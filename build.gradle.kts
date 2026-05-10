@@ -1,0 +1,75 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+plugins {
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.android.library) apply false
+    alias(libs.plugins.kotlin.android) apply false
+    alias(libs.plugins.compose.compiler) apply false
+    alias(libs.plugins.kotlin.serialization) apply false
+    alias(libs.plugins.kotlin.parcelize) apply false
+    alias(libs.plugins.ksp) apply false
+    alias(libs.plugins.aboutlibraries) apply false
+    alias(libs.plugins.aboutlibraries.multiplatform) apply false
+    alias(libs.plugins.room) apply false
+    alias(libs.plugins.sentry.gradle) apply false
+    alias(libs.plugins.android.lint) apply false
+    alias(libs.plugins.compose.multiplatform) apply false
+    alias(libs.plugins.kotlin.multiplatform) apply false
+    alias(libs.plugins.android.kotlin.multiplatform.library) apply false
+    alias(libs.plugins.jetbrains.kotlin.jvm) apply false
+    alias(libs.plugins.build.config) apply false
+    alias(libs.plugins.osdetector) apply false
+}
+
+tasks.register<Delete>("Clean") {
+    delete(rootProject.layout.buildDirectory)
+}
+
+// Shorten build directory path on Windows to avoid MAX_PATH issues
+val customBuildDir = project.findProperty("custom.build.dir") as String?
+if (customBuildDir != null) {
+    allprojects {
+        val pathName = project.path.replace(":", "/")
+        val newBuildDir = if (pathName.isEmpty() || pathName == "/") {
+            file("$customBuildDir/_root_")
+        } else {
+            file("$customBuildDir/$pathName")
+        }
+        layout.buildDirectory.set(newBuildDir)
+    }
+}
+
+subprojects {
+    tasks.withType<KotlinCompile>().configureEach {
+        compilerOptions {
+            if (project.findProperty("enableComposeCompilerReports") == "true") {
+                arrayOf("reports", "metrics").forEach {
+                    freeCompilerArgs.addAll(
+                        listOf(
+                            "-P",
+                            "plugin:androidx.compose.compiler.plugins.kotlin:${it}Destination=${layout.buildDirectory.asFile.get().absolutePath}/compose_metrics",
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    // EL CANDADO MAESTRO CORREGIDO (Inteligente y a prueba de fallos)
+    plugins.withId("org.jetbrains.kotlin.jvm") {
+        configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension> {
+            jvmToolchain(21)
+        }
+    }
+    plugins.withId("org.jetbrains.kotlin.android") {
+        configure<org.jetbrains.kotlin.gradle.dsl.KotlinAndroidProjectExtension> {
+            jvmToolchain(21)
+        }
+    }
+    plugins.withId("org.jetbrains.kotlin.multiplatform") {
+        configure<org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension> {
+            jvmToolchain(21)
+        }
+    }
+}
