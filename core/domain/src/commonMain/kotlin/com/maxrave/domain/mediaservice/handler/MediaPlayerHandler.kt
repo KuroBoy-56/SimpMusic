@@ -177,6 +177,8 @@ sealed class PlayerEvent {
 
     data object Previous : PlayerEvent()
 
+    data object SkipToPrevious : PlayerEvent()
+
     data object Shuffle : PlayerEvent()
 
     data object Repeat : PlayerEvent()

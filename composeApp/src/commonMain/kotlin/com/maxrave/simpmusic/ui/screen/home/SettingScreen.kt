@@ -154,6 +154,7 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import simpmusic.composeapp.generated.resources.KuroMusic_lyrics
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.add_an_account
 import simpmusic.composeapp.generated.resources.ai
@@ -1040,7 +1041,7 @@ fun SettingScreen(
                 SettingItem(
                     title = stringResource(Res.string.main_lyrics_provider),
                     subtitle = when (mainLyricsProvider) {
-                        DataStoreManager.SIMPMUSIC -> stringResource(Res.string.simpmusic_lyrics)
+                        DataStoreManager.SIMPMUSIC -> stringResource(Res.string.KuroMusic_lyrics)
                         DataStoreManager.YOUTUBE -> stringResource(Res.string.youtube_transcript)
                         DataStoreManager.LRCLIB -> stringResource(Res.string.lrclib)
                         DataStoreManager.BETTER_LYRICS -> stringResource(Res.string.better_lyrics)
@@ -1053,7 +1054,7 @@ fun SettingScreen(
                                 selectOne =
                                     SettingAlertState.SelectData(
                                         listSelect = listOf(
-                                            (mainLyricsProvider == DataStoreManager.SIMPMUSIC) to runBlocking { getString(Res.string.simpmusic_lyrics) },
+                                            (mainLyricsProvider == DataStoreManager.SIMPMUSIC) to runBlocking { getString(Res.string.KuroMusic_lyrics) },
                                             (mainLyricsProvider == DataStoreManager.YOUTUBE) to runBlocking { getString(Res.string.youtube_transcript) },
                                             (mainLyricsProvider == DataStoreManager.LRCLIB) to runBlocking { getString(Res.string.lrclib) },
                                             (mainLyricsProvider == DataStoreManager.BETTER_LYRICS) to runBlocking { getString(Res.string.better_lyrics) },
@@ -1063,7 +1064,7 @@ fun SettingScreen(
                                     runBlocking { getString(Res.string.change) } to { state ->
                                         viewModel.setLyricsProvider(
                                             when (state.selectOne?.getSelected()) {
-                                                runBlocking { getString(Res.string.simpmusic_lyrics) } -> DataStoreManager.SIMPMUSIC
+                                                runBlocking { getString(Res.string.KuroMusic_lyrics) } -> DataStoreManager.SIMPMUSIC
                                                 runBlocking { getString(Res.string.youtube_transcript) } -> DataStoreManager.YOUTUBE
                                                 runBlocking { getString(Res.string.lrclib) } -> DataStoreManager.LRCLIB
                                                 runBlocking { getString(Res.string.better_lyrics) } -> DataStoreManager.BETTER_LYRICS

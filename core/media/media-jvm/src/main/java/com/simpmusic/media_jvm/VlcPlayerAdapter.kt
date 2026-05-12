@@ -431,6 +431,26 @@ class VlcPlayerAdapter(
         }
     }
 
+    override fun seekToPreviousMediaItem() {
+        coroutineScope.launch {
+            // Cancel any ongoing crossfade first and revert index, awaiting completion
+            if (isCrossfading) {
+                Logger.d(TAG, "seekToPreviousMediaItem: Cancelling crossfade")
+                cancelCrossfadeAndCleanup(revertIndex = true)
+            }
+
+            if (hasPreviousMediaItem()) {
+                Logger.d(TAG, "seekToPreviousMediaItem: going to previous track")
+                val prevIndex = getPreviousMediaItemIndex()
+                seekTo(prevIndex, 0)
+            } else {
+                Logger.d(TAG, "seekToPreviousMediaItem: No previous item, seeking to start")
+                currentPlayer?.seekTo(0)
+                cachedPosition = 0
+            }
+        }
+    }
+
     override fun prepare() {
         if (playlist.isNotEmpty() && localCurrentMediaItemIndex >= 0) {
             coroutineScope.launch {

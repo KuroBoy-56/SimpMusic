@@ -29,6 +29,8 @@ interface MediaPlayerInterface {
 
     fun seekToPrevious()
 
+    fun seekToPreviousMediaItem()
+
     fun prepare()
 
     // Media item management

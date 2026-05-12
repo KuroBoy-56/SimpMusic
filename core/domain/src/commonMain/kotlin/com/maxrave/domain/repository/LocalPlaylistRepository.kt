@@ -62,6 +62,12 @@ interface LocalPlaylistRepository {
         newPosition: Int,
     ): Flow<String>
 
+    fun moveItemInSyncedPlaylist(
+        playlistId: Long,
+        fromIndex: Int,
+        toIndex: Int,
+    ): Flow<LocalResource<String>>
+
     fun downloadStateFlow(id: Long): Flow<Int>
 
     fun getAllDownloadingLocalPlaylists(): Flow<List<LocalPlaylistEntity>>

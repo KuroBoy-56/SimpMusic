@@ -357,14 +357,6 @@ class NowPlayingBottomSheetViewModel(
                     dataStoreManager.setPitch(ev.pitch)
                 }
 
-                is NowPlayingBottomSheetUIEvent.Share -> {
-                    val url = "https://simpmusic.org/app/watch?v=${songUIState.videoId}"
-                    shareUrl(
-                        title = getString(Res.string.share_url),
-                        url,
-                    )
-                }
-
                 is NowPlayingBottomSheetUIEvent.StartRadio -> {
                     songRepository
                         .getRadioFromEndpoint(
@@ -463,6 +455,4 @@ sealed class NowPlayingBottomSheetUIEvent {
         val videoId: String,
         val name: String,
     ) : NowPlayingBottomSheetUIEvent()
-
-    data object Share : NowPlayingBottomSheetUIEvent()
 }

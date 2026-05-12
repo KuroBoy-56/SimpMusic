@@ -564,6 +564,46 @@ internal class CrossfadeExoPlayerAdapter(
         }
     }
 
+    override fun seekToPreviousMediaItem() {
+        // Cancel any ongoing crossfade first
+        if (isCrossfading) {
+            Logger.d(TAG, "seekToPreviousMediaItem: Cancelling crossfade")
+            coroutineScope.launch {
+                crossfadeJob?.cancel()
+                crossfadeJob = null
+                currentPlayerFilter?.enabled = false
+                secondaryPlayerFilter?.enabled = false
+                secondaryPlayer?.release()
+                secondaryPlayer = null
+                secondaryPlayerFilter = null
+                setCrossfading(false)
+                if (crossfadeFromIndex >= 0) {
+                    localCurrentMediaItemIndex = crossfadeFromIndex
+                    playlist.getOrNull(crossfadeFromIndex)?.let { mediaItem ->
+                        listeners.forEach {
+                            it.onMediaItemTransition(
+                                mediaItem,
+                                PlayerConstants.MEDIA_ITEM_TRANSITION_REASON_SEEK,
+                            )
+                        }
+                    }
+                    forwardingPlayer.notifyMediaItemChanged()
+                    crossfadeFromIndex = -1
+                }
+            }
+        }
+
+        if (hasPreviousMediaItem()) {
+            Logger.d(TAG, "seekToPreviousMediaItem: going to previous track")
+            val prevIndex = getPreviousMediaItemIndex()
+            seekTo(prevIndex, 0)
+        } else {
+            Logger.d(TAG, "seekToPreviousMediaItem: No previous item, seeking to start")
+            currentPlayer?.seekTo(0)
+            cachedPosition = 0
+        }
+    }
+
     override fun prepare() {
         if (playlist.isNotEmpty() && localCurrentMediaItemIndex >= 0) {
             coroutineScope.launch {

@@ -87,9 +87,11 @@ fun DescriptionView(
                 append(matchResult.value)
                 pop()
             } else if (urlRegex.matches(matchResult.value)) {
-                pushStringAnnotation("CLICKABLE_USER_URL", matchResult.value)
-                append(matchResult.value)
-                pop()
+                if (!matchResult.value.contains("simpmusic", ignoreCase = true)) {
+                    pushStringAnnotation("CLICKABLE_USER_URL", matchResult.value)
+                    append(matchResult.value)
+                    pop()
+                }
             }
         }
         if (index == matchedWords.count() - 1) {

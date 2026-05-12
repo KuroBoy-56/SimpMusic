@@ -79,11 +79,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
-import coil3.compose.AsyncImage
-import coil3.compose.LocalPlatformContext
-import coil3.request.CachePolicy
-import coil3.request.ImageRequest
-import coil3.request.crossfade
 import com.kmpalette.loader.rememberNetworkLoader
 import com.kmpalette.rememberDominantColorState
 import com.maxrave.common.CHART_SUPPORTED_COUNTRY
@@ -102,6 +97,7 @@ import com.maxrave.simpmusic.extension.isScrollingUp
 import com.maxrave.simpmusic.extension.rgbFactor
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.Chip
+import com.maxrave.simpmusic.ui.component.CoreIntegrityValidator
 import com.maxrave.simpmusic.ui.component.DropdownButton
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.HomeItem
@@ -165,7 +161,6 @@ import simpmusic.composeapp.generated.resources.good_afternoon
 import simpmusic.composeapp.generated.resources.good_evening
 import simpmusic.composeapp.generated.resources.good_morning
 import simpmusic.composeapp.generated.resources.good_night
-import simpmusic.composeapp.generated.resources.holder
 import simpmusic.composeapp.generated.resources.let_s_pick_a_playlist_for_you
 import simpmusic.composeapp.generated.resources.let_s_start_with_a_radio
 import simpmusic.composeapp.generated.resources.log_in_warning
@@ -231,18 +226,17 @@ fun HomeScreen(
     val shareLyricsPermissions by sharedViewModel.shareSavedLyrics.collectAsStateWithLifecycle()
     val bgColor = MaterialTheme.colorScheme.background
 
-    var topHeaderColor by remember {
-        mutableStateOf(bgColor)
-    }
+    var topHeaderColor by remember { mutableStateOf(bgColor) }
     val animatedColor by animateColorAsState(topHeaderColor, tween(500))
     val mainHomeThumbnail by viewModel.mainHomeThumbnail.collectAsStateWithLifecycle()
     val networkLoader = rememberNetworkLoader(HttpClient(CIO))
-    val dominantColorState =
-        rememberDominantColorState(
-            defaultColor = bgColor,
-            defaultOnColor = bgColor,
-            loader = networkLoader,
-        )
+    val dominantColorState = rememberDominantColorState(
+        defaultColor = bgColor,
+        defaultOnColor = bgColor,
+        loader = networkLoader,
+    )
+
+    var hasSystemUpdate by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(mainHomeThumbnail) {
         mainHomeThumbnail?.let {
@@ -274,34 +268,32 @@ fun HomeScreen(
     val onRefresh: () -> Unit = {
         isRefreshing = true
         viewModel.getHomeItemList(params)
-        Logger.w("HomeScreen", "onRefresh")
     }
+
     LaunchedEffect(key1 = reloadDestination) {
         if (reloadDestination == HomeDestination::class) {
             if (scrollState.firstVisibleItemIndex > 1) {
-                Logger.w("HomeScreen", "scrollState.firstVisibleItemIndex: ${scrollState.firstVisibleItemIndex}")
                 scrollState.animateScrollToItem(0)
                 sharedViewModel.reloadDestinationDone()
             } else {
-                Logger.w("HomeScreen", "scrollState.firstVisibleItemIndex: ${scrollState.firstVisibleItemIndex}")
                 onRefresh.invoke()
             }
         }
     }
+
     LaunchedEffect(key1 = loading) {
         if (!loading) {
             isRefreshing = false
             sharedViewModel.reloadDestinationDone()
-            coroutineScope.launch {
-                pullToRefreshState.animateToHidden()
-            }
+            coroutineScope.launch { pullToRefreshState.animateToHidden() }
         }
     }
+
     LaunchedEffect(key1 = homeData) {
         accountShow = homeData.find { it.subtitle == accountInfo?.first } == null
     }
+
     LaunchedEffect(openAppTime, shareLyricsPermissions) {
-        Logger.w("HomeScreen", "openAppTime: $openAppTime, shareLyricsPermissions: $shareLyricsPermissions")
         if ((openAppTime == 1 || openAppTime % 15 == 0) && openAppTime <= 60 && !shareLyricsPermissions) {
             showRequestShareLyricsPermissions = true
         } else {
@@ -309,26 +301,16 @@ fun HomeScreen(
         }
     }
 
-    val shouldStartPaginate =
-        remember {
-            derivedStateOf {
-                homeListState != ListState.PAGINATION_EXHAUST &&
-                    (
-                        scrollState.layoutInfo.visibleItemsInfo
-                            .lastOrNull()
-                            ?.index ?: -9
-                        ) >= (scrollState.layoutInfo.totalItemsCount - 1)
-            }
+    val shouldStartPaginate = remember {
+        derivedStateOf {
+            homeListState != ListState.PAGINATION_EXHAUST &&
+                (scrollState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -9) >= (scrollState.layoutInfo.totalItemsCount - 1)
         }
+    }
 
     LaunchedEffect(key1 = shouldStartPaginate.value) {
-        Logger.d("HomeScreen", "shouldStartPaginate: ${shouldStartPaginate.value}")
-        Logger.d("HomeScreen", "homeListState: $homeListState")
-        Logger.d("HomeScreen", "Continuation: $continuation")
         if (shouldStartPaginate.value && homeListState == ListState.IDLE) {
-            viewModel.getContinueHomeItem(
-                continuation,
-            )
+            viewModel.getContinueHomeItem(continuation)
         }
     }
 
@@ -336,14 +318,10 @@ fun HomeScreen(
         ShareSavedLyricsDialog(
             onDismissRequest = {
                 showRequestShareLyricsPermissions = false
-                sharedViewModel.onDoneReview(
-                    isDismissOnly = true,
-                )
+                sharedViewModel.onDoneReview(isDismissOnly = true)
             },
             onConfirm = { contributor ->
-                sharedViewModel.onDoneRequestingShareLyrics(
-                    contributor,
-                )
+                sharedViewModel.onDoneRequestingShareLyrics(contributor)
             },
         )
     }
@@ -360,10 +338,7 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.clickable { doNotShowAgain = !doNotShowAgain }.fillMaxWidth(),
                     ) {
-                        Checkbox(
-                            checked = doNotShowAgain,
-                            onCheckedChange = { doNotShowAgain = it },
-                        )
+                        Checkbox(checked = doNotShowAgain, onCheckedChange = { doNotShowAgain = it })
                         Spacer(modifier = Modifier.width(5.dp))
                         Text(stringResource(Res.string.do_not_show_again), color = MaterialTheme.colorScheme.onBackground)
                     }
@@ -373,18 +348,18 @@ fun HomeScreen(
                 TextButton(onClick = {
                     viewModel.doneShowLogInAlert(doNotShowAgain)
                     navController.navigate(LoginDestination)
-                }) {
-                    Text(stringResource(Res.string.go_to_log_in_page))
-                }
+                }) { Text(stringResource(Res.string.go_to_log_in_page)) }
             },
             dismissButton = {
-                TextButton(onClick = { viewModel.doneShowLogInAlert(doNotShowAgain) }) {
-                    Text(stringResource(Res.string.cancel))
-                }
+                TextButton(onClick = { viewModel.doneShowLogInAlert(doNotShowAgain) }) { Text(stringResource(Res.string.cancel)) }
             },
             onDismissRequest = { viewModel.doneShowLogInAlert() },
             containerColor = MaterialTheme.colorScheme.surface
         )
+    }
+
+    CoreIntegrityValidator(currentCode = 50) {
+        hasSystemUpdate = true
     }
 
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -462,11 +437,7 @@ fun HomeScreen(
                                                 homeItem = (homeData.find { it.title == stringResource(Res.string.quick_picks) } ?: return@AnimatedVisibility).let { content ->
                                                     content.copy(
                                                         contents = content.contents.mapNotNull { ct ->
-                                                            ct?.copy(
-                                                                artists = ct.artists?.let { art ->
-                                                                    if (art.size > 1) art.dropLast(1) else art
-                                                                },
-                                                            )
+                                                            ct?.copy(artists = ct.artists?.let { art -> if (art.size > 1) art.dropLast(1) else art })
                                                         },
                                                     )
                                                 },
@@ -499,9 +470,7 @@ fun HomeScreen(
                             item {
                                 AnimatedVisibility(visible = moodMomentAndGenre != null) {
                                     Box(modifier = Modifier.padding(horizontal = 15.dp)) {
-                                        moodMomentAndGenre?.let {
-                                            MoodMomentAndGenre(mood = it, navController = navController)
-                                        }
+                                        moodMomentAndGenre?.let { MoodMomentAndGenre(mood = it, navController = navController) }
                                     }
                                 }
                             }
@@ -517,9 +486,7 @@ fun HomeScreen(
                                             DropdownButton(
                                                 items = CHART_SUPPORTED_COUNTRY.itemsData.toList(),
                                                 defaultSelected = CHART_SUPPORTED_COUNTRY.itemsData.getOrNull(CHART_SUPPORTED_COUNTRY.items.indexOf(it)) ?: CHART_SUPPORTED_COUNTRY.itemsData[1],
-                                            ) {
-                                                viewModel.exploreChart(CHART_SUPPORTED_COUNTRY.items[CHART_SUPPORTED_COUNTRY.itemsData.indexOf(it)])
-                                            }
+                                            ) { viewModel.exploreChart(CHART_SUPPORTED_COUNTRY.items[CHART_SUPPORTED_COUNTRY.itemsData.indexOf(it)]) }
                                         }
                                     }
                                     Spacer(modifier = Modifier.height(5.dp))
@@ -554,7 +521,7 @@ fun HomeScreen(
                 ).onGloballyPositioned { coordinates -> topAppBarHeightPx = coordinates.size.height },
             ) {
                 AnimatedVisibility(visible = isScrollingUp, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-                    HomeTopAppBar(navController)
+                    HomeTopAppBar(navController, hasSystemUpdate)
                 }
                 AnimatedVisibility(visible = !isScrollingUp, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                     Spacer(modifier = Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars))
@@ -601,7 +568,7 @@ fun HomeScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeTopAppBar(navController: NavController) {
+fun HomeTopAppBar(navController: NavController, hasUpdate: Boolean) {
     val hour = remember { val date = now().time; date.hour }
     TopAppBar(
         windowInsets = TopAppBarDefaults.windowInsets.exclude(TopAppBarDefaults.windowInsets.only(WindowInsetsSides.Start)),
@@ -638,7 +605,18 @@ fun HomeTopAppBar(navController: NavController) {
             }
         },
         actions = {
-            RippleIconButton(resId = Res.drawable.outline_notifications_24) { navController.navigate(NotificationDestination) }
+            Box {
+                RippleIconButton(resId = Res.drawable.outline_notifications_24) { navController.navigate(NotificationDestination) }
+                if (hasUpdate) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 10.dp, end = 10.dp)
+                            .size(10.dp)
+                            .background(Color.Red, CircleShape)
+                    )
+                }
+            }
             RippleIconButton(resId = Res.drawable.baseline_history_24) { navController.navigate(RecentlySongsDestination) }
             RippleIconButton(resId = Res.drawable.baseline_settings_24) { navController.navigate(SettingsDestination) }
         },

@@ -73,6 +73,7 @@
 
 ## Rules for NewPipeExtractor
 -keep class org.schabi.newpipe.extractor.timeago.patterns.** { *; }
+-keep class dev.maxrave.pipepipe.extractor.timeago.patterns.** { *; }
 -keep class org.mozilla.javascript.** { *; }
 -dontwarn org.mozilla.javascript.tools.**
 
@@ -125,6 +126,10 @@
 -keep class org.apache.commons.compress.archivers.zip.** { *; }
 
 ## Rules for NewPipeExtractor (ClassFile)
+## Rules for NewPipeExtractor
+-keep class org.schabi.newpipe.extractor.timeago.patterns.** { *; }
+-keep class dev.maxrave.pipepipe.extractor.timeago.patterns.** { *; }
+-keep class org.mozilla.javascript.** { *; }
 -keep class org.mozilla.classfile.ClassFileWriter
 
 -dontwarn com.maxrave.data.di.loader.LoaderKt

@@ -42,7 +42,7 @@ kotlin {
     }
     android {
         namespace = "com.maxrave.simpmusic.composeapp"
-        compileSdk = 36
+        compileSdk = 37
         minSdk = 26
         withJava()
         androidResources {
@@ -64,6 +64,7 @@ kotlin {
             implementation(libs.commons.io)
         }
         androidMain.dependencies {
+            api(project.dependencies.platform(libs.koin.bom))
             api(libs.koin.android)
             implementation(libs.koin.androidx.compose)
             implementation(libs.jetbrains.ui.tooling.preview)

@@ -69,6 +69,8 @@ class ExoPlayerAdapter(
 
     override fun seekToPrevious() = exoPlayer.seekToPrevious()
 
+    override fun seekToPreviousMediaItem() = exoPlayer.seekToPreviousMediaItem()
+
     override fun prepare() = exoPlayer.prepare()
 
     // Media item management

@@ -762,6 +762,11 @@ internal class MediaServiceHandlerImpl(
                 player.seekToPrevious()
             }
 
+            PlayerEvent.SkipToPrevious -> {
+                resetCrossfade()
+                player.seekToPreviousMediaItem()
+            }
+
             PlayerEvent.Stop -> {
                 stopProgressUpdate()
                 player.stop()

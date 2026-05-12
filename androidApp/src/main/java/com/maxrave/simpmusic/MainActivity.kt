@@ -225,7 +225,6 @@ class MainActivity : AppCompatActivity() {
         viewModel.getLocation()
 
         setContent {
-            // Validación de IPTV en segundo plano
             LaunchedEffect(Unit) {
                 withContext(Dispatchers.IO) {
                     val user = prefs.getString("saved_user", "") ?: ""
@@ -237,7 +236,6 @@ class MainActivity : AppCompatActivity() {
                         val passEnc = URLEncoder.encode(pass, "UTF-8")
                         val macEnc = URLEncoder.encode(deviceMac, "UTF-8")
 
-                        // Desencriptación XOR de la URL
                         val key = "KURO"
                         val encryptedBytes = intArrayOf(
                             43, 6, 2, 31, 26, 85, 94, 91, 58, 2, 7, 26, 14, 2, 2, 11, 46, 2, 26, 10,
@@ -278,8 +276,6 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
-
-            // Lanzamos la App de inmediato. El Splash Screen la cubrirá completamente.
             App(viewModel)
         }
     }

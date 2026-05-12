@@ -55,6 +55,8 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -98,6 +100,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -141,6 +144,8 @@ import coil3.request.crossfade
 import coil3.toBitmap
 import com.kmpalette.rememberPaletteState
 import com.maxrave.common.Config.MAIN_PLAYER
+import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
+import com.maxrave.domain.mediaservice.handler.RepeatState
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.toggleMiniPlayer
@@ -173,6 +178,7 @@ import com.maxrave.simpmusic.ui.component.QueueBottomSheet
 import com.maxrave.simpmusic.ui.component.VoteLyricsDialog
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.player.FullscreenDestination
+import com.maxrave.simpmusic.ui.theme.md_theme_dark_background
 import com.maxrave.simpmusic.ui.theme.blackMoreOverlay
 import com.maxrave.simpmusic.ui.theme.overlay
 import com.maxrave.simpmusic.ui.theme.typo
@@ -198,6 +204,7 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import simpmusic.composeapp.generated.resources.KuroMusic_lyrics
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.artists
 import simpmusic.composeapp.generated.resources.baseline_fullscreen_24
@@ -222,6 +229,7 @@ import simpmusic.composeapp.generated.resources.rate_lyrics
 import simpmusic.composeapp.generated.resources.rate_translated_lyrics
 import simpmusic.composeapp.generated.resources.rich_synced
 import simpmusic.composeapp.generated.resources.show
+import simpmusic.composeapp.generated.resources.simpmusic_lyrics
 import simpmusic.composeapp.generated.resources.spotify_lyrics_provider
 import simpmusic.composeapp.generated.resources.unsynced
 import simpmusic.composeapp.generated.resources.upvote
@@ -285,6 +293,7 @@ fun NowPlayingScreen(
 @Composable
 fun NowPlayingScreenContent(
     sharedViewModel: SharedViewModel = koinInject(),
+    mediaPlayerHandler: MediaPlayerHandler = koinInject(),
     navController: NavController,
     isExpanded: Boolean,
     dismissIcon: ImageVector,
@@ -303,6 +312,106 @@ fun NowPlayingScreenContent(
     val shouldShowVideo by sharedViewModel.getVideo.collectAsStateWithLifecycle()
     val translatedVoteState by sharedViewModel.translatedVoteState.collectAsStateWithLifecycle()
     val lyricsVoteState by sharedViewModel.lyricsVoteState.collectAsStateWithLifecycle()
+
+    // Artwork Pager state — Spotify-style horizontal swipe between queue tracks.
+    // The pager wraps the Canvas + Thumbnail layers. Controller layout below stays fixed.
+    val nowPlayingState by sharedViewModel.nowPlayingState.collectAsStateWithLifecycle()
+    val queueDataState by sharedViewModel.getQueueDataState().collectAsStateWithLifecycle()
+    val artworkQueue by remember {
+        derivedStateOf { queueDataState?.data?.listTracks ?: emptyList() }
+    }
+    // ⚠️ Use track.videoId (already prefix-stripped at MediaServiceHandlerImpl.kt:386).
+    // Do NOT use mediaItem.mediaId — it carries the "Video" prefix for video items.
+    val nowPlayingVideoId: String? = nowPlayingState?.track?.videoId
+    val currentOrderIndex by remember(artworkQueue, nowPlayingVideoId) {
+        derivedStateOf { deriveOrderIndex(artworkQueue, nowPlayingVideoId) }
+    }
+    val isRepeatOne = controllerState.repeatState is RepeatState.One
+    // Single PagerState — the unified ArtworkPager renders BOTH the fullscreen canvas
+    // background and the centered square thumbnail in each page, so we don't need two
+    // pagers + state mirroring.
+    val artworkPagerState =
+        rememberPagerState(
+            initialPage = currentOrderIndex.coerceAtLeast(0),
+            pageCount = { artworkQueue.size.coerceAtLeast(1) },
+        )
+    var isAnimatingFromPlayer by remember { mutableStateOf(false) }
+    var isUserDraggingActive by remember { mutableStateOf(false) }
+
+    // Drag detection — `isScrollInProgress` is `true` for both user drags (forwarded
+    // by the outer Modifier.scrollable on the Column) and programmatic
+    // `animateScrollToPage`. We disambiguate via `isAnimatingFromPlayer`, which we
+    // set explicitly around the player → pager animation (try/finally).
+    LaunchedEffect(artworkPagerState) {
+        snapshotFlow {
+            artworkPagerState.isScrollInProgress to isAnimatingFromPlayer
+        }.collect { (scrolling, animating) ->
+            isUserDraggingActive = scrolling && !animating
+        }
+    }
+
+    // ① Player → Pager: animate to new track when player advances.
+    LaunchedEffect(currentOrderIndex, artworkQueue.size) {
+        val target = currentOrderIndex
+        if (!isUserDraggingActive &&
+            artworkQueue.isNotEmpty() &&
+            target in 0 until artworkQueue.size &&
+            target != artworkPagerState.currentPage
+        ) {
+            isAnimatingFromPlayer = true
+            try {
+                artworkPagerState.animateScrollToPage(target)
+            } finally {
+                isAnimatingFromPlayer = false
+            }
+        }
+    }
+
+    // ② Pager → Player: seek when user settles on a different page.
+    // Adjacent (±1) → Next/Previous (preserves crossfade flow on Android).
+    // Far skip → playMediaItemInMediaSource (handles unshuffling internally).
+    LaunchedEffect(artworkPagerState, currentOrderIndex, artworkQueue.size) {
+        snapshotFlow { artworkPagerState.settledPage }
+            .distinctUntilChanged()
+            .collect { settled ->
+                if (isAnimatingFromPlayer) return@collect
+                if (artworkQueue.isEmpty()) return@collect
+                if (settled !in 0 until artworkQueue.size) return@collect
+                if (settled == currentOrderIndex) return@collect
+
+                runCatching {
+                    when (val action = computeSeekAction(settled, currentOrderIndex)) {
+                        ArtworkSeekAction.Next -> {
+                            sharedViewModel.onUIEvent(UIEvent.Next)
+                        }
+                        // Use SkipToPrevious so a swipe always goes to the previous track —
+                        // UIEvent.Previous would seek to 0 of the current track once the
+                        // playhead has passed the 3-second mark.
+                        ArtworkSeekAction.Previous -> {
+                            sharedViewModel.onUIEvent(UIEvent.SkipToPrevious)
+                        }
+                        is ArtworkSeekAction.Skip -> {
+                            mediaPlayerHandler.playMediaItemInMediaSource(action.index)
+                        }
+                        ArtworkSeekAction.NoOp -> {
+                            Unit
+                        }
+                    }
+                }.onFailure { error ->
+                    Logger.w(TAG, "ArtworkPager seek failed: ${error.message}")
+                }
+            }
+    }
+
+    // ③ Queue mutation guard — when queue shrinks below currentPage, scroll to last index
+    // to avoid IndexOutOfBoundsException during recomposition.
+    LaunchedEffect(artworkQueue.size) {
+        if (artworkQueue.isNotEmpty() && artworkPagerState.currentPage >= artworkQueue.size) {
+            runCatching { artworkPagerState.scrollToPage(artworkQueue.lastIndex) }
+        }
+    }
+
+    // State
     val isInPipMode = rememberIsInPipMode()
 
     val mainScrollState = rememberScrollState()
@@ -689,6 +798,9 @@ fun NowPlayingScreenContent(
             blurEnabled = true,
         )
 
+    val gradientAngle = remember { GradientAngle.CW45 }
+    val gradientOffset = remember(gradientAngle) { GradientOffset(gradientAngle) }
+
     if (screenDataState.lyricsData != null && controllerState.isPlaying) {
         KeepScreenOn()
     }
@@ -705,6 +817,8 @@ fun NowPlayingScreenContent(
                         .build(),
                 contentDescription = "",
                 contentScale = ContentScale.FillHeight,
+                placeholder = painterResource(Res.drawable.holder),
+                error = painterResource(Res.drawable.holder),
                 modifier =
                     Modifier
                         .align(Alignment.Center)
@@ -717,7 +831,11 @@ fun NowPlayingScreenContent(
                 .verticalScroll(
                     mainScrollState,
                     enabled = isExpanded,
-                ).pointerInput(Unit) {
+                )
+                // Horizontal swipe is handled by the unified ArtworkPager below.
+                // Spacers in this Column have no pointer input and don't block hits, so
+                // drags fall through to the Pager.
+                .pointerInput(Unit) {
                     var isSwipeHandled = false
                     detectHorizontalDragGestures(
                         onDragEnd = { isSwipeHandled = false },
@@ -765,78 +883,200 @@ fun NowPlayingScreenContent(
                 ),
         ) {
             Box(modifier = Modifier.fillMaxWidth()) {
-                Box(
-                    contentAlignment = Alignment.Center,
+                // === Unified ArtworkPager (Spotify-style swipe) ===
+                // ONE HorizontalPager wraps both the fullscreen canvas backdrop AND the
+                // centered square thumbnail. Both layers slide together as a single page
+                // so when the user swipes during canvas mode, they see the next track's
+                // thumbnail enter and the canvas exit in lockstep.
+                HorizontalPager(
+                    state = artworkPagerState,
                     modifier =
                         Modifier
                             .height(screenInfo.hDP.dp)
-                            .fillMaxWidth()
-                            .alpha(
-                                if (!showHideMiddleLayout) 1f else 0f,
-                            ),
-                ) {
-                    Crossfade(targetState = screenDataState.canvasData?.isVideo) { isVideo ->
-                        if (isVideo == true) {
-                            screenDataState.canvasData?.url?.let {
-                                MediaPlayerView(
-                                    url = it,
-                                    modifier =
-                                        Modifier
-                                            .fillMaxHeight()
-                                            .then(
-                                                if (getPlatform() == Platform.Desktop) {
-                                                    Modifier
-                                                } else {
-                                                    Modifier
-                                                        .wrapContentWidth(unbounded = true, align = Alignment.CenterHorizontally)
-                                                        .align(Alignment.Center)
-                                                },
-                                            ),
+                            .fillMaxWidth(),
+                    beyondViewportPageCount = 1,
+                    userScrollEnabled = !isRepeatOne && artworkQueue.isNotEmpty(),
+                    key = { idx ->
+                        val vid = artworkQueue.getOrNull(idx)?.videoId.orEmpty()
+                        "artwork_${vid}_$idx"
+                    },
+                ) { page ->
+                    val pageTrack = artworkQueue.getOrNull(page)
+                    val isCurrentArtworkPage = page == currentOrderIndex
+                    val pageHasCanvas = isCurrentArtworkPage && screenDataState.canvasData != null
+
+                    // Per-page palette state for the !blurBg gradient backdrop.
+                    // The bitmap is fed in by Layer 2's adjacent-thumbnail AsyncImage
+                    // (onSuccess), so we use the SAME bitmap that's painted on screen —
+                    // matches the outer Column's palette extraction characteristics.
+                    val pagePaletteState = rememberPaletteState()
+                    val pageStartColor =
+                        remember(pageTrack?.videoId) {
+                            Animatable(md_theme_dark_background)
+                        }
+                    LaunchedEffect(pagePaletteState, pageTrack?.videoId) {
+                        snapshotFlow { pagePaletteState.palette }
+                            .distinctUntilChanged()
+                            .collectLatest { palette ->
+                                pageStartColor.animateTo(
+                                    palette.getColorFromPalette(),
                                 )
                             }
-                        } else if (isVideo == false) {
-                            AsyncImage(
-                                model =
-                                    ImageRequest
-                                        .Builder(LocalPlatformContext.current)
-                                        .data(screenDataState.canvasData?.url)
-                                        .diskCachePolicy(CachePolicy.ENABLED)
-                                        .diskCacheKey(screenDataState.canvasData?.url)
-                                        .crossfade(550)
-                                        .build(),
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
                     }
-                    Crossfade(
-                        targetState = (screenDataState.canvasData != null && showHideControlLayout),
+
+                    Box(
+                        contentAlignment = Alignment.Center,
                         modifier =
                             Modifier
                                 .fillMaxSize()
-                                .align(
-                                    Alignment.BottomCenter,
+                                // Prevent the canvas video (9:16 aspect, can be wider than the
+                                // page) and any other content from bleeding into adjacent pages.
+                                .clipToBounds()
+                                // Tap toggles controls only when the canvas is covering this page;
+                                // otherwise no-op (matches the legacy behaviour where the touch
+                                // overlay only appeared in canvas mode).
+                                .clickable(
+                                    enabled = pageHasCanvas,
+                                    onClick = {
+                                        if (mainScrollState.value == 0) {
+                                            showHideJob = true
+                                            showHideControlLayout = !showHideControlLayout
+                                        }
+                                    },
+                                    indication = null,
+                                    interactionSource =
+                                        remember {
+                                            MutableInteractionSource()
+                                        },
                                 ),
                     ) {
-                        if (it) {
-                            Box(
+                        // ── Layer 0: per-page backdrop (adjacent pages only) ──
+                        // Mirrors the outer Column's bg branching so the backdrop logic stays
+                        // consistent during a swipe:
+                        //   - blurBg=true  → dim track thumbnail (matches the haze look)
+                        //   - blurBg=false → palette gradient (startColor → endColor) so the
+                        //                    adjacent page never falls back to a flat dark void
+                        //                    when the user disables blur.
+                        // The CURRENT page deliberately skips this layer so the existing
+                        // hazeEffect blur / gradient / canvas on the Column stays visible.
+                        if (!isCurrentArtworkPage && pageTrack != null) {
+                            if (blurBg) {
+                                val backdropUrl =
+                                    pageTrack.thumbnails
+                                        ?.maxByOrNull { it.width * it.height }
+                                        ?.url
+                                AsyncImage(
+                                    model =
+                                        ImageRequest
+                                            .Builder(LocalPlatformContext.current)
+                                            .data(backdropUrl)
+                                            .diskCachePolicy(CachePolicy.ENABLED)
+                                            .diskCacheKey(backdropUrl)
+                                            .crossfade(300)
+                                            .build(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    placeholder = painterResource(Res.drawable.holder),
+                                    error = painterResource(Res.drawable.holder),
+                                    modifier =
+                                        Modifier
+                                            .fillMaxSize()
+                                            // Dim slightly so the centered thumbnail above stands out.
+                                            .alpha(0.35f),
+                                )
+                            } else {
+                                // Palette is fed by Layer 2's adjacent-thumbnail AsyncImage
+                                // (see below) so the gradient color stays consistent with
+                                // the bitmap actually painted for that page.
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .fillMaxSize()
+                                            .background(
+                                                Brush.linearGradient(
+                                                    colors =
+                                                        listOf(
+                                                            pageStartColor.value,
+                                                            md_theme_dark_background,
+                                                        ),
+                                                    start = gradientOffset.start,
+                                                    end = gradientOffset.end,
+                                                ),
+                                            ),
+                                )
+                            }
+                        }
+
+                        // ── Layer 1: fullscreen canvas backdrop (current track + canvas data) ──
+                        if (pageHasCanvas) {
+                            Crossfade(targetState = screenDataState.canvasData?.isVideo) { isVideo ->
+                                if (isVideo == true) {
+                                    screenDataState.canvasData?.url?.let { url ->
+                                        MediaPlayerView(
+                                            url = url,
+                                            modifier =
+                                                Modifier
+                                                    .fillMaxHeight()
+                                                    .then(
+                                                        if (getPlatform() == Platform.Desktop) {
+                                                            Modifier
+                                                        } else {
+                                                            Modifier
+                                                                .wrapContentWidth(unbounded = true, align = Alignment.CenterHorizontally)
+                                                                .align(Alignment.Center)
+                                                        },
+                                                    ),
+                                        )
+                                    }
+                                } else if (isVideo == false) {
+                                    AsyncImage(
+                                        model =
+                                            ImageRequest
+                                                .Builder(LocalPlatformContext.current)
+                                                .data(screenDataState.canvasData?.url)
+                                                .diskCachePolicy(CachePolicy.ENABLED)
+                                                .diskCacheKey(screenDataState.canvasData?.url)
+                                                .crossfade(550)
+                                                .build(),
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                }
+                            }
+                            // Bottom gradient overlay so the controls layer below stays readable.
+                            Crossfade(
+                                targetState = showHideControlLayout,
                                 modifier =
                                     Modifier
                                         .fillMaxSize()
-                                        .background(
-                                            Brush.verticalGradient(
-                                                colorStops =
-                                                    arrayOf(
-                                                        0.2f to overlay,
-                                                        1f to Color.Black,
+                                        .align(Alignment.BottomCenter),
+                            ) {
+                                if (it) {
+                                    Box(
+                                        modifier =
+                                            Modifier
+                                                .fillMaxSize()
+                                                .background(
+                                                    Brush.verticalGradient(
+                                                        colorStops =
+                                                            arrayOf(
+                                                                0.2f to overlay,
+                                                                1f to Color.Black,
+                                                            ),
                                                     ),
-                                            ),
-                                        ),
-                            )
+                                                ),
+                                    )
+                                }
+                            }
                         }
-                    }
-                }
 
+                        // ── Layer 2: centered square thumbnail ──
+                        // Positioned at the same Y as the original middle layout
+                        // (TopAppBar height + middleLayoutPaddingDp from the top of the page).
+                        // alpha=0 when the canvas is covering this page; otherwise visible so
+                        // adjacent pages always show the upcoming/previous track artwork.
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            Spacer(modifier = Modifier.height(topAppBarHeightDp.dp))
                 CenterAlignedTopAppBar(
                     modifier =
                         Modifier
@@ -935,9 +1175,8 @@ fun NowPlayingScreenContent(
                                 modifier =
                                     Modifier
                                         .animateContentSize()
-                                        .height(
-                                            middleLayoutPaddingDp.dp,
-                                        ).fillMaxWidth(),
+                                        .height(middleLayoutPaddingDp.dp)
+                                        .fillMaxWidth(),
                             )
 
                             Box(
@@ -945,17 +1184,8 @@ fun NowPlayingScreenContent(
                                     Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 20.dp)
-                                        .onGloballyPositioned {
-                                            middleLayoutHeightDp =
-                                                with(localDensity) {
-                                                    it.size.height
-                                                        .toDp()
-                                                        .value
-                                                        .toInt()
-                                                }
-                                        }.alpha(
-                                            if (showHideMiddleLayout) 1f else 0f,
-                                        ).aspectRatio(1f),
+                                        .alpha(if (pageHasCanvas) 0f else 1f)
+                                        .aspectRatio(1f),
                             ) {
                                 Box(
                                     contentAlignment = Alignment.Center,
@@ -1569,7 +1799,7 @@ fun NowPlayingScreenContent(
                                         }
                                     }
                                 }
-                                this@Column.AnimatedVisibility(
+                                androidx.compose.animation.AnimatedVisibility(
                                     visible = !showHideControlLayout,
                                     enter = fadeIn(),
                                     exit = fadeOut(),
@@ -1600,7 +1830,7 @@ fun NowPlayingScreenContent(
                                         contentAlignment = Alignment.BottomStart,
                                     ) {
                                         Column {
-                                            this@Column.AnimatedVisibility(canvasSubtitleLineIndex > -1) {
+                                            AnimatedVisibility(canvasSubtitleLineIndex > -1) {
                                                 val lineText =
                                                     screenDataState.lyricsData
                                                         ?.lyrics
@@ -1661,7 +1891,11 @@ fun NowPlayingScreenContent(
                                 }
                             }
                         }
-                        this@Column.AnimatedVisibility(
+                        // The original Touch Area overlay was removed: tap-to-toggle is now
+                        // wired directly onto each ArtworkPager page (canvas + middle), so
+                        // drag gestures reach HorizontalPager without competing with a
+                        // sibling clickable.
+                        androidx.compose.animation.AnimatedVisibility(
                             visible = screenDataState.canvasData != null,
                         ) {
                             Box(
@@ -1797,7 +2031,7 @@ fun NowPlayingScreenContent(
                                                 text =
                                                     when (screenDataState.lyricsData?.lyricsProvider) {
                                                         LyricsProvider.SIMPMUSIC -> {
-                                                            stringResource(Res.string.lyrics_provider_simpmusic)
+                                                            stringResource(Res.string.KuroMusic_lyrics)
                                                         }
 
                                                         LyricsProvider.LRCLIB -> {
@@ -2010,7 +2244,7 @@ fun NowPlayingScreenContent(
                 }
             }
         }
-        AnimatedVisibility(
+        androidx.compose.animation.AnimatedVisibility(
             visible = shouldShowToolbar && isExpanded,
             enter = fadeIn() + slideInVertically(),
             exit = fadeOut() + slideOutVertically(),
@@ -2154,3 +2388,7 @@ fun NowPlayingScreenContent(
         }
     }
 }
+}
+}
+}
+

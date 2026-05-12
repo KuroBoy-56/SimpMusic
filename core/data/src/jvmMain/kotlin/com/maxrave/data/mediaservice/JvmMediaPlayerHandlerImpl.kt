@@ -727,6 +727,11 @@ class JvmMediaPlayerHandlerImpl(
                 player.seekToPrevious()
             }
 
+            PlayerEvent.SkipToPrevious -> {
+                resetCrossfade()
+                player.seekToPrevious()
+            }
+
             PlayerEvent.Stop -> {
                 stopProgressUpdate()
                 player.stop()

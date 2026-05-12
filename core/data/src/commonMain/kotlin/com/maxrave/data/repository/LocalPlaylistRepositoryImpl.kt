@@ -826,4 +826,36 @@ internal class LocalPlaylistRepositoryImpl(
             delay(100)
             emit("Position updated")
         }.flowOn(Dispatchers.IO)
+
+    override fun moveItemInSyncedPlaylist(
+        playlistId: Long,
+        fromIndex: Int,
+        toIndex: Int,
+    ): Flow<LocalResource<String>> =
+        flow {
+            emit(LocalResource.Loading())
+            val localPlaylist = localDataSource.getLocalPlaylist(playlistId) ?: return@flow
+            val tracks = localPlaylist.tracks ?: emptyList()
+            val videoId = tracks.getOrNull(fromIndex) ?: return@flow
+
+            // Note: YouTube Music reordering via "browse/edit_playlist" needs "moveItemId" and "predecessorItemId"
+            // For now we just swap positions locally and log
+            Logger.d(TAG, "moveItemInSyncedPlaylist: moving $videoId from $fromIndex to $toIndex")
+
+            // Swapping logic for local data
+            val newTracks = tracks.toMutableList()
+            if (fromIndex in newTracks.indices && toIndex in newTracks.indices) {
+                val item = newTracks.removeAt(fromIndex)
+                newTracks.add(toIndex, item)
+                localDataSource.updateLocalPlaylistTracks(newTracks, playlistId)
+
+                // Update all positions in PairSongLocalPlaylist
+                newTracks.forEachIndexed { index, vid ->
+                    localDataSource.editPositionOfSongInPlaylist(playlistId, vid, index)
+                }
+                emit(LocalResource.Success("Playlist updated"))
+            } else {
+                emit(LocalResource.Error("Invalid index"))
+            }
+        }.flowOn(Dispatchers.IO)
 }

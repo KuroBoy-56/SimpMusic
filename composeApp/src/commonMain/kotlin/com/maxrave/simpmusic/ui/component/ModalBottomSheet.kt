@@ -163,6 +163,7 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import simpmusic.composeapp.generated.resources.KuroMusic_lyrics
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.add_to_a_playlist
 import simpmusic.composeapp.generated.resources.add_to_queue
@@ -606,7 +607,7 @@ fun InfoPlayerBottomSheet(
                     color = MaterialTheme.colorScheme.onBackground,
                 )
                 Text(
-                    text = (if (format?.itag == 0) "320kbps" else format?.itag?.toString()) ?: stringResource(Res.string.unknown),
+                    text = format?.itag?.toString() ?: stringResource(Res.string.unknown),
                     modifier =
                         Modifier
                             .fillMaxWidth()
@@ -854,39 +855,6 @@ fun InfoPlayerBottomSheet(
                     style = typo().bodyMedium,
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                )
-                Text(
-                    text = stringResource(Res.string.youtube_url),
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 10.dp),
-                    textAlign = TextAlign.Center,
-                    style = typo().labelMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-                Text(
-                    text =
-                        buildAnnotatedString {
-                            withLink(
-                                LinkAnnotation.Url(
-                                    "https://simpmusic.org/app/watch?v=${songEntity?.videoId}",
-                                    TextLinkStyles(style = SpanStyle(textDecoration = TextDecoration.Underline, color = MaterialTheme.colorScheme.primary)),
-                                ),
-                            ) {
-                                append("https://simpmusic.org/app/watch?v=${songEntity?.videoId}")
-                            }
-                        },
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .wrapContentHeight(align = Alignment.CenterVertically)
-                            .basicMarquee(
-                                iterations = Int.MAX_VALUE,
-                                animationMode = MarqueeAnimationMode.Immediately,
-                            ).focusable(),
-                    style = typo().bodyMedium,
-                    textAlign = TextAlign.Center,
                 )
                 OutlinedButton(
                     enabled = screenDataState.bitmap != null,
@@ -1572,7 +1540,7 @@ fun NowPlayingBottomSheet(
                     ) {
                         RadioButton(selected = selected == 0, onClick = { selected = 0 })
                         Spacer(modifier = Modifier.size(10.dp))
-                        Text(text = stringResource(Res.string.simpmusic_lyrics), style = typo().labelSmall, color = MaterialTheme.colorScheme.onBackground)
+                        Text(text = stringResource(Res.string.KuroMusic_lyrics), style = typo().labelSmall, color = MaterialTheme.colorScheme.onBackground)
                     }
                     Row(
                         modifier =
@@ -1894,12 +1862,6 @@ fun NowPlayingBottomSheet(
                                 changePlaybackSpeedPitch = true
                             }
                         }
-                    }
-                    ActionButton(
-                        icon = painterResource(Res.drawable.baseline_share_24),
-                        text = Res.string.share,
-                    ) {
-                        viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.Share)
                     }
                     EndOfModalBottomSheet()
                 }
@@ -2864,7 +2826,7 @@ fun PlaylistBottomSheet(
                 }
                 val shareTitle = stringResource(Res.string.share)
                 ActionButton(icon = painterResource(Res.drawable.baseline_share_24), text = Res.string.share) {
-                    val url = "https://simpmusic.org/app/playlist?list=${playlistId.replaceFirst("VL", "")}"
+                    val url = "https://www.youtube.com/playlist?list=${playlistId.replaceFirst("VL", "")}"
                     shareUrl(shareTitle, url)
                 }
                 EndOfModalBottomSheet()
@@ -3027,7 +2989,7 @@ fun LocalPlaylistBottomSheet(
                         text = if (ytPlaylistId != null) Res.string.share else Res.string.sync_first,
                         enable = (ytPlaylistId != null),
                     ) {
-                        val url = "https://simpmusic.org/app/playlist?list=${ytPlaylistId?.replaceFirst("VL", "")}"
+                        val url = "https://www.youtube.com/playlist?list=${ytPlaylistId?.replaceFirst("VL", "")}"
                         shareUrl(shareTitle, url)
                     }
                     EndOfModalBottomSheet()
@@ -3129,14 +3091,13 @@ fun SortPlaylistBottomSheet(
 fun DevLogInBottomSheet(
     onDismiss: () -> Unit,
     type: DevLogInType,
-    onDone: (String, String) -> Unit,
+    onDone: (String) -> Unit,
 ) {
     val coroutineScope = rememberCoroutineScope()
     val modelBottomSheetState =
         rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var value by rememberSaveable { mutableStateOf("") }
-    var secondValue by rememberSaveable { mutableStateOf("") }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -3169,25 +3130,12 @@ fun DevLogInBottomSheet(
                     maxLines = 1,
                 )
                 Spacer(modifier = Modifier.height(5.dp))
-                if (type == DevLogInType.YouTube) {
-                    Text(text = "Netscape cookie", style = typo().labelSmall, color = MaterialTheme.colorScheme.onBackground)
-                    Spacer(modifier = Modifier.height(5.dp))
-                    OutlinedTextField(
-                        value = secondValue,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                        onValueChange = { secondValue = it },
-                        maxLines = 1,
-                    )
-                    Spacer(modifier = Modifier.height(5.dp))
-                }
                 TextButton(
                     onClick = {
-                        if (value.isNotEmpty() && value.isNotBlank() &&
-                            (type != DevLogInType.YouTube || (secondValue.isNotEmpty() && secondValue.isNotBlank()))
-                        ) {
+                        if (value.isNotEmpty() && value.isNotBlank()) {
                             showToast(runBlocking { getString(Res.string.processing) }, ToastGravity.Bottom)
                             onDismiss()
-                            onDone(value, secondValue)
+                            onDone(value)
                         } else {
                             showToast(runBlocking { getString(Res.string.can_not_be_empty) }, ToastGravity.Bottom)
                         }
