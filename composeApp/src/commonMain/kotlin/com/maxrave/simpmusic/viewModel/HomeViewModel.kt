@@ -98,75 +98,38 @@ class HomeViewModel(
         viewModelScope.launch {
             regionCodeChart.value = dataStoreManager.chartKey.first()
             exploreChart(regionCodeChart.value ?: "ZZ")
-            language = dataStoreManager.getString(SELECTED_LANGUAGE).first()
-                ?: SUPPORTED_LANGUAGE.codes.first()
-            //  refresh when region change
-            val job1 =
-                launch {
-                    dataStoreManager.location.distinctUntilChanged().collect {
-                        regionCode = it
-                        getHomeItemList(params.value)
-                    }
-                }
-            //  refresh when language change
-            val job2 =
-                launch {
-                    dataStoreManager.language.distinctUntilChanged().collect {
-                        language = it
-                        getHomeItemList(params.value)
-                    }
-                }
-            val job3 =
-                launch {
-                    dataStoreManager.cookie.distinctUntilChanged().collect {
-                        getHomeItemList(params.value)
-                        _accountInfo.emit(
-                            Pair(
-                                dataStoreManager.getString("AccountName").first(),
-                                dataStoreManager.getString("AccountThumbUrl").first(),
-                            ),
-                        )
-                    }
-                }
-            val job4 =
-                launch {
-                    params.collectLatest {
-                        getHomeItemList(it)
-                    }
-                }
-            val job5 =
-                launch {
-                    dataStoreManager
-                        .cookie
-                        .distinctUntilChanged()
-                        .collectLatest {
-                            if (it.isNotEmpty()) {
-                                Logger.w(tag, "Cookie changed, refreshing home")
-                                loading.value = true
-                                delay(1000) // To wait for the cookie to be saved properly
-                                getHomeItemList(params.value)
-                            }
-                        }
-                }
-            val job6 =
-                launch {
-                    homeItemList.collectLatest { list ->
-                        _mainHomeThumbnail.value =
-                            list
-                                .firstOrNull()
-                                ?.contents
-                                ?.firstOrNull()
-                                ?.thumbnails
-                                ?.lastOrNull()
-                                ?.url
-                    }
-                }
-            job1.join()
-            job2.join()
-            job3.join()
-            job4.join()
-            job5.join()
-            job6.join()
+
+            combine(
+                dataStoreManager.location.distinctUntilChanged(),
+                dataStoreManager.language.distinctUntilChanged(),
+                dataStoreManager.cookie.distinctUntilChanged(),
+                params,
+            ) { location, lang, cookie, p ->
+                regionCode = location
+                language = lang
+                _accountInfo.emit(
+                    Pair(
+                        dataStoreManager.getString("AccountName").first(),
+                        dataStoreManager.getString("AccountThumbUrl").first(),
+                    ),
+                )
+                p
+            }.collectLatest { p ->
+                getHomeItemList(p)
+            }
+        }
+
+        viewModelScope.launch {
+            homeItemList.collectLatest { list ->
+                _mainHomeThumbnail.value =
+                    list
+                        .firstOrNull()
+                        ?.contents
+                        ?.firstOrNull()
+                        ?.thumbnails
+                        ?.lastOrNull()
+                        ?.url
+            }
         }
     }
 
@@ -182,102 +145,74 @@ class HomeViewModel(
     fun getHomeItemList(params: String? = null) {
         loading.value = true
         _homeListState.value = ListState.LOADING
-        language =
-            runBlocking {
-                dataStoreManager.getString(SELECTED_LANGUAGE).first()
-                    ?: SUPPORTED_LANGUAGE.codes.first()
-            }
-        regionCode = runBlocking { dataStoreManager.location.first() }
         homeJob?.cancel()
         homeJob =
             viewModelScope.launch {
-                combine(
+                // Fetch each component independently to avoid blocking the entire UI
+                launch {
                     homeRepository.getHomeData(
                         params,
                         getString(Res.string.view_count),
                         getString(Res.string.song),
-                    ),
-                    homeRepository.getMoodAndMomentsData(),
-                    homeRepository.getChartData(dataStoreManager.chartKey.first()),
+                    ).collect { home ->
+                        when (home) {
+                            is Resource.Success -> {
+                                _continuation.value = home.data?.first
+                                _homeItemList.value = home.data?.second ?: listOf()
+                                if (home.data?.first.isNullOrEmpty()) {
+                                    _homeListState.value = ListState.PAGINATION_EXHAUST
+                                } else {
+                                    _homeListState.value = ListState.IDLE
+                                }
+                                loading.value = false
+                            }
+                            is Resource.Error -> {
+                                _continuation.value = null
+                                _homeItemList.value = listOf()
+                                _homeListState.value = ListState.PAGINATION_EXHAUST
+                                showSnackBarErrorState.emit(home.message ?: "Error loading home")
+                                loading.value = false
+                            }
+                            else -> {
+                                // Keep loading true for other cases (like Resource.Loading)
+                            }
+                        }
+                    }
+                }
+
+                launch {
+                    homeRepository.getMoodAndMomentsData().collect { mood ->
+                        if (mood is Resource.Success) {
+                            _exploreMoodItem.value = mood.data
+                        } else if (mood is Resource.Error) {
+                            showSnackBarErrorState.emit(mood.message ?: "Error loading moods")
+                        }
+                    }
+                }
+
+                launch {
+                    val chartKey = dataStoreManager.chartKey.first()
+                    homeRepository.getChartData(chartKey).collect { c ->
+                        if (c is Resource.Success) {
+                            _chart.value = c.data
+                            regionCodeChart.value = chartKey
+                        } else if (c is Resource.Error) {
+                            showSnackBarErrorState.emit(c.message ?: "Error loading charts")
+                        }
+                    }
+                }
+
+                launch {
                     homeRepository.getNewRelease(
                         getString(Res.string.new_release),
                         getString(Res.string.music_video),
-                    ),
-                ) { home, exploreMood, exploreChart, newRelease ->
-                    HomeDataCombine(home, exploreMood, exploreChart, newRelease)
-                }.collect { result ->
-                    val home = result.home
-                    Logger.d("home size", "${home.data?.second?.size}")
-                    val exploreMoodItem = result.mood
-                    val chart = result.chart
-                    val newRelease = result.newRelease
-                    when (home) {
-                        is Resource.Success -> {
-                            _continuation.value = home.data?.first
-                            _homeItemList.value = home.data?.second ?: listOf()
-                        }
-
-                        else -> {
-                            _continuation.value = null
-                            _homeItemList.value = listOf()
+                    ).collect { nr ->
+                        if (nr is Resource.Success) {
+                            _newRelease.value = nr.data ?: listOf()
+                        } else if (nr is Resource.Error) {
+                            showSnackBarErrorState.emit(nr.message ?: "Error loading new releases")
                         }
                     }
-                    if (continuation.value.isNullOrEmpty()) {
-                        _homeListState.value = ListState.PAGINATION_EXHAUST
-                    } else {
-                        _homeListState.value = ListState.IDLE
-                    }
-                    when (chart) {
-                        is Resource.Success -> {
-                            _chart.value = chart.data
-                        }
-
-                        else -> {
-                            _chart.value = null
-                        }
-                    }
-                    when (newRelease) {
-                        is Resource.Success -> {
-                            _newRelease.value = newRelease.data ?: arrayListOf()
-                        }
-
-                        else -> {
-                            _newRelease.value = arrayListOf()
-                        }
-                    }
-                    when (exploreMoodItem) {
-                        is Resource.Success -> {
-                            _exploreMoodItem.value = exploreMoodItem.data
-                        }
-
-                        else -> {
-                            _exploreMoodItem.value = null
-                        }
-                    }
-                    regionCodeChart.value = dataStoreManager.chartKey.first()
-                    Logger.d("HomeViewModel", "getHomeItemList: $result")
-                    dataStoreManager.cookie.first().let {
-                        if (it != "") {
-                            _accountInfo.emit(
-                                Pair(
-                                    dataStoreManager.getString("AccountName").first(),
-                                    dataStoreManager.getString("AccountThumbUrl").first(),
-                                ),
-                            )
-                        }
-                    }
-                    when {
-                        home is Resource.Error -> home.message
-                        exploreMoodItem is Resource.Error -> exploreMoodItem.message
-                        chart is Resource.Error -> chart.message
-                        else -> null
-                    }?.let {
-                        showSnackBarErrorState.emit(it)
-                        Logger.w("Error", "getHomeItemList: ${home.message}")
-                        Logger.w("Error", "getHomeItemList: ${exploreMoodItem.message}")
-                        Logger.w("Error", "getHomeItemList: ${chart.message}")
-                    }
-                    loading.value = false
                 }
             }
     }

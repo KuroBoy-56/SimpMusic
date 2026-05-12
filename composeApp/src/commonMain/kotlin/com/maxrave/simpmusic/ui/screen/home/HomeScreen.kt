@@ -450,6 +450,48 @@ fun HomeScreen(
                                 }
                             }
                         }
+
+                        // Independent sections - Moved out of PAGINATION_EXHAUST
+                        items(newRelease, key = { "nr_" + it.hashCode() }) {
+                            Box(modifier = Modifier.padding(horizontal = 15.dp)) {
+                                HomeItem(navController = navController, data = it)
+                            }
+                        }
+
+                        item(key = "moods_moments") {
+                            AnimatedVisibility(visible = moodMomentAndGenre != null) {
+                                Box(modifier = Modifier.padding(horizontal = 15.dp)) {
+                                    moodMomentAndGenre?.let { MoodMomentAndGenre(mood = it, navController = navController) }
+                                }
+                            }
+                        }
+
+                        item(key = "charts") {
+                            Column(
+                                Modifier.padding(vertical = 10.dp).padding(horizontal = 15.dp),
+                                verticalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                ChartTitle()
+                                Spacer(modifier = Modifier.height(5.dp))
+                                Crossfade(targetState = regionChart) {
+                                    if (it != null) {
+                                        DropdownButton(
+                                            items = CHART_SUPPORTED_COUNTRY.itemsData.toList(),
+                                            defaultSelected = CHART_SUPPORTED_COUNTRY.itemsData.getOrNull(CHART_SUPPORTED_COUNTRY.items.indexOf(it)) ?: CHART_SUPPORTED_COUNTRY.itemsData[1],
+                                        ) { viewModel.exploreChart(CHART_SUPPORTED_COUNTRY.items[CHART_SUPPORTED_COUNTRY.itemsData.indexOf(it)]) }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(5.dp))
+                                Crossfade(targetState = chartLoading, label = "Chart") { loading ->
+                                    if (!loading) {
+                                        chart?.let { ChartData(chart = it, navController = navController) }
+                                    } else {
+                                        CenterLoadingBox(modifier = Modifier.fillMaxWidth().height(400.dp))
+                                    }
+                                }
+                            }
+                        }
+
                         item {
                             AnimatedVisibility(
                                 homeListState == ListState.PAGINATING,
@@ -457,47 +499,6 @@ fun HomeScreen(
                                 exit = fadeOut() + shrinkVertically(),
                             ) {
                                 CenterLoadingBox(modifier = Modifier.fillMaxWidth().height(200.dp))
-                            }
-                        }
-                        if (homeListState == ListState.PAGINATION_EXHAUST) {
-                            items(newRelease, key = { it.hashCode() }) {
-                                AnimatedVisibility(visible = newRelease.isNotEmpty()) {
-                                    Box(modifier = Modifier.padding(horizontal = 15.dp)) {
-                                        HomeItem(navController = navController, data = it)
-                                    }
-                                }
-                            }
-                            item {
-                                AnimatedVisibility(visible = moodMomentAndGenre != null) {
-                                    Box(modifier = Modifier.padding(horizontal = 15.dp)) {
-                                        moodMomentAndGenre?.let { MoodMomentAndGenre(mood = it, navController = navController) }
-                                    }
-                                }
-                            }
-                            item {
-                                Column(
-                                    Modifier.padding(vertical = 10.dp).padding(horizontal = 15.dp),
-                                    verticalArrangement = Arrangement.SpaceBetween,
-                                ) {
-                                    ChartTitle()
-                                    Spacer(modifier = Modifier.height(5.dp))
-                                    Crossfade(targetState = regionChart) {
-                                        if (it != null) {
-                                            DropdownButton(
-                                                items = CHART_SUPPORTED_COUNTRY.itemsData.toList(),
-                                                defaultSelected = CHART_SUPPORTED_COUNTRY.itemsData.getOrNull(CHART_SUPPORTED_COUNTRY.items.indexOf(it)) ?: CHART_SUPPORTED_COUNTRY.itemsData[1],
-                                            ) { viewModel.exploreChart(CHART_SUPPORTED_COUNTRY.items[CHART_SUPPORTED_COUNTRY.itemsData.indexOf(it)]) }
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.height(5.dp))
-                                    Crossfade(targetState = chartLoading, label = "Chart") { loading ->
-                                        if (!loading) {
-                                            chart?.let { ChartData(chart = it, navController = navController) }
-                                        } else {
-                                            CenterLoadingBox(modifier = Modifier.fillMaxWidth().height(400.dp))
-                                        }
-                                    }
-                                }
                             }
                         }
                         item { EndOfPage() }
