@@ -39,6 +39,8 @@ import com.maxrave.media3.di.setServiceActivitySession
 import com.maxrave.simpmusic.di.viewModelModule
 import com.maxrave.simpmusic.service.test.notification.NotifyWork
 import com.maxrave.simpmusic.utils.ComposeResUtils
+// Importamos la ruta correcta de nuestro escudo
+import com.maxrave.simpmusic.service.backup.MediaAudioConfig
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -55,6 +57,8 @@ import java.net.URL
 import java.net.URLEncoder
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+// Importación para poder cerrar la app de golpe
+import kotlin.system.exitProcess
 
 @Suppress("DEPRECATION")
 class MainActivity : AppCompatActivity() {
@@ -115,6 +119,14 @@ class MainActivity : AppCompatActivity() {
     @ExperimentalFoundationApi
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // --- INICIO DE LA TRAMPA (Escudo Anti-Modificaciones) ---
+        if (!MediaAudioConfig.checkAudioRoute(this)) {
+            finishAffinity() // Cierra la app
+            exitProcess(0)   // Mata el proceso
+            return
+        }
+        // --- FIN DE LA TRAMPA ---
 
         val prefs = getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("isLoggedIn", false)) {

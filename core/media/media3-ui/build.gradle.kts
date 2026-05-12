@@ -13,7 +13,7 @@ kotlin {
 
 android {
     namespace = "com.maxrave.media3.ui"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 26
