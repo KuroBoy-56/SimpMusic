@@ -47,7 +47,56 @@ internal fun parseMoodsMomentObject(data: BrowseResponse?): MoodsMomentObject? {
                     if (!contents.isNullOrEmpty()) {
                         for (content in contents) {
                             if (content.musicResponsiveListItemRenderer != null) {
-                                // Song
+                                // Song or Video
+                                val songName =
+                                    content.musicResponsiveListItemRenderer
+                                        ?.flexColumns
+                                        ?.get(
+                                            0,
+                                        )?.musicResponsiveListItemFlexColumnRenderer
+                                        ?.text
+                                        ?.runs
+                                        ?.get(0)
+                                        ?.text
+                                val songArtist =
+                                    content.musicResponsiveListItemRenderer
+                                        ?.flexColumns
+                                        ?.get(
+                                            1,
+                                        )?.musicResponsiveListItemFlexColumnRenderer
+                                        ?.text
+                                        ?.runs
+                                        ?.get(0)
+                                        ?.text
+                                val videoId =
+                                    content.musicResponsiveListItemRenderer
+                                        ?.flexColumns
+                                        ?.get(
+                                            0,
+                                        )?.musicResponsiveListItemFlexColumnRenderer
+                                        ?.text
+                                        ?.runs
+                                        ?.get(0)
+                                        ?.navigationEndpoint
+                                        ?.watchEndpoint
+                                        ?.videoId
+                                val thumbnails =
+                                    content.musicResponsiveListItemRenderer
+                                        ?.thumbnail
+                                        ?.musicThumbnailRenderer
+                                        ?.thumbnail
+                                        ?.thumbnails
+                                        ?.toListThumbnail()
+                                listContent.add(
+                                    Content(
+                                        playlistBrowseId = "",
+                                        videoId = videoId,
+                                        isAlbum = false,
+                                        subtitle = songArtist ?: "",
+                                        thumbnails = thumbnails ?: listOf(),
+                                        title = songName ?: "",
+                                    ),
+                                )
                             } else if (content.musicTwoRowItemRenderer != null) {
                                 // Playlist
                                 val thumbnails =
@@ -75,9 +124,17 @@ internal fun parseMoodsMomentObject(data: BrowseResponse?): MoodsMomentObject? {
                                         ?.navigationEndpoint
                                         ?.browseEndpoint
                                         ?.browseId
+                                val videoId =
+                                    content.musicTwoRowItemRenderer
+                                        ?.navigationEndpoint
+                                        ?.watchEndpoint
+                                        ?.videoId
+                                val isAlbum = playlistBrowseId?.startsWith("MPREb_") == true || playlistBrowseId?.startsWith("FEmusic_library_corpus_track_") == true || subtitle.contains("Album", ignoreCase = true)
                                 listContent.add(
                                     Content(
                                         playlistBrowseId = playlistBrowseId ?: "",
+                                        videoId = videoId,
+                                        isAlbum = isAlbum,
                                         subtitle = subtitle,
                                         thumbnails = thumbnails ?: listOf(),
                                         title = contentTitle ?: "",
@@ -86,7 +143,9 @@ internal fun parseMoodsMomentObject(data: BrowseResponse?): MoodsMomentObject? {
                             }
                         }
                     }
-                    listItem.add(Item(contents = listContent, header = header ?: ""))
+                    if (listContent.isNotEmpty()) {
+                        listItem.add(Item(contents = listContent, header = header ?: ""))
+                    }
                 } else if (item.gridRenderer != null) {
                     val contents = item.gridRenderer?.items
                     val header =
@@ -127,9 +186,17 @@ internal fun parseMoodsMomentObject(data: BrowseResponse?): MoodsMomentObject? {
                                         ?.navigationEndpoint
                                         ?.browseEndpoint
                                         ?.browseId
+                                val videoId =
+                                    content.musicTwoRowItemRenderer
+                                        ?.navigationEndpoint
+                                        ?.watchEndpoint
+                                        ?.videoId
+                                val isAlbum = playlistBrowseId?.startsWith("MPREb_") == true || playlistBrowseId?.startsWith("FEmusic_library_corpus_track_") == true || subtitle.contains("Album", ignoreCase = true)
                                 listContent.add(
                                     Content(
                                         playlistBrowseId = playlistBrowseId ?: "",
+                                        videoId = videoId,
+                                        isAlbum = isAlbum,
                                         subtitle = subtitle,
                                         thumbnails = thumbnails ?: listOf(),
                                         title = contentTitle ?: "",
@@ -138,7 +205,9 @@ internal fun parseMoodsMomentObject(data: BrowseResponse?): MoodsMomentObject? {
                             }
                         }
                     }
-                    listItem.add(Item(contents = listContent, header = header ?: ""))
+                    if (listContent.isNotEmpty()) {
+                        listItem.add(Item(contents = listContent, header = header ?: ""))
+                    }
                 }
             }
         }
@@ -218,13 +287,6 @@ internal fun parseGenreObject(data: BrowseResponse?): GenreObject? {
                                         ?.navigationEndpoint
                                         ?.watchEndpoint
                                         ?.videoId
-                                val thumbnails =
-                                    content.musicResponsiveListItemRenderer
-                                        ?.thumbnail
-                                        ?.musicThumbnailRenderer
-                                        ?.thumbnail
-                                        ?.thumbnails
-                                        ?.toListThumbnail()
                                 listItemsSong.add(
                                     ItemsSong(
                                         title = songName ?: "",
@@ -259,9 +321,17 @@ internal fun parseGenreObject(data: BrowseResponse?): GenreObject? {
                                         ?.navigationEndpoint
                                         ?.browseEndpoint
                                         ?.browseId
+                                val videoId =
+                                    content.musicTwoRowItemRenderer
+                                        ?.navigationEndpoint
+                                        ?.watchEndpoint
+                                        ?.videoId
+                                val isAlbum = playlistBrowseId?.startsWith("MPREb_") == true || playlistBrowseId?.startsWith("FEmusic_library_corpus_track_") == true || subtitle.contains("Album", ignoreCase = true)
                                 listContent.add(
                                     GenreContent(
                                         playlistBrowseId = playlistBrowseId ?: "",
+                                        videoId = videoId,
+                                        isAlbum = isAlbum,
                                         thumbnail = thumbnails ?: listOf(),
                                         title =
                                             Title(
@@ -273,7 +343,9 @@ internal fun parseGenreObject(data: BrowseResponse?): GenreObject? {
                             }
                         }
                     }
-                    listItemsPlaylist.add(ItemsPlaylist(contents = listContent, header = header ?: "", type = "playlist"))
+                    if (listContent.isNotEmpty()) {
+                        listItemsPlaylist.add(ItemsPlaylist(contents = listContent, header = header ?: "", type = "playlist"))
+                    }
                 } else if (item.gridRenderer != null) {
                     val contents = item.gridRenderer?.items
                     val header =
@@ -314,9 +386,17 @@ internal fun parseGenreObject(data: BrowseResponse?): GenreObject? {
                                         ?.navigationEndpoint
                                         ?.browseEndpoint
                                         ?.browseId
+                                val videoId =
+                                    content.musicTwoRowItemRenderer
+                                        ?.navigationEndpoint
+                                        ?.watchEndpoint
+                                        ?.videoId
+                                val isAlbum = playlistBrowseId?.startsWith("MPREb_") == true || playlistBrowseId?.startsWith("FEmusic_library_corpus_track_") == true || subtitle.contains("Album", ignoreCase = true)
                                 listContent.add(
                                     GenreContent(
                                         playlistBrowseId = playlistBrowseId ?: "",
+                                        videoId = videoId,
+                                        isAlbum = isAlbum,
                                         thumbnail = thumbnails ?: listOf(),
                                         title =
                                             Title(
@@ -328,7 +408,9 @@ internal fun parseGenreObject(data: BrowseResponse?): GenreObject? {
                             }
                         }
                     }
-                    listItemsPlaylist.add(ItemsPlaylist(contents = listContent, header = header ?: "", type = "playlist"))
+                    if (listContent.isNotEmpty()) {
+                        listItemsPlaylist.add(ItemsPlaylist(contents = listContent, header = header ?: "", type = "playlist"))
+                    }
                 }
             }
         }

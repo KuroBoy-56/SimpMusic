@@ -92,8 +92,10 @@ import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.HomeViewModel
+import com.maxrave.simpmusic.viewModel.SharedViewModel
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.album
@@ -1314,6 +1316,7 @@ fun MoodAndGenresContentItem(
     data: Any?,
     navController: NavController,
 ) {
+    val sharedViewModel = koinInject<SharedViewModel>()
     Column(
         modifier = Modifier.wrapContentHeight(align = Alignment.CenterVertically, unbounded = true),
     ) {
@@ -1347,16 +1350,28 @@ fun MoodAndGenresContentItem(
                 }
             items(itemList) { item ->
                 HomeItemContentPlaylist(onClick = {
-                    navController.navigate(
-                        PlaylistDestination(
-                            playlistId =
-                                if (item is com.maxrave.domain.data.model.mood.genre.Content) {
-                                    item.playlistBrowseId
-                                } else {
-                                    (item as com.maxrave.domain.data.model.mood.moodmoments.Content).playlistBrowseId
-                                },
-                        ),
-                    )
+                    val playlistBrowseId: String
+                    val videoId: String?
+                    val isAlbum: Boolean
+                    
+                    if (item is com.maxrave.domain.data.model.mood.genre.Content) {
+                        playlistBrowseId = item.playlistBrowseId
+                        videoId = item.videoId
+                        isAlbum = item.isAlbum
+                    } else {
+                        val itm = item as com.maxrave.domain.data.model.mood.moodmoments.Content
+                        playlistBrowseId = itm.playlistBrowseId
+                        videoId = itm.videoId
+                        isAlbum = itm.isAlbum
+                    }
+
+                    if (videoId != null) {
+                        sharedViewModel.loadSharedMediaItem(videoId)
+                    } else if (isAlbum) {
+                        navController.navigate(AlbumDestination(playlistBrowseId))
+                    } else if (playlistBrowseId.isNotEmpty()) {
+                        navController.navigate(PlaylistDestination(playlistBrowseId))
+                    }
                 }, data = item)
             }
         }

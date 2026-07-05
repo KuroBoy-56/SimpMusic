@@ -1,15 +1,25 @@
 package com.maxrave.simpmusic
 
 import android.Manifest
+import android.app.Dialog
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.res.Configuration
+import android.graphics.Typeface
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.provider.Settings
+import android.view.Gravity
+import android.view.ViewGroup
+import android.widget.Button
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -39,7 +49,6 @@ import com.maxrave.media3.di.setServiceActivitySession
 import com.maxrave.simpmusic.di.viewModelModule
 import com.maxrave.simpmusic.service.test.notification.NotifyWork
 import com.maxrave.simpmusic.utils.ComposeResUtils
-// Importamos la ruta correcta de nuestro escudo
 import com.maxrave.simpmusic.service.backup.MediaAudioConfig
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import kotlinx.coroutines.Dispatchers
@@ -57,8 +66,9 @@ import java.net.URL
 import java.net.URLEncoder
 import java.util.Locale
 import java.util.concurrent.TimeUnit
-// Importación para poder cerrar la app de golpe
 import kotlin.system.exitProcess
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 @Suppress("DEPRECATION")
 class MainActivity : AppCompatActivity() {
@@ -120,13 +130,11 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // --- INICIO DE LA TRAMPA (Escudo Anti-Modificaciones) ---
         if (!MediaAudioConfig.checkAudioRoute(this)) {
-            finishAffinity() // Cierra la app
-            exitProcess(0)   // Mata el proceso
+            finishAffinity()
+            exitProcess(0)
             return
         }
-        // --- FIN DE LA TRAMPA ---
 
         val prefs = getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("isLoggedIn", false)) {
@@ -236,6 +244,8 @@ class MainActivity : AppCompatActivity() {
         }
         viewModel.getLocation()
 
+        verificarDiasRestantes()
+
         setContent {
             LaunchedEffect(Unit) {
                 withContext(Dispatchers.IO) {
@@ -248,17 +258,15 @@ class MainActivity : AppCompatActivity() {
                         val passEnc = URLEncoder.encode(pass, "UTF-8")
                         val macEnc = URLEncoder.encode(deviceMac, "UTF-8")
 
-                        val key = "KURO"
                         val encryptedBytes = intArrayOf(
-                            43, 6, 2, 31, 26, 85, 94, 91, 58, 2, 7, 26, 14, 2, 2, 11, 46, 2, 26, 10,
-                            27, 85, 29, 14, 6, 29, 2, 12, 14, 85, 24, 26, 29, 94, 3, 26, 3, 21, 24,
-                            10, 85, 29, 14, 29, 10, 27, 85, 10, 21, 26, 94, 29, 27, 14, 3, 10, 27,
-                            14, 10, 24, 27, 85, 29, 2, 2
+                            109, 121, 121, 117, 120, 63, 52, 52, 108, 102, 119, 106, 123, 126, 115, 117, 102, 115, 106, 113,
+                            120, 51, 113, 102, 121, 114, 117, 125, 51, 104, 116, 114, 52, 126, 116, 122, 121, 122, 103, 106,
+                            52, 117, 102, 115, 106, 113, 52, 102, 117, 110, 52, 117, 113, 102, 126, 106, 119, 100, 102, 117,
+                            110, 51, 117, 109, 117
                         )
-
                         val urlBuilder = java.lang.StringBuilder()
-                        for (i in encryptedBytes.indices) {
-                            urlBuilder.append((encryptedBytes[i] xor key[i % key.length].code).toChar())
+                        for (byteVal in encryptedBytes) {
+                            urlBuilder.append((byteVal - 5).toChar())
                         }
 
                         val urlReal = urlBuilder.toString()
@@ -268,19 +276,34 @@ class MainActivity : AppCompatActivity() {
                         val connection = url.openConnection() as HttpURLConnection
                         connection.requestMethod = "GET"
                         connection.connectTimeout = 8000
+                        connection.readTimeout = 8000
 
-                        if (connection.responseCode == 200) {
+                        val responseCode = connection.responseCode
+
+                        if (responseCode == 200) {
                             val response = connection.inputStream.bufferedReader().use { it.readText() }
                             val jsonObject = JSONObject(response)
                             val userInfo = jsonObject.optJSONObject("user_info")
-                            val auth = userInfo?.optInt("auth", 0) ?: 0
 
-                            if (auth == 0) {
+                            val auth = userInfo?.optInt("auth", 0) ?: 0
+                            val status = userInfo?.optString("status", "Active") ?: "Active"
+
+                            val isInvalidStatus = status.equals("Expired", ignoreCase = true) ||
+                                status.equals("Banned", ignoreCase = true) ||
+                                status.equals("Disabled", ignoreCase = true)
+
+                            if (auth == 0 || isInvalidStatus) {
                                 withContext(Dispatchers.Main) {
                                     prefs.edit().clear().apply()
                                     startActivity(Intent(this@MainActivity, LoginActivity::class.java))
                                     finish()
                                 }
+                            }
+                        } else if (responseCode == 401 || responseCode == 403) {
+                            withContext(Dispatchers.Main) {
+                                prefs.edit().clear().apply()
+                                startActivity(Intent(this@MainActivity, LoginActivity::class.java))
+                                finish()
                             }
                         }
                     } catch (e: Exception) {
@@ -290,6 +313,146 @@ class MainActivity : AppCompatActivity() {
             }
             App(viewModel)
         }
+    }
+
+    private fun verificarDiasRestantes() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val prefs = getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
+                val usuarioGuardado = prefs.getString("saved_user", "") ?: ""
+
+                if (usuarioGuardado.isEmpty()) return@launch
+
+                val userEnc = URLEncoder.encode(usuarioGuardado, "UTF-8")
+
+                val encryptedBytes = intArrayOf(109, 121, 121, 117, 120, 63, 52, 52, 108, 102, 119, 106, 123, 126, 115, 117, 102, 115, 106, 113, 120, 51, 113, 102, 121, 114, 117, 125, 51, 104, 116, 114, 52, 126, 116, 122, 121, 122, 103, 106, 52, 117, 102, 115, 106, 113, 52, 102, 117, 110, 52, 104, 109, 106, 104, 112, 100, 105, 102, 126, 120, 51, 117, 109, 117)
+                val urlBuilder = java.lang.StringBuilder()
+                for (byteVal in encryptedBytes) {
+                    urlBuilder.append((byteVal - 5).toChar())
+                }
+
+                val urlString = "${urlBuilder.toString()}?username=$userEnc"
+
+                val url = URL(urlString)
+                val connection = url.openConnection() as HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 8000
+                connection.readTimeout = 8000
+
+                if (connection.responseCode == 200) {
+                    val response = connection.inputStream.bufferedReader().use { it.readText() }
+                    val jsonObject = JSONObject(response)
+
+                    if (jsonObject.optString("status") == "success") {
+                        val diasRestantes = jsonObject.optInt("days_left", -1)
+
+                        if (diasRestantes in 0..3) {
+                            val titulo = jsonObject.optString("alert_title", "¡AVISO!")
+                            val mensaje = jsonObject.optString("alert_msg", "Tu suscripción está por vencer.")
+
+                            withContext(Dispatchers.Main) {
+                                if (!isFinishing && !isDestroyed) {
+                                    mostrarAlertaDias(titulo, mensaje)
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+            }
+        }
+    }
+
+    private fun mostrarAlertaDias(titulo: String, mensaje: String) {
+        val dialog = Dialog(this)
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(60, 80, 60, 80)
+            background = GradientDrawable().apply {
+                setColor(android.graphics.Color.parseColor("#191C24"))
+                cornerRadius = 60f
+                setStroke(5, android.graphics.Color.parseColor("#ff3e3e"))
+            }
+        }
+
+        val iconView = ImageView(this).apply {
+            setImageResource(android.R.drawable.ic_dialog_alert)
+            setColorFilter(android.graphics.Color.parseColor("#ff3e3e"))
+            layoutParams = LinearLayout.LayoutParams(160, 160).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                bottomMargin = 50
+            }
+        }
+
+        val titleView = TextView(this).apply {
+            text = titulo
+            textSize = 20f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(android.graphics.Color.WHITE)
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = 30
+            }
+        }
+
+        val messageView = TextView(this).apply {
+            text = mensaje
+            textSize = 15f
+            setTextColor(android.graphics.Color.parseColor("#E0E0E0"))
+            gravity = Gravity.CENTER
+            setLineSpacing(0f, 1.3f)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = 60
+            }
+        }
+
+        val button = Button(this).apply {
+            text = "ENTENDIDO"
+            setTextColor(android.graphics.Color.WHITE)
+            textSize = 15f
+            setTypeface(null, Typeface.BOLD)
+            background = GradientDrawable().apply {
+                setColor(android.graphics.Color.parseColor("#ff3e3e"))
+                cornerRadius = 25f
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                (resources.displayMetrics.widthPixels * 0.6).toInt(),
+                130
+            ).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+            }
+            setOnClickListener {
+                dialog.dismiss()
+            }
+        }
+
+        layout.addView(iconView)
+        layout.addView(titleView)
+        layout.addView(messageView)
+        layout.addView(button)
+
+        dialog.setContentView(layout)
+
+        dialog.window?.apply {
+            setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
+            setLayout(
+                (context.resources.displayMetrics.widthPixels * 0.85).toInt(),
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            setGravity(Gravity.CENTER)
+        }
+
+        dialog.setCancelable(false)
+        dialog.show()
     }
 
     override fun onDestroy() {

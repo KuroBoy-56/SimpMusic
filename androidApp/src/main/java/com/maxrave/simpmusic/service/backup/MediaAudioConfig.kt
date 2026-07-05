@@ -9,20 +9,40 @@ import java.security.MessageDigest
 
 object MediaAudioConfig {
 
-    // Generador dinámico del Hash (Totalmente ofuscado con XOR y la llave "KURO")
-    private fun getDefaultRouteId(): String {
-        val key = "KURO"
-        val encryptedBytes = intArrayOf(
-            10, 45, 106, 12, 127, 20, 20, 112, 8, 35, 20, 110, 29, 45, 104, 11,
-            13, 22, 14, 119, 120, 45, 99, 127, 122, 19, 96, 110, 126, 32, 99, 10,
-            13, 36, 103, 10, 14, 17, 20, 12, 13, 36, 101, 12, 10, 35, 17, 120,
-            13, 16, 17, 122, 13, 37, 17, 12, 9, 17, 107, 125, 120, 37, 17, 10
+    private fun getDevRouteId(): String {
+        val b = intArrayOf(
+            0b01000001, 0b00111000, 0b00111000, 0b01000011, 0b00110100, 0b01000001, 0b01000110, 0b00110011,
+            0b01000011, 0b00110110, 0b01000110, 0b00110001, 0b00110110, 0b00111000, 0b00110110, 0b01000100,
+            0b01000110, 0b01000011, 0b01000100, 0b00111000, 0b00110011, 0b00111000, 0b00110001, 0b00110000,
+            0b00110001, 0b01000110, 0b00110010, 0b00110001, 0b00110101, 0b00110101, 0b00110001, 0b01000101,
+            0b01000110, 0b00111001, 0b00110101, 0b01000101, 0b01000101, 0b01000010, 0b01000110, 0b01000011,
+            0b01000110, 0b00110001, 0b00110111, 0b01000011, 0b01000001, 0b00110110, 0b01000001, 0b00110111,
+            0b01000110, 0b01000101, 0b01000001, 0b00110101, 0b01000110, 0b00110000, 0b01000001, 0b01000011,
+            0b01000010, 0b01000100, 0b00111001, 0b00110010, 0b00110011, 0b00110000, 0b01000011, 0b01000101
         )
-        val builder = StringBuilder()
-        for (i in encryptedBytes.indices) {
-            builder.append((encryptedBytes[i] xor key[i % key.length].code).toChar())
+        val s = java.lang.StringBuilder()
+        for (i in b) {
+            s.append(i.toChar())
         }
-        return builder.toString()
+        return s.toString()
+    }
+
+    private fun getOfficialRouteId(): String {
+        val b = intArrayOf(
+            0b00110011, 0b00110101, 0b01000010, 0b00110100, 0b00111001, 0b01000101, 0b01000010, 0b01000011,
+            0b00110111, 0b01000011, 0b00110001, 0b01000010, 0b00111001, 0b00111000, 0b00110001, 0b00111000,
+            0b01000100, 0b00110011, 0b01000100, 0b01000110, 0b00110010, 0b01000001, 0b00111001, 0b01000011,
+            0b00110110, 0b00110100, 0b01000010, 0b01000110, 0b00111000, 0b01000011, 0b01000010, 0b00110101,
+            0b00110010, 0b01000001, 0b01000100, 0b00110110, 0b01000101, 0b01000010, 0b01000100, 0b00110101,
+            0b00110110, 0b00111001, 0b00111000, 0b00110111, 0b00110011, 0b01000011, 0b01000011, 0b00111001,
+            0b00110000, 0b00110111, 0b00110110, 0b00111001, 0b00111001, 0b00110110, 0b00110000, 0b01000011,
+            0b00110100, 0b00111001, 0b01000101, 0b00110001, 0b00110001, 0b00110010, 0b00111001, 0b01000010
+        )
+        val s = java.lang.StringBuilder()
+        for (i in b) {
+            s.append(i.toChar())
+        }
+        return s.toString()
     }
 
     @Suppress("DEPRECATION")
@@ -51,14 +71,12 @@ object MediaAudioConfig {
                     md.update(signature.toByteArray())
                     val currentRouteId = bytesToHex(md.digest())
 
-                    // Comparamos el hash real con el que desencriptamos en memoria
-                    if (getDefaultRouteId() == currentRouteId) {
+                    if (currentRouteId == getDevRouteId() || currentRouteId == getOfficialRouteId()) {
                         return true
                     }
                 }
             }
         } catch (e: Exception) {
-            // Muere en el más absoluto silencio
         }
         return false
     }

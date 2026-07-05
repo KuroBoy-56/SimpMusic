@@ -497,8 +497,13 @@ fun NowPlayingScreenContent(
         }
     }
 
-    LaunchedEffect(bgColor) {
-        endColor.animateTo(bgColor, animationSpec = tween(1000))
+    val isLightTopBg = startColor.value.luminance() > 0.5f
+    val topContentColor = if (isLightTopBg) Color.Black else Color.White
+    val topTextShadow = if (!isLightTopBg) Shadow(color = Color.Black.copy(alpha = 0.6f), offset = Offset(0f, 2f), blurRadius = 4f) else null
+
+    LaunchedEffect(bgColor, isLightTopBg) {
+        val targetEndColor = if (isLightTopBg) bgColor else md_theme_dark_background
+        endColor.animateTo(targetEndColor, animationSpec = tween(1000))
     }
 
     LaunchedEffect(Unit) {
@@ -511,11 +516,6 @@ fun NowPlayingScreenContent(
                 }
             }
     }
-
-    // MAGIA DE COLOR: Barra superior (TopAppBar) y controles generales
-    val isLightTopBg = startColor.value.luminance() > 0.5f
-    val topContentColor = if (isLightTopBg) Color.Black else Color.White
-    val topTextShadow = if (!isLightTopBg) Shadow(color = Color.Black.copy(alpha = 0.6f), offset = Offset(0f, 2f), blurRadius = 4f) else null
 
     var topAppBarHeightDp by rememberSaveable {
         mutableIntStateOf(0)
@@ -863,7 +863,7 @@ fun NowPlayingScreenContent(
                         if (blurBg && screenDataState.canvasData == null) {
                             Modifier
                                 .background(Color.Transparent)
-                                .hazeEffect(hazeState, style = CupertinoMaterials.thin()) {
+                                .hazeEffect(hazeState, style = if (isLightTopBg) CupertinoMaterials.thin() else CupertinoMaterials.regular()) {
                                     blurEnabled = true
                                 }
                         } else {
@@ -997,7 +997,7 @@ fun NowPlayingScreenContent(
                                                     colors =
                                                         listOf(
                                                             pageStartColor.value,
-                                                            md_theme_dark_background,
+                                                            endColor.value,
                                                         ),
                                                     start = gradientOffset.start,
                                                     end = gradientOffset.end,
@@ -1594,8 +1594,8 @@ fun NowPlayingScreenContent(
                                                                         ).clip(
                                                                             RoundedCornerShape(8.dp),
                                                                         ),
-                                                                color = Color.Gray,
-                                                                trackColor = Color.DarkGray,
+                                                                color = topContentColor.copy(alpha = 0.5f),
+                                                                trackColor = topContentColor.copy(alpha = 0.2f),
                                                                 strokeCap = StrokeCap.Round,
                                                             )
                                                         }
@@ -1612,10 +1612,10 @@ fun NowPlayingScreenContent(
                                                                         ).clip(
                                                                             RoundedCornerShape(8.dp),
                                                                         ),
-                                                                color = Color.Gray,
+                                                                color = topContentColor.copy(alpha = 0.5f),
                                                                 trackColor =
-                                                                    Color.Gray.copy(
-                                                                        alpha = 0.6f,
+                                                                    topContentColor.copy(
+                                                                        alpha = 0.2f,
                                                                     ),
                                                                 strokeCap = StrokeCap.Round,
                                                                 drawStopIndicator = {},

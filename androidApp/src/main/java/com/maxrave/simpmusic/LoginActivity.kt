@@ -395,6 +395,15 @@ class LoginActivity : AppCompatActivity() {
                     val auth = userInfo.optInt("auth", 0)
 
                     if (auth == 1) {
+                        val status = userInfo.optString("status", "Active")
+                        val isInvalidStatus = status.equals("Expired", ignoreCase = true) ||
+                            status.equals("Banned", ignoreCase = true) ||
+                            status.equals("Disabled", ignoreCase = true)
+
+                        if (isInvalidStatus) {
+                            return@withContext "Cuenta inactiva: $status"
+                        }
+
                         return@withContext "SUCCESS"
                     } else {
                         return@withContext userInfo.optString("status", "Acceso denegado")

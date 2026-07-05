@@ -5,6 +5,8 @@ import com.maxrave.domain.data.type.HomeContentType
 
 data class Content(
     val playlistBrowseId: String,
+    val videoId: String? = null,
+    val isAlbum: Boolean = false,
     val subtitle: String,
     val thumbnails: List<Thumbnail>?,
     val title: String,
