@@ -281,10 +281,6 @@ fun NotificationItem(
     notification: NotificationEntity,
     navController: NavController,
 ) {
-    if (notification.type == NotificationEntity.TYPE_BLOG) {
-        BlogNotificationItem(notification)
-        return
-    }
     Box(
         modifier =
             Modifier
@@ -366,66 +362,6 @@ fun NotificationItem(
             text = notification.time.formatTimeAgo(),
             style = typo().titleSmall,
             color = MaterialTheme.colorScheme.onBackground,
-            modifier =
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(end = 15.dp),
-        )
-    }
-}
-
-@Composable
-fun BlogNotificationItem(notification: NotificationEntity) {
-    val uriHandler = LocalUriHandler.current
-    val link = notification.link
-    Box(
-        modifier =
-            Modifier
-                .padding(5.dp)
-                .fillMaxWidth(),
-    ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clickable(enabled = !link.isNullOrEmpty()) {
-                    link?.let { uriHandler.openUri(it) }
-                },
-        ) {
-            Box(
-                modifier =
-                    Modifier
-                        .align(Alignment.Top)
-                        .size(50.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.08f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    painter = painterResource(Res.drawable.ic_rss_feed_24),
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(26.dp),
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(Modifier.padding(end = 56.dp)) {
-                Text(text = "New blog post", style = typo().titleSmall)
-                Spacer(modifier = Modifier.height(3.dp))
-                Text(text = notification.name, style = typo().titleMedium)
-                notification.description?.takeIf { it.isNotBlank() }?.let { desc ->
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = desc,
-                        style = typo().bodySmall,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-        }
-        Text(
-            text = notification.time.formatTimeAgo(),
-            style = typo().titleSmall,
             modifier =
                 Modifier
                     .align(Alignment.TopEnd)

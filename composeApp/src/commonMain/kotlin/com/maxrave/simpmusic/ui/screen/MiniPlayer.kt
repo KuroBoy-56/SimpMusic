@@ -344,39 +344,41 @@ fun MiniPlayer(
                     ).then(
                         Modifier
                             .clipToBounds()
-                            .offset { IntOffset(0, offsetY.value.roundToInt()) }
-                            .clickable(
-                                onClick = onClick,
-                            ).pointerInput(Unit) {
-                                detectVerticalDragGestures(
-                                    onDragStart = {
-                                    },
-                                    onVerticalDrag = { change: PointerInputChange, dragAmount: Float ->
-                                        if (offsetY.value + dragAmount > 0) {
-                                            coroutineScope.launch {
-                                                change.consume()
-                                                offsetY.animateTo(offsetY.value + 2 * dragAmount)
-                                            }
-                                        }
-                                    },
-                                    onDragCancel = {
-                                        coroutineScope.launch {
-                                            offsetY.animateTo(0f)
-                                        }
-                                    },
-                                    onDragEnd = {
-                                        coroutineScope.launch {
-                                            if (offsetY.value > 70) {
-                                                onClose()
-                                            }
-                                            offsetY.animateTo(0f)
-                                        }
-                                    },
-                                )
-                            },
+                            .offset { IntOffset(0, offsetY.value.roundToInt()) },
                     ),
         ) {
-            Box(modifier = Modifier.fillMaxHeight()) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxHeight()
+                        .pointerInput(Unit) {
+                            detectVerticalDragGestures(
+                                onDragStart = {
+                                },
+                                onVerticalDrag = { change: PointerInputChange, dragAmount: Float ->
+                                    if (offsetY.value + dragAmount > 0) {
+                                        coroutineScope.launch {
+                                            change.consume()
+                                            offsetY.animateTo(offsetY.value + 2 * dragAmount)
+                                        }
+                                    }
+                                },
+                                onDragCancel = {
+                                    coroutineScope.launch {
+                                        offsetY.animateTo(0f)
+                                    }
+                                },
+                                onDragEnd = {
+                                    coroutineScope.launch {
+                                        if (offsetY.value > 70) {
+                                            onClose()
+                                        }
+                                        offsetY.animateTo(0f)
+                                    }
+                                },
+                            )
+                        },
+            ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier =
@@ -384,10 +386,21 @@ fun MiniPlayer(
                             .fillMaxSize(),
                 ) {
                     Spacer(modifier = Modifier.size(8.dp))
-                    Box(modifier = Modifier.weight(1F)) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .weight(1F)
+                                .fillMaxHeight()
+                                .clickable(
+                                    indication = null,
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    onClick = onClick,
+                                ),
+                    ) {
                         Row(
                             modifier =
                                 Modifier
+                                    .fillMaxHeight()
                                     .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                                     .pointerInput(Unit) {
                                         detectHorizontalDragGestures(
@@ -424,6 +437,7 @@ fun MiniPlayer(
                                             },
                                         )
                                     },
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             AsyncImage(
                                 model =
@@ -496,6 +510,7 @@ fun MiniPlayer(
                                                         animationMode = MarqueeAnimationMode.Immediately,
                                                     ).focusable(),
                                         )
+                                        val lyricLine by sharedViewModel.currentLyricLine.collectAsStateWithLifecycle()
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             androidx.compose.animation.AnimatedVisibility(visible = songEntity?.isExplicit == true) {
                                                 ExplicitBadge(
@@ -507,7 +522,7 @@ fun MiniPlayer(
                                                 )
                                             }
                                             Text(
-                                                text = (songEntity?.artistName?.connectArtists() ?: ""),
+                                                text = lyricLine ?: (songEntity?.artistName?.connectArtists() ?: ""),
                                                 style = typo().bodySmall.copy(shadow = textShadow),
                                                 maxLines = 1,
                                                 color = textColor.copy(alpha = 0.8f),

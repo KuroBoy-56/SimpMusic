@@ -77,6 +77,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.cancellable
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.filterNotNull
@@ -209,6 +210,9 @@ class SharedViewModel(
     val openAppTime: StateFlow<Int> = dataStoreManager.openAppTime.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), 0)
     private val _shareSavedLyrics: MutableStateFlow<Boolean> = MutableStateFlow(true)
     val shareSavedLyrics: StateFlow<Boolean> get() = _shareSavedLyrics
+
+    private val _currentLyricLine = MutableStateFlow<String?>(null)
+    val currentLyricLine: StateFlow<String?> = _currentLyricLine
 
     private fun cleanTitleForLyrics(rawTitle: String): String {
         var clean = rawTitle
@@ -445,10 +449,45 @@ class SharedViewModel(
                         }
                     }
                 }
+            val currentLyricLineJob =
+                launch {
+                    combine(timeline, nowPlayingScreenData) { timeline: TimeLine, screenData: NowPlayingScreenData ->
+                        Pair(timeline, screenData)
+                    }.collectLatest { (timeline, screenData) ->
+                        val lyrics = screenData.lyricsData?.lyrics
+                        if (lyrics == null || lyrics.syncType == "UNSYNCED" || lyrics.syncType == null) {
+                            _currentLyricLine.value = null
+                            return@collectLatest
+                        }
+                        val lines = lyrics.lines ?: run {
+                            _currentLyricLine.value = null
+                            return@collectLatest
+                        }
+
+                        var currentLine: String? = null
+                        if (timeline.current > 0L) {
+                            for (i in lines.indices) {
+                                val startTimeMs = lines[i].startTimeMs.toLongOrNull() ?: 0L
+                                val endTimeMs =
+                                    if (i < lines.size - 1) {
+                                        lines[i + 1].startTimeMs.toLongOrNull() ?: 0L
+                                    } else {
+                                        startTimeMs + 60000
+                                    }
+                                if (timeline.current in startTimeMs..endTimeMs) {
+                                    currentLine = lines[i].words.replace(Regex("""<\d{2}:\d{2}\.\d{2,3}>\s*"""), "").trim()
+                                    break
+                                }
+                            }
+                        }
+                        _currentLyricLine.value = currentLine
+                    }
+                }
             job1.join()
             controllerJob.join()
             sleepTimerJob.join()
             playlistNameJob.join()
+            currentLyricLineJob.join()
         }
         checkAllDownloadingSongs()
         checkAllDownloadingPlaylists()
@@ -913,40 +952,12 @@ class SharedViewModel(
     fun checkForUpdate() {
         viewModelScope.launch {
             _isCheckingUpdate.value = true
-            val updateChannel = dataStoreManager.updateChannel.first()
             dataStoreManager.putString(
                 "CheckForUpdateAt",
                 System.currentTimeMillis().toString(),
             )
-            if (updateChannel == DataStoreManager.GITHUB) {
-                updateRepository.checkForGithubReleaseUpdate().collectLatest { response ->
-                    val data = response.data
-                    when (response) {
-                        is Resource.Success if (data != null) -> {
-                            _updateResponse.value = data
-                            showedUpdateDialog = true
-                        }
-
-                        else -> {
-                        }
-                    }
-                    _isCheckingUpdate.value = false
-                }
-            } else if (updateChannel == DataStoreManager.FDROID) {
-                updateRepository.checkForFdroidUpdate().collectLatest { response ->
-                    val data = response.data
-                    when (response) {
-                        is Resource.Success if (data != null) -> {
-                            _updateResponse.value = data
-                            showedUpdateDialog = true
-                        }
-
-                        else -> {
-                        }
-                    }
-                    _isCheckingUpdate.value = false
-                }
-            }
+            // GitHub update check removed by request
+            _isCheckingUpdate.value = false
         }
     }
 
