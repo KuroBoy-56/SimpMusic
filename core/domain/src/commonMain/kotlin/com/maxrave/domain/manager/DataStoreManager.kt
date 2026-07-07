@@ -335,6 +335,10 @@ interface DataStoreManager {
 
     suspend fun setLocalTrackingEnabled(enabled: Boolean)
 
+    val blogNotificationEnabled: Flow<String>
+
+    suspend fun setBlogNotificationEnabled(enabled: Boolean)
+
     // Auto Backup
     val autoBackupEnabled: Flow<String>
 

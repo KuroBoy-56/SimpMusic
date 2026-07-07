@@ -262,6 +262,11 @@ internal class CommonRepositoryImpl(
             localDataSource.insertNotification(notificationEntity)
         }
 
+    override suspend fun isNotificationExists(link: String): Boolean =
+        withContext(Dispatchers.IO) {
+            localDataSource.isNotificationExists(link)
+        }
+
     override suspend fun getAllNotifications(): Flow<List<NotificationEntity>?> =
         flow {
             emit(localDataSource.getAllNotification())

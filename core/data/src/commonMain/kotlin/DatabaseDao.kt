@@ -342,6 +342,13 @@ interface DatabaseDao {
         channelId: String,
     )
 
+    @Query("UPDATE artist SET nameLogoUrl = :logoUrl, nameLogoColor = :bgColorHex WHERE channelId = :channelId")
+    suspend fun updateArtistNameLogo(
+        channelId: String,
+        logoUrl: String,
+        bgColorHex: String?,
+    )
+
     // Album
     @Query("SELECT * FROM album ORDER BY inLibrary DESC LIMIT :limit OFFSET 0")
     suspend fun getAllAlbums(limit: Int): List<AlbumEntity>
@@ -718,6 +725,9 @@ interface DatabaseDao {
 
     @Query("SELECT * FROM notification ORDER BY time DESC LIMIT 100")
     suspend fun getAllNotification(): List<NotificationEntity>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM notification WHERE link = :link LIMIT 1)")
+    suspend fun isNotificationExists(link: String): Boolean
 
     @Query("DELETE FROM notification WHERE id = :id")
     suspend fun deleteNotification(id: Long)

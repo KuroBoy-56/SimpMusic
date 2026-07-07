@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +38,9 @@ import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.changeLanguageNative
 import io.sentry.Sentry
 import io.sentry.SentryLevel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import multiplatform.network.cmptoast.ToastHost
@@ -61,7 +65,7 @@ import simpmusic.composeapp.generated.resources.quit_app
 import simpmusic.composeapp.generated.resources.time_out_check_internet_connection_or_change_piped_instance_in_settings
 
 @OptIn(ExperimentalMaterial3Api::class)
-fun main(args: Array<String>) {
+fun runDesktopApp(args: Array<String> = emptyArray()) {
     CrashDialog.install()
 
     System.setProperty("compose.swing.render.on.graphics", "true")
@@ -82,6 +86,23 @@ fun main(args: Array<String>) {
         args.firstOrNull()?.takeIf { arg ->
             arg.startsWith("simpmusic://") || arg.startsWith("http://") || arg.startsWith("https://")
         }
+    // Single-instance guard — MUST run before startKoin. The DataStore Koin
+    // singleton is `createdAtStart`, so a second Windows instance would touch
+    // ~/.simpmusic/settings.preferences_pb and crash with an "Unable to rename
+    // ...tmp" IOException (#2044) before it ever reached the old in-Compose check.
+    // Bail out here, before Koin/DataStore initialize.
+    val isSingleInstance =
+        SingleInstanceManager.isSingleInstance(
+            onRestoreRequest = { DesktopRestoreSignal.request() },
+        )
+    if (!isSingleInstance) {
+        // Second instance: forward the deep link (if any) to the running instance,
+        // then exit. Nothing has touched the DataStore file yet.
+        deepLinkArg?.let { DesktopDeepLinkHandler.writePendingUri(it) }
+        return
+    }
+
+    // First instance only: deliver our own deep link (non-macOS passes URI via args).
     if (!isMacOS) {
         deepLinkArg?.let { DesktopDeepLinkHandler.onNewUri(it) }
     }
@@ -144,20 +165,16 @@ fun main(args: Array<String>) {
                 size = DpSize(1500.dp, 860.dp),
             )
         var isVisible by remember { mutableStateOf(true) }
-
-        val isSingleInstance =
-            SingleInstanceManager.isSingleInstance(
-                onRestoreRequest = {
-                    isVisible = true
-                    windowState.isMinimized = false
-                    DesktopDeepLinkHandler.consumePendingUri()
-                },
-            )
-
-        if (!isSingleInstance) {
-            deepLinkArg?.let { DesktopDeepLinkHandler.writePendingUri(it) }
-            exitApplication()
-            return@application
+        // The single-instance guard now runs before startKoin (top of
+        // runDesktopApp). Here we only react to a restore request raised when a
+        // second instance launches: bring the window back to the foreground and
+        // consume any deep link the second instance forwarded.
+        LaunchedEffect(Unit) {
+            DesktopRestoreSignal.requests.collect {
+                isVisible = true
+                windowState.isMinimized = false
+                DesktopDeepLinkHandler.consumePendingUri()
+            }
         }
         val openAppString = stringResource(Res.string.open_app)
         val quitAppString = stringResource(Res.string.quit_app)
@@ -192,23 +209,60 @@ fun main(args: Array<String>) {
                 exitApplication()
             }
         }
-
+        // Detect virtual machines (Parallels, VirtualBox, VMware, etc.).
+        // Transparent + undecorated Compose windows don't render on VM
+        // GPU drivers — the window stays invisible while the JVM keeps
+        // running, so we must detect the VM and fall back to a normal
+        // decorated window.
+        //
+        // We probe Manufacturer + Model because brand strings live in
+        // different fields per hypervisor (Parallels-on-ARM puts
+        // "Parallels Software International Inc." in Manufacturer and
+        // "Parallels ARM Virtual Machine" in Model; VirtualBox uses
+        // "innotek GmbH" + "VirtualBox"; etc).
+        //
+        // Microsoft removed `wmic` from Windows 11 (deprecated since
+        // 10 21H1), so on modern Windows it returns "command not
+        // recognized" and our previous detection always saw an empty
+        // vendor — Parallels Win 11 ARM users hit this and got an
+        // invisible window. PowerShell `Get-CimInstance` is the modern
+        // replacement; we try it first and fall back to wmic for older
+        // hosts.
         val isVM =
             remember {
-                val model = System.getProperty("os.name", "")
-                val vendor =
-                    try {
-                        val process =
-                            ProcessBuilder("wmic", "computersystem", "get", "model")
-                                .redirectErrorStream(true)
-                                .start()
-                        process.inputStream.bufferedReader().readText()
-                    } catch (_: Exception) {
-                        ""
-                    }
-                vendor.contains("Parallels", ignoreCase = true) ||
-                    vendor.contains("VirtualBox", ignoreCase = true) ||
-                    vendor.contains("VMware", ignoreCase = true) ||
+                val osName = System.getProperty("os.name", "")
+                if (!osName.contains("Windows", ignoreCase = true)) {
+                    return@remember false
+                }
+                val probes =
+                    listOf(
+                        listOf(
+                            "powershell",
+                            "-NoProfile",
+                            "-Command",
+                            "(Get-CimInstance Win32_ComputerSystem | " +
+                                "Select-Object Manufacturer,Model | " +
+                                "Format-List | Out-String).Trim()",
+                        ),
+                        listOf("wmic", "computersystem", "get", "manufacturer,model"),
+                    )
+                val sysInfo =
+                    probes
+                        .asSequence()
+                        .mapNotNull { cmd ->
+                            runCatching {
+                                val p =
+                                    ProcessBuilder(cmd)
+                                        .redirectErrorStream(true)
+                                        .start()
+                                val out = p.inputStream.bufferedReader().readText()
+                                if (p.waitFor() == 0 && out.isNotBlank()) out else null
+                            }.getOrNull()
+                        }
+                        .firstOrNull()
+                        .orEmpty()
+                val vmTokens = listOf("Parallels", "VirtualBox", "VMware", "QEMU", "KVM", "Xen", "Hyper-V")
+                vmTokens.any { sysInfo.contains(it, ignoreCase = true) } ||
                     System.getProperty("compose.window.no-transparent", "false").toBooleanStrictOrNull() == true
             }
         Window(
@@ -281,5 +335,20 @@ fun main(args: Array<String>) {
                 },
             )
         }
+    }
+}
+
+/**
+ * Bridges a restore request from the single-instance guard (which runs outside
+ * Compose, at the top of [runDesktopApp]) into the running window's composition.
+ * The guard calls [request] when a second instance launches; the window collects
+ * [requests] to bring itself back to the foreground and pick up any deep link.
+ */
+private object DesktopRestoreSignal {
+    private val _requests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val requests: SharedFlow<Unit> = _requests.asSharedFlow()
+
+    fun request() {
+        _requests.tryEmit(Unit)
     }
 }

@@ -16,6 +16,8 @@ data class ArtistEntity(
     val followed: Boolean = false,
     val followedAt: LocalDateTime? = now(),
     val inLibrary: LocalDateTime = now(),
+    val nameLogoUrl: String? = null,
+    val nameLogoColor: String? = null,
 ) : RecentlyType,
     ArtistType {
     override fun objectType() = RecentlyType.Type.ARTIST

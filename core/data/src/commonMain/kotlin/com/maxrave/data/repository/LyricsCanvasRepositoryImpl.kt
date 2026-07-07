@@ -531,6 +531,11 @@ internal class LyricsCanvasRepositoryImpl(
                 }
         }.flowOn(Dispatchers.IO)
 
+    override fun getArtistLogo(artistName: String): Flow<Resource<com.maxrave.domain.data.model.browse.artist.ArtistLogo>> =
+        flow {
+            emit(Resource.Error<com.maxrave.domain.data.model.browse.artist.ArtistLogo>("Not implemented"))
+        }.flowOn(Dispatchers.IO)
+
     override fun voteSimpMusicLyrics(
         lyricsId: String,
         upvote: Boolean,

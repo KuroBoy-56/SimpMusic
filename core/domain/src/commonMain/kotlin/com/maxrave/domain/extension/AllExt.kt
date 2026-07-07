@@ -9,6 +9,7 @@ import com.maxrave.domain.data.player.GenericMediaMetadata
 import com.maxrave.domain.utils.connectArtists
 import com.maxrave.domain.utils.toListName
 import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atTime
@@ -21,6 +22,9 @@ import kotlin.time.ExperimentalTime
 
 @OptIn(ExperimentalTime::class)
 fun now(): LocalDateTime = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+
+fun epochMillisToLocalDateTime(millis: Long): LocalDateTime =
+    Instant.fromEpochMilliseconds(millis).toLocalDateTime(TimeZone.currentSystemDefault())
 
 fun LocalDateTime.isBefore(other: LocalDateTime): Boolean = this < other
 

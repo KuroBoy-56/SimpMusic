@@ -30,5 +30,11 @@ interface ArtistRepository {
         channelId: String,
     )
 
+    suspend fun updateArtistNameLogo(
+        channelId: String,
+        logoUrl: String,
+        bgColorHex: String?,
+    )
+
     fun getArtistData(channelId: String): Flow<Resource<ArtistBrowse>>
 }

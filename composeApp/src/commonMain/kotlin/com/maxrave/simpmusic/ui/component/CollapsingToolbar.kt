@@ -73,9 +73,12 @@ import coil3.request.crossfade
 import coil3.toBitmap
 import com.kmpalette.rememberPaletteState
 import com.maxrave.logger.Logger
+import com.maxrave.simpmusic.expect.ui.toImageBitmap
 import com.maxrave.simpmusic.extension.getColorFromPalette
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.rgbFactor
+import com.maxrave.simpmusic.extension.toSquareThumbnailUrl
+import com.maxrave.simpmusic.ui.theme.md_theme_dark_background
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import org.jetbrains.compose.resources.painterResource
@@ -107,7 +110,18 @@ fun CollapsingToolbarParallaxEffect(
         TopAppBarDefaults.TopAppBarExpandedHeight + with(density) { WindowInsets.statusBars.getTop(this).toDp() * 2 }
 
     val scroll: ScrollState = rememberScrollState(0)
-    val headerHeight = (getScreenSizeInfo().hDP.dp * 2 / 4).coerceAtLeast(250.dp)
+// Portrait: square header (= screen width) so a squared artist image fills it exactly,
+// with no crop. Landscape: keep the original wide header (half screen height) and the
+// original (un-squared) image, which fits the wide frame better.
+    val screenSize = getScreenSizeInfo()
+    val isPortraitHeader = screenSize.hDP >= screenSize.wDP
+    val headerHeight =
+        if (isPortraitHeader) {
+            screenSize.wDP.dp.coerceAtLeast(250.dp)
+        } else {
+            (screenSize.hDP.dp * 2 / 4).coerceAtLeast(250.dp)
+        }
+    val headerImageUrl = if (isPortraitHeader) imageUrl?.toSquareThumbnailUrl() else imageUrl
 
     val headerHeightPx = with(density) { headerHeight.toPx() }
     val toolbarHeightPx = with(density) { toolbarHeight.toPx() }
@@ -145,7 +159,7 @@ fun CollapsingToolbarParallaxEffect(
         Header(
             scroll = scroll,
             headerHeightPx = headerHeightPx,
-            imageUrl = imageUrl,
+            imageUrl = headerImageUrl,
             backgroundColor = color,
             modifier = Modifier.fillMaxWidth().height(headerHeight),
         ) { bm ->
@@ -228,11 +242,11 @@ private fun Header(
                 .diskCacheKey(imageUrl)
                 .crossfade(true)
                 .build(),
-            onSuccess = { onImageLoaded(it.result.image.toBitmap().asImageBitmap()) },
+            onSuccess = { onImageLoaded(it.result.image.toImageBitmap()) },
             placeholder = painterResource(Res.drawable.holder_video),
             error = painterResource(Res.drawable.holder_video),
             contentDescription = null,
-            contentScale = ContentScale.Crop,
+            contentScale = ContentScale.FillWidth,
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -298,12 +312,19 @@ private fun Toolbar(
         exit = fadeOut(animationSpec = tween(300)),
     ) {
         TopAppBar(
-            windowInsets = TopAppBarDefaults.windowInsets.exclude(TopAppBarDefaults.windowInsets.only(WindowInsetsSides.Start)),
-            modifier = Modifier.background(
-                Brush.verticalGradient(
-                    listOf(backgroundColor.rgbFactor(0.8f), backgroundColor.rgbFactor(0.6f))
-                )
-            ),
+            windowInsets =
+                TopAppBarDefaults.windowInsets.exclude(
+                    TopAppBarDefaults.windowInsets.only(WindowInsetsSides.Start),
+                ),
+            modifier =
+                Modifier.background(
+                    Brush.verticalGradient(
+                        listOf(
+                            backgroundColor.rgbFactor(0.8f),
+                            backgroundColor.rgbFactor(0.6f),
+                        ),
+                    ),
+                ),
             navigationIcon = {
                 IconButton(
                     onClick = onBack,

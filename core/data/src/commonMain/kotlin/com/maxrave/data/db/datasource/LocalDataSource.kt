@@ -159,6 +159,16 @@ internal class LocalDataSource(
         channelId: String,
     ) = databaseDao.updateArtistInLibrary(inLibrary, channelId)
 
+    suspend fun updateArtistNameLogo(
+        channelId: String,
+        logoUrl: String,
+        bgColorHex: String?,
+    ) = databaseDao.updateArtistNameLogo(
+        channelId,
+        logoUrl,
+        bgColorHex,
+    )
+
     suspend fun getAllAlbums(limit: Int) = databaseDao.getAllAlbums(limit)
 
     suspend fun insertAlbum(album: AlbumEntity) = databaseDao.insertAlbum(album)
@@ -440,6 +450,8 @@ internal class LocalDataSource(
     )
 
     suspend fun insertNotification(notificationEntity: NotificationEntity) = databaseDao.insertNotification(notificationEntity)
+
+    suspend fun isNotificationExists(link: String) = databaseDao.isNotificationExists(link)
 
     suspend fun getAllNotification() = databaseDao.getAllNotification()
 

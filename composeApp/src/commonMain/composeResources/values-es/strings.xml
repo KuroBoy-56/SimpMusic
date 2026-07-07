@@ -123,6 +123,11 @@
     <string name="github">GitHub</string>
     <string name="maxrave_dev">garevyn-dev</string>
     <string name="buy_me_a_coffee">Cómprame un café</string>
+    <string name="developer_blog"></string>
+    <string name="developer_blog_tagline">Leer notas de desarrollo, tutoriales &amp; detrás de la escena</string>
+    <string name="blog_promo_title">Algo nuevo del desarrollador</string>
+    <string name="blog_promo_message">Acabo de lanzar mi blog personal en maxrave.dev — compartiendo la historia detrás de SimpMusic, inmersiones profundas de tecnología musical y notas de ingeniería. Dale un vistazo si eres curioso ✨</string>
+    <string name="visit_blog">Visita el blog</string>
     <string name="paypal">PayPal</string>
     <string name="title">Título</string>
     <string name="custom_order">Orden personalizado</string>
@@ -379,6 +384,10 @@
     <string name="invalid_port">Puerto inválido</string>
     <string name="proxy_host_message">Por favor introduce tu host de Proxy</string>
     <string name="proxy_port_message">Por favor introduce tu puerto de Proxy</string>
+    <string name="proxy_username">Nombre de usuario proxy</string>
+    <string name="proxy_password">Contraseña proxy</string>
+    <string name="proxy_username_message">Por favor ingrese su nombre de usuario proxy (opcional)</string>
+    <string name="proxy_password_message">Introduzca su contraseña proxy (opcional)</string>
     <string name="five_seconds">Cinco segundos</string>
     <string name="lyrics_provider_lrc">Lyrics proporcionados por LRCLIB</string>
     <string name="sync_first">Primero sincroniza esta playlist a Youtube Music</string>
@@ -449,6 +458,8 @@
     <string name="crossfade_disabled">Desactivado</string>
     <string name="crossfade_duration">Duración del crossfade</string>
     <string name="set_crossfade_duration">Establecer la duración del crossfade en segundos (%1$ds)</string>
+    <string name="crossfade_auto">Automático</string>
+    <string name="crossfade_auto_description">Calcula automáticamente la duración basada en BPM (requiere flujo de 320kbps con datos BPM)</string>
     <string name="crossfade_dj_mode">Transición estilo DJ</string>
     <string name="crossfade_dj_mode_description">Aplica un filtro de barrido durante el efecto crossfade para una transición más suave (similar al Automix de Apple Music).</string>
     <string name="youtube_subtitle_language">Idioma de traducción de subtítulos de YouTube</string>
@@ -533,6 +544,13 @@
     <string name="KuroMusic_charts">Gráficos KuroMusic</string>
     <string name="crossfading">Crossfade</string>
     <string name="your_320kbps_url">Su URL de 320kbps</string>
+    <string name="your_320kbps_url_description">Dejar en blanco para elegir automáticamente una URL funcional desde la comprobación de tiempo de activación.</string>
     <string name="search_for">Buscar por</string>
     <string name="synced_playlist_cannot_change_order">No se puede cambiar el orden de la lista sincronizada</string>
+    <string name="bpm">BPM</string>
+    <string name="key">Clave</string>
+    <string name="scale">Escala</string>
+    <string name="home_offline_title">No se puede conectar</string>
+    <string name="home_offline_subtitle">Compruebe su conexión a Internet e inténtelo de nuevo, o escuche su música descargada.</string>
+    <string name="listen_to_downloaded">Escucha la música descargada</string>
 </resources>

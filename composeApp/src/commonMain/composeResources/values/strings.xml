@@ -549,6 +549,8 @@
     <string name="quit_app">Quit app</string>
     <string name="local_tracking_title">Local tracking listening history</string>
     <string name="local_tracking_description">Log your listening history to local database</string>
+    <string name="blog_notification_title">Blog post notifications</string>
+    <string name="blog_notification_description">Get notified when a new blog post is published</string>
     <string name="KuroMusic_charts">KuroMusic Charts</string>
     <string name="crossfading">Crossfading</string>
     <string name="your_320kbps_url">Your 320kbps URL</string>
@@ -558,4 +560,7 @@
     <string name="bpm">BPM</string>
     <string name="key">Key</string>
     <string name="scale">Scale</string>
+    <string name="home_offline_title">Can't connect</string>
+    <string name="home_offline_subtitle">Check your internet connection and try again, or listen to your downloaded music.</string>
+    <string name="listen_to_downloaded">Listen to downloaded music</string>
 </resources>

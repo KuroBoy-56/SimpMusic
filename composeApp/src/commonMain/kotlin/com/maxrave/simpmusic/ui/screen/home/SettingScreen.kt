@@ -175,6 +175,8 @@ import simpmusic.composeapp.generated.resources.baseline_close_24
 import simpmusic.composeapp.generated.resources.baseline_people_alt_24
 import simpmusic.composeapp.generated.resources.baseline_playlist_add_24
 import simpmusic.composeapp.generated.resources.better_lyrics
+import simpmusic.composeapp.generated.resources.blog_notification_description
+import simpmusic.composeapp.generated.resources.blog_notification_title
 import simpmusic.composeapp.generated.resources.blur_fullscreen_lyrics
 import simpmusic.composeapp.generated.resources.blur_fullscreen_lyrics_description
 import simpmusic.composeapp.generated.resources.blur_player_background
@@ -330,6 +332,7 @@ import simpmusic.composeapp.generated.resources.youtube_transcript
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlin.properties.ReadOnlyProperty
 
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -402,6 +405,7 @@ fun SettingScreen(
     val keepYoutubePlaylistOffline by viewModel.keepYouTubePlaylistOffline.collectAsStateWithLifecycle(initialValue = false)
 
     val localTrackingEnabled by viewModel.localTrackingEnabled.collectAsStateWithLifecycle(initialValue = false)
+    val blogNotificationEnabled by viewModel.blogNotificationEnabled.collectAsStateWithLifecycle()
     val combineLocalAndYouTubeLiked by viewModel.combineLocalAndYouTubeLiked.collectAsStateWithLifecycle()
 
     val playVideoInsteadOfAudioState by viewModel.playVideoInsteadOfAudio.collectAsStateWithLifecycle(initialValue = null)
@@ -2039,9 +2043,7 @@ fun SettingScreen(
                 ),
                 Modifier.fillMaxSize(),
                 lazyListState = lazyListState,
-                showDescription = true,
                 contentPadding = innerPadding,
-                typography = typo(),
                 colors =
                     LibraryDefaults.libraryColors(
                         licenseChipColors =
@@ -2121,4 +2123,8 @@ fun SettingScreen(
                 containerColor = Color.Transparent,
             ),
     )
+}
+
+private fun Any.collectAsStateWithLifecycle(): ReadOnlyProperty<Any?, Long> {
+    val todo = TODO("Not yet implemented")
 }

@@ -81,6 +81,7 @@ fun MediaPlayerView(
     density: Density,
     url: String,
     screenSize: ScreenSizeInfo,
+    cropToBounds: Boolean = false,
 ) {
     val canvasCache: SimpleCache = koinInject<SimpleCache>(named(Config.CANVAS_CACHE))
 
@@ -141,7 +142,7 @@ fun MediaPlayerView(
                 ).build()
                 .apply {
                     addListener(playerListener)
-                    videoScalingMode = C.VIDEO_SCALING_MODE_DEFAULT
+                    videoScalingMode = if (cropToBounds) C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING else C.VIDEO_SCALING_MODE_DEFAULT
                 }
         }
 
@@ -150,6 +151,11 @@ fun MediaPlayerView(
         remember(url) {
             MediaItem.fromUri(url)
         }
+
+    LaunchedEffect(cropToBounds) {
+        exoPlayer.videoScalingMode =
+            if (cropToBounds) C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING else C.VIDEO_SCALING_MODE_DEFAULT
+    }
 
     // Set MediaSource to ExoPlayer
     LaunchedEffect(mediaSource) {
@@ -177,10 +183,13 @@ fun MediaPlayerView(
             player = exoPlayer,
             surfaceType = SURFACE_TYPE_SURFACE_VIEW,
             modifier =
-                Modifier
-                    .fillMaxHeight()
-                    .width(with(density) { widthPx.toDp() })
-                    .align(Alignment.Center),
+                if (cropToBounds) {
+                    Modifier.fillMaxSize()
+                } else {
+                    Modifier
+                        .fillMaxHeight()
+                        .width(with(density) { widthPx.toDp() })
+                }.align(Alignment.Center),
         )
 
         if (presentationState.coverSurface) {

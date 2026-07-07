@@ -77,6 +77,8 @@ interface LyricsCanvasRepository {
         language: String,
     ): Flow<Resource<Lyrics>>
 
+    fun getArtistLogo(artistName: String): Flow<Resource<com.maxrave.domain.data.model.browse.artist.ArtistLogo>>
+
     fun voteSimpMusicLyrics(
         lyricsId: String,
         upvote: Boolean,

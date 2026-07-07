@@ -856,6 +856,40 @@ fun InfoPlayerBottomSheet(
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 )
+                Text(
+                    text = stringResource(Res.string.youtube_url),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 10.dp),
+                    textAlign = TextAlign.Center,
+                    style = typo().labelMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Text(
+                    text =
+                        buildAnnotatedString {
+                            withLink(
+                                LinkAnnotation.Url(
+                                    "https://music.youtube.com/watch?v=${songEntity?.videoId}",
+                                    TextLinkStyles(style = SpanStyle(textDecoration = TextDecoration.Underline)),
+                                ),
+                            ) {
+                                append("https://music.youtube.com/watch?v=${songEntity?.videoId}")
+                            }
+                        },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .wrapContentHeight(align = Alignment.CenterVertically)
+                            .basicMarquee(
+                                iterations = Int.MAX_VALUE,
+                                animationMode = MarqueeAnimationMode.Immediately,
+                            ).focusable(),
+                    style = typo().bodyMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    textAlign = TextAlign.Center,
+                )
                 OutlinedButton(
                     enabled = screenDataState.bitmap != null,
                     onClick = {
@@ -2826,7 +2860,7 @@ fun PlaylistBottomSheet(
                 }
                 val shareTitle = stringResource(Res.string.share)
                 ActionButton(icon = painterResource(Res.drawable.baseline_share_24), text = Res.string.share) {
-                    val url = "https://www.youtube.com/playlist?list=${playlistId.replaceFirst("VL", "")}"
+                    val url = "https://music.youtube.com/playlist?list=${playlistId.replaceFirst("VL", "")}"
                     shareUrl(shareTitle, url)
                 }
                 EndOfModalBottomSheet()
@@ -2989,7 +3023,7 @@ fun LocalPlaylistBottomSheet(
                         text = if (ytPlaylistId != null) Res.string.share else Res.string.sync_first,
                         enable = (ytPlaylistId != null),
                     ) {
-                        val url = "https://www.youtube.com/playlist?list=${ytPlaylistId?.replaceFirst("VL", "")}"
+                        val url = "https://music.youtube.com/playlist?list=${ytPlaylistId?.replaceFirst("VL", "")}"
                         shareUrl(shareTitle, url)
                     }
                     EndOfModalBottomSheet()
