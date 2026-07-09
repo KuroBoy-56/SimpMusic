@@ -22,7 +22,7 @@ android {
     defaultConfig {
         applicationId = "com.ytmusic.kurompx"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 37
         versionCode =
             libs.versions.version.code
                 .get()

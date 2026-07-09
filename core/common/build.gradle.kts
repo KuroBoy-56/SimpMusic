@@ -13,7 +13,7 @@ kotlin {
     // See: https://kotlinlang.org/docs/multiplatform-discover-project.html#targets
     androidLibrary {
         namespace = "com.maxrave.common"
-        compileSdk = 36
+        compileSdk = 37
         minSdk = 26
     }
 

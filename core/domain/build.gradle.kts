@@ -13,7 +13,7 @@ kotlin {
     jvmToolchain(21)
     androidLibrary {
         namespace = "com.maxrave.domain"
-        compileSdk = 36
+        compileSdk = 37
         minSdk = 26
     }
     val xcfName = "domainKit"

@@ -14,7 +14,7 @@ kotlin {
     // See: https://kotlinlang.org/docs/multiplatform-discover-project.html#targets
     androidLibrary {
         namespace = "org.simpmusic.aiservice"
-        compileSdk = 36
+        compileSdk = 37
         minSdk = 26
     }
 

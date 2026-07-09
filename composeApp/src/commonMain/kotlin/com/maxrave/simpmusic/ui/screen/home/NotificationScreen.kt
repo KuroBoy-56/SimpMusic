@@ -44,7 +44,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -252,7 +251,7 @@ fun NotificationScreen(
                     items(it) { notification ->
                         NotificationItem(
                             notification = notification,
-                            navController,
+                            navController = navController,
                         )
                     }
                     item {
@@ -281,6 +280,8 @@ fun NotificationItem(
     notification: NotificationEntity,
     navController: NavController,
 ) {
+    val uriHandler = LocalUriHandler.current
+
     Box(
         modifier =
             Modifier
@@ -290,11 +291,20 @@ fun NotificationItem(
         Column {
             Row(
                 Modifier.clickable {
-                    navController.navigate(
-                        ArtistDestination(
-                            channelId = notification.channelId,
-                        ),
-                    )
+                    // Lógica para diferenciar Música de Comunicados/Actualizaciones
+                    if (notification.type == NotificationEntity.TYPE_BLOG) {
+                        notification.link?.let { url ->
+                            if (url.isNotEmpty() && (url.startsWith("http://") || url.startsWith("https://"))) {
+                                uriHandler.openUri(url)
+                            }
+                        }
+                    } else {
+                        navController.navigate(
+                            ArtistDestination(
+                                channelId = notification.channelId,
+                            ),
+                        )
+                    }
                 },
             ) {
                 val thumb = notification.thumbnail
@@ -307,8 +317,9 @@ fun NotificationItem(
                             .diskCacheKey(thumb)
                             .crossfade(true)
                             .build(),
-                    placeholder = painterResource(Res.drawable.holder),
-                    error = painterResource(Res.drawable.holder),
+                    // Mostramos el ícono oficial 'mono' si es comunicado tuyo, sino carátula por defecto
+                    placeholder = painterResource(if (notification.type == NotificationEntity.TYPE_BLOG) Res.drawable.mono else Res.drawable.holder),
+                    error = painterResource(if (notification.type == NotificationEntity.TYPE_BLOG) Res.drawable.mono else Res.drawable.holder),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier =
@@ -322,7 +333,7 @@ fun NotificationItem(
                 Spacer(modifier = Modifier.padding(5.dp))
                 Column {
                     Text(
-                        text = stringResource(Res.string.new_release),
+                        text = if (notification.type == NotificationEntity.TYPE_BLOG) "Comunicado Oficial" else stringResource(Res.string.new_release),
                         style = typo().titleSmall,
                         color = MaterialTheme.colorScheme.onBackground
                     )
@@ -334,25 +345,39 @@ fun NotificationItem(
                     )
                 }
             }
-            LazyRow(
-                Modifier.padding(top = 15.dp),
-            ) {
-                items(notification.single) { single ->
-                    ItemAlbumNotification(
-                        isAlbum = false,
-                        browseId = single["browseId"] ?: "",
-                        title = single["title"] ?: "",
-                        thumbnail = single["thumbnails"],
-                        navController,
-                    )
+
+            // Si NO es un mensaje/comunicado, intentamos cargar canciones/álbumes debajo
+            if (notification.type != NotificationEntity.TYPE_BLOG) {
+                LazyRow(
+                    Modifier.padding(top = 15.dp),
+                ) {
+                    items(notification.single) { single ->
+                        ItemAlbumNotification(
+                            isAlbum = false,
+                            browseId = single["browseId"] ?: "",
+                            title = single["title"] ?: "",
+                            thumbnail = single["thumbnails"],
+                            navController,
+                        )
+                    }
+                    items(notification.album) { album ->
+                        ItemAlbumNotification(
+                            isAlbum = true,
+                            browseId = album["browseId"] ?: "",
+                            title = album["title"] ?: "",
+                            thumbnail = album["thumbnails"],
+                            navController = navController,
+                        )
+                    }
                 }
-                items(notification.album) { album ->
-                    ItemAlbumNotification(
-                        isAlbum = true,
-                        browseId = album["browseId"] ?: "",
-                        title = album["title"] ?: "",
-                        thumbnail = album["thumbnails"],
-                        navController = navController,
+            } else {
+                // Si ES un mensaje/comunicado, mostramos su descripción / texto
+                if (!notification.description.isNullOrEmpty()) {
+                    Text(
+                        text = notification.description!!,
+                        style = typo().bodyMedium,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
+                        modifier = Modifier.padding(top = 8.dp, start = 55.dp)
                     )
                 }
             }

@@ -949,6 +949,13 @@ class SharedViewModel(
     private var _updateResponse = MutableStateFlow<UpdateData?>(null)
     val updateResponse: StateFlow<UpdateData?> = _updateResponse
 
+    fun setUpdateAvailable(updateData: UpdateData) {
+        viewModelScope.launch(Dispatchers.Main) {
+            // LÍNEA BORRADA: Esto apaga para siempre la orden que despertaba la ventana vieja.
+            _isCheckingUpdate.value = false
+        }
+    }
+
     fun checkForUpdate() {
         viewModelScope.launch {
             _isCheckingUpdate.value = true
@@ -956,7 +963,6 @@ class SharedViewModel(
                 "CheckForUpdateAt",
                 System.currentTimeMillis().toString(),
             )
-            // GitHub update check removed by request
             _isCheckingUpdate.value = false
         }
     }
@@ -999,7 +1005,6 @@ class SharedViewModel(
             )
 
         if (isTranslatedLyrics && lyricsProvider != LyricsProvider.AI) {
-            // Skip sync validation for AI translations — timestamps are copied programmatically
             val originalLyrics = _nowPlayingScreenData.value.lyricsData?.lyrics
             val originalLines = originalLyrics?.lines
             val lyricsLines = lyrics.lines
@@ -1008,7 +1013,6 @@ class SharedViewModel(
                 val totalLines = originalLines.size
 
                 if (originalLines.size == lyricsLines.size) {
-                    // Line counts match: compare by index (1:1 mapping)
                     originalLines.forEachIndexed { index, originalLine ->
                         val originalTime = originalLine.startTimeMs.toLongOrNull() ?: 0L
                         val translatedLine = lyricsLines[index]
@@ -1020,7 +1024,6 @@ class SharedViewModel(
                         }
                     }
                 } else {
-                    // Line count mismatch: use timestamp-based matching with used-line tracking
                     val usedIndices = mutableSetOf<Int>()
                     originalLines.forEach { originalLine ->
                         val originalTime = originalLine.startTimeMs.toLongOrNull() ?: 0L
@@ -1046,7 +1049,6 @@ class SharedViewModel(
                     }
                 }
 
-                // Use percentage-based threshold: reject if >25% of lines are out of sync
                 val syncErrorRatio = if (totalLines > 0) timeSyncErrorCount.toFloat() / totalLines else 0f
                 if (syncErrorRatio > 0.25f || (totalLines > 0 && timeSyncErrorCount > 5)) {
                     Logger.w(
@@ -1443,16 +1445,16 @@ class SharedViewModel(
                         true,
                         LyricsProvider.SIMPMUSIC,
                     )
-                    // If SimpMusic translated lyrics are RICH_SYNCED (word-by-word),
-                    // convert to LINE_SYNCED, downvote, and fallback to AI translation
                     if (data.syncType == "RICH_SYNCED") {
                         Logger.w(tag, "SimpMusic translated lyrics are RICH_SYNCED, downvoting and falling back to AI")
                         val simpMusicLyricsId = data.simpMusicLyrics?.id
                         if (!simpMusicLyricsId.isNullOrEmpty()) {
                             viewModelScope.launch {
                                 lyricsCanvasRepository
-                                    .voteSimpMusicTranslatedLyrics(simpMusicLyricsId, false)
-                                    .collectLatest { voteResult ->
+                                    .voteSimpMusicTranslatedLyrics(
+                                        translatedLyricsId = simpMusicLyricsId,
+                                        false,
+                                    ).collectLatest { voteResult ->
                                         when (voteResult) {
                                             is Resource.Error -> Logger.w(tag, "Downvote RICH_SYNCED translated lyrics error: ${voteResult.message}")
                                             is Resource.Success -> Logger.d(tag, "Downvote RICH_SYNCED translated lyrics success")
@@ -1460,7 +1462,6 @@ class SharedViewModel(
                                     }
                             }
                         }
-                        // Fallback to AI translation
                         getAITranslationLyrics(videoId, lyrics)
                     } else {
                         Logger.d(tag, "Get SimpMusic Translated Lyrics Success")
@@ -1507,8 +1508,6 @@ class SharedViewModel(
                     LyricsProvider.AI,
                 )
             } else {
-                // Convert RICH_SYNCED to LINE_SYNCED before sending to AI
-                // AI should only work with line-level or plain lyrics
                 val lyricsForAi =
                     if (lyrics.syncType == "RICH_SYNCED") {
                         lyrics.toSyncedLyrics()
@@ -1672,7 +1671,7 @@ class SharedViewModel(
         _reloadDestination.value = null
     }
 
-    fun shouldCheckForUpdate(): Boolean = runBlocking { dataStoreManager.autoCheckForUpdates.first() == TRUE }
+    fun shouldCheckForUpdate(): Boolean = false
 
     private var _downloadFileProgress = MutableStateFlow<DownloadProgress>(DownloadProgress.INIT)
     val downloadFileProgress: StateFlow<DownloadProgress> get() = _downloadFileProgress
@@ -1851,11 +1850,6 @@ sealed class UIEvent {
 
     data object Previous : UIEvent()
 
-    /**
-     * Always advances to the previous track — bypasses the 3-second
-     * "seek to start of current track" rule used by [Previous]. Used by the
-     * NowPlaying artwork pager swipe.
-     */
     data object SkipToPrevious : UIEvent()
 
     data object Stop : UIEvent()
