@@ -1,4 +1,4 @@
-name: Compilar SimpMusic iOS
+name: Compilar SimpMusic iOS (Compose Multiplatform)
 
 on:
   workflow_dispatch:
@@ -11,28 +11,52 @@ jobs:
       - name: Clonar el repositorio
         uses: actions/checkout@v4
 
-      # --- AHORA ESTO NO CANCELARÁ EL PROCESO SI NO ENCUENTRA EL ARCHIVO ---
-      - name: Prevenir errores de permisos
-        run: |
-          chmod +x gradlew || true
-          chmod +x android/gradlew || true
-          find . -type f -name "*.sh" -exec chmod +x {} \; || true
-
-      - name: Configurar Flutter
-        uses: subosito/flutter-action@v2
+      - name: Configurar Java (Requerido para Gradle y Kotlin)
+        uses: actions/setup-java@v4
         with:
-          channel: 'stable'
+          distribution: 'zulu'
+          java-version: '17' # Versión recomendada para Android/KMP
 
-      - name: Instalar dependencias de Flutter
-        run: flutter pub get
+      - name: Dar permisos de ejecución a Gradle
+        run: chmod +x gradlew
 
-      - name: Compilar iOS (Sin firma para instalar en Windows)
+      - name: Compilar iOS y generar .ipa (Sin firma)
         run: |
-          flutter build ios --release --no-codesign
+          # 1. Entrar a la carpeta nativa de iOS (estándar en KMP)
+          cd iosApp
+
+          # 2. Instalar CocoaPods si el proyecto los requiere
+          if [ -f "Podfile" ]; then
+            pod install
+          fi
+
+          # 3. Detectar si usa Workspace (CocoaPods) o Project estándar
+          if [ -d "iosApp.xcworkspace" ]; then
+            TARGET="-workspace iosApp.xcworkspace"
+          else
+            TARGET="-project iosApp.xcodeproj"
+          fi
+
+          # 4. Compilar con Xcode deshabilitando la firma obligatoria de Apple
+          # Xcode llamará a Gradle automáticamente para compilar la parte de Compose
+          xcodebuild clean build \
+            $TARGET \
+            -scheme iosApp \
+            -configuration Release \
+            -sdk iphoneos \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            SYMROOT=$(pwd)/build
+
+          # 5. Preparar la estructura Payload requerida para el archivo .ipa
+          mkdir -p ../Payload
           
-          mkdir -p Payload
-          mv build/ios/iphoneos/Runner.app Payload/
-          
+          # 6. Mover el paquete compilado (.app) a la carpeta Payload
+          mv build/Release-iphoneos/*.app ../Payload/
+
+          # 7. Regresar a la raíz del proyecto y comprimir
+          cd ..
           zip -qr SimpMusic.ipa Payload
 
       - name: Subir archivo .ipa para descargar
