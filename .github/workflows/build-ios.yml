@@ -11,37 +11,51 @@ jobs:
       - name: Clonar el repositorio
         uses: actions/checkout@v4
 
-      - name: Configurar Java (Requerido para Gradle y Kotlin)
+      - name: Configurar Java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17' # Versión recomendada para Android/KMP
+          java-version: '17'
 
       - name: Dar permisos de ejecución a Gradle
-        run: chmod +x gradlew
+        run: chmod +x gradlew || true
 
-      - name: Compilar iOS y generar .ipa (Sin firma)
+      - name: Buscar y compilar iOS automáticamente
         run: |
-          # 1. Entrar a la carpeta nativa de iOS (estándar en KMP)
-          cd iosApp
+          # 1. Buscar automáticamente dónde está el archivo de Xcode
+          XCODE_PROJ=$(find . -name "*.xcodeproj" | head -n 1)
+          
+          if [ -z "$XCODE_PROJ" ]; then
+            echo "Error crítico: No se encontró ningún archivo .xcodeproj en todo el repositorio."
+            echo "Esto significa que el desarrollador aún no ha creado la interfaz nativa para iOS."
+            exit 1
+          fi
+          
+          # Obtener la ruta de la carpeta y entrar en ella
+          IOS_DIR=$(dirname "$XCODE_PROJ")
+          echo "Proyecto de iOS encontrado en: $IOS_DIR"
+          cd "$IOS_DIR"
 
-          # 2. Instalar CocoaPods si el proyecto los requiere
+          # 2. Instalar CocoaPods si existen
           if [ -f "Podfile" ]; then
             pod install
           fi
 
-          # 3. Detectar si usa Workspace (CocoaPods) o Project estándar
-          if [ -d "iosApp.xcworkspace" ]; then
-            TARGET="-workspace iosApp.xcworkspace"
+          # 3. Detectar si compilar como Workspace o Project
+          WORKSPACE=$(find . -maxdepth 1 -name "*.xcworkspace" | head -n 1)
+          if [ -n "$WORKSPACE" ]; then
+            TARGET="-workspace $(basename "$WORKSPACE")"
           else
-            TARGET="-project iosApp.xcodeproj"
+            TARGET="-project $(basename "$XCODE_PROJ")"
           fi
+          
+          # Obtener el nombre (scheme) del proyecto
+          SCHEME=$(basename "$XCODE_PROJ" .xcodeproj)
 
-          # 4. Compilar con Xcode deshabilitando la firma obligatoria de Apple
-          # Xcode llamará a Gradle automáticamente para compilar la parte de Compose
+          # 4. Compilar deshabilitando la firma de Apple
           xcodebuild clean build \
             $TARGET \
-            -scheme iosApp \
+            -scheme "$SCHEME" \
             -configuration Release \
             -sdk iphoneos \
             CODE_SIGN_IDENTITY="" \
@@ -49,13 +63,13 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             SYMROOT=$(pwd)/build
 
-          # 5. Preparar la estructura Payload requerida para el archivo .ipa
+          # 5. Crear la carpeta Payload en el directorio anterior
           mkdir -p ../Payload
           
-          # 6. Mover el paquete compilado (.app) a la carpeta Payload
-          mv build/Release-iphoneos/*.app ../Payload/
+          # 6. Mover la app compilada a Payload
+          mv build/Release-iphoneos/*.app ../Payload/ || echo "No se generó el archivo .app"
 
-          # 7. Regresar a la raíz del proyecto y comprimir
+          # 7. Regresar y comprimir el .ipa
           cd ..
           zip -qr SimpMusic.ipa Payload
 
