@@ -1,0 +1,43 @@
+name: Compilar SimpMusic iOS
+
+# Esto permite ejecutar la compilación manualmente desde la pestaña "Actions"
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    # Usamos la máquina virtual más reciente de macOS de GitHub
+    runs-on: macos-latest
+
+    steps:
+      - name: Clonar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable' # Usa la versión estable de Flutter
+
+      - name: Instalar dependencias de Flutter
+        run: flutter pub get
+
+      - name: Compilar iOS (Sin firma para Sideload)
+        run: |
+          # 1. Compila la app de iOS sin requerir certificados de desarrollador
+          flutter build ios --release --no-codesign
+          
+          # 2. Crea la carpeta Payload (requerida para estructurar un .ipa)
+          mkdir -p Payload
+          
+          # 3. Mueve el archivo compilado .app dentro de Payload
+          mv build/ios/iphoneos/Runner.app Payload/
+          
+          # 4. Comprime la carpeta Payload en un archivo .ipa
+          zip -qr SimpMusic.ipa Payload
+
+      - name: Subir archivo .ipa para descargar
+        uses: actions/upload-artifact@v4
+        with:
+          name: SimpMusic-iOS-IPA
+          path: SimpMusic.ipa
+          retention-days: 7 # El archivo se borrará de GitHub en 7 días
