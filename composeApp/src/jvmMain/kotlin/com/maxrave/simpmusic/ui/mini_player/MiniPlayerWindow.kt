@@ -2,6 +2,7 @@ package com.maxrave.simpmusic.ui.mini_player
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -18,9 +19,12 @@ import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.WindowState
 import com.maxrave.logger.Logger
+import com.maxrave.simpmusic.ui.theme.AppTheme
+import com.maxrave.simpmusic.viewModel.SettingsViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.UIEvent
 import org.jetbrains.compose.resources.painterResource
+import org.koin.compose.koinInject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.circle_app_icon
 import java.awt.Dimension
@@ -38,6 +42,7 @@ import java.util.prefs.Preferences
  * - Close-safe (doesn't close main app)
  * - Remembers window position
  * - Keyboard shortcuts (Space: play/pause, Arrow keys: prev/next)
+ * - Listens to global App Theme Settings
  */
 @Composable
 fun MiniPlayerWindow(
@@ -45,6 +50,11 @@ fun MiniPlayerWindow(
     onCloseRequest: () -> Unit,
 ) {
     val prefs = remember { Preferences.userRoot().node("SimpMusic/MiniPlayer") }
+    
+    // Inyectamos el SettingsViewModel para escuchar el tema
+    val settingsViewModel: SettingsViewModel = koinInject()
+    val followSystemTheme by settingsViewModel.followSystemTheme.collectAsState()
+    val forceLightTheme by settingsViewModel.forceLightTheme.collectAsState()
 
     // Minimum size constraints
     val minWidth = 200f
@@ -124,10 +134,16 @@ fun MiniPlayerWindow(
                 )
         }
 
-        MiniPlayerRoot(
-            sharedViewModel = sharedViewModel,
-            onClose = onCloseRequest,
-            windowState = windowState,
-        )
+        // Envolvemos el Root en AppTheme para que respete los colores
+        AppTheme(
+            followSystemTheme = followSystemTheme,
+            forceLightTheme = forceLightTheme
+        ) {
+            MiniPlayerRoot(
+                sharedViewModel = sharedViewModel,
+                onClose = onCloseRequest,
+                windowState = windowState,
+            )
+        }
     }
 }

@@ -37,9 +37,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -64,15 +64,13 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.maxrave.domain.data.model.streams.TimeLine
 import com.maxrave.domain.mediaservice.handler.ControlState
-import com.maxrave.simpmusic.ui.component.rememberHolderPainter
 import com.maxrave.simpmusic.extension.parseRichSyncWords
-import com.maxrave.simpmusic.ui.component.PlayPauseButton
 import com.maxrave.simpmusic.ui.component.RichSyncLyricsLineItem
 import com.maxrave.simpmusic.ui.component.RippleIconButton
+import com.maxrave.simpmusic.ui.component.rememberHolderPainter
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.NowPlayingScreenData
 import com.maxrave.simpmusic.viewModel.UIEvent
-import org.jetbrains.compose.resources.painterResource
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.baseline_skip_next_24
 import simpmusic.composeapp.generated.resources.baseline_skip_previous_24
@@ -88,38 +86,30 @@ private fun MiniPlayerSeekBar(
 ) {
     if (timeline.total <= 0L) return
 
-    val progress =
-        (timeline.current.toFloat() / timeline.total.toFloat())
-            .coerceIn(0f, 1f)
+    val progress = (timeline.current.toFloat() / timeline.total.toFloat()).coerceIn(0f, 1f)
 
     BoxWithConstraints(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .height(hitHeight)
-                .pointerInput(Unit) {
-                    detectTapGestures { offset ->
-                        val percent =
-                            (offset.x / size.width)
-                                .coerceIn(0f, 1f) * 100f
+        modifier = modifier
+            .fillMaxWidth()
+            .height(hitHeight)
+            .pointerInput(Unit) {
+                detectTapGestures { offset ->
+                    val percent = (offset.x / size.width).coerceIn(0f, 1f) * 100f
+                    onUIEvent(UIEvent.UpdateProgress(percent))
+                }
+            }
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        val percent = (offset.x / size.width).coerceIn(0f, 1f) * 100f
+                        onUIEvent(UIEvent.UpdateProgress(percent))
+                    },
+                    onDrag = { change, _ ->
+                        val percent = (change.position.x / size.width).coerceIn(0f, 1f) * 100f
                         onUIEvent(UIEvent.UpdateProgress(percent))
                     }
-                }.pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            val percent =
-                                (offset.x / size.width)
-                                    .coerceIn(0f, 1f) * 100f
-                            onUIEvent(UIEvent.UpdateProgress(percent))
-                        },
-                        onDrag = { change, _ ->
-                            val percent =
-                                (change.position.x / size.width)
-                                    .coerceIn(0f, 1f) * 100f
-                            onUIEvent(UIEvent.UpdateProgress(percent))
-                        },
-                    )
-                },
+                )
+            },
         contentAlignment = Alignment.CenterStart,
     ) {
         Box(
@@ -129,8 +119,8 @@ private fun MiniPlayerSeekBar(
                 .align(Alignment.Center)
                 .background(
                     MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
-                    RoundedCornerShape(50),
-                ),
+                    RoundedCornerShape(50)
+                )
         )
 
         Box(
@@ -140,8 +130,8 @@ private fun MiniPlayerSeekBar(
                 .align(Alignment.CenterStart)
                 .background(
                     MaterialTheme.colorScheme.primary,
-                    RoundedCornerShape(50),
-                ),
+                    RoundedCornerShape(50)
+                )
         )
 
         Box(
@@ -149,7 +139,7 @@ private fun MiniPlayerSeekBar(
                 .offset(x = (maxWidth * progress) - (thumbSize / 2))
                 .size(thumbSize)
                 .align(Alignment.CenterStart)
-                .background(MaterialTheme.colorScheme.primary, CircleShape),
+                .background(MaterialTheme.colorScheme.primary, CircleShape)
         )
     }
 }
@@ -164,30 +154,28 @@ fun CompactMiniLayout(
     val isHovered by interactionSource.collectIsHoveredAsState()
     val alpha by animateFloatAsState(
         targetValue = if (isHovered) 1f else 0.9f,
-        animationSpec = tween(200),
+        animationSpec = tween(200)
     )
 
     Surface(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .animateContentSize(animationSpec = tween(300))
-                .hoverable(interactionSource),
-        color = Color.Transparent,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier
+            .fillMaxSize()
+            .animateContentSize(animationSpec = tween(300))
+            .hoverable(interactionSource),
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Box(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .alpha(alpha),
-                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .alpha(alpha),
+                contentAlignment = Alignment.Center
             ) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     RippleIconButton(
                         resId = Res.drawable.baseline_skip_previous_24,
@@ -197,14 +185,20 @@ fun CompactMiniLayout(
                             if (controllerState.isPreviousAvailable) {
                                 onUIEvent(UIEvent.Previous)
                             }
-                        },
+                        }
                     )
 
-                    PlayPauseButton(
-                        isPlaying = controllerState.isPlaying,
-                        modifier = Modifier.size(36.dp),
+                    IconButton(
                         onClick = { onUIEvent(UIEvent.PlayPause) },
-                    )
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (controllerState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                            contentDescription = "Play/Pause",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
 
                     RippleIconButton(
                         resId = Res.drawable.baseline_skip_next_24,
@@ -214,17 +208,15 @@ fun CompactMiniLayout(
                             if (controllerState.isNextAvailable) {
                                 onUIEvent(UIEvent.Next)
                             }
-                        },
+                        }
                     )
                 }
             }
 
-            Box(
-                modifier = Modifier.padding(horizontal = 12.dp),
-            ) {
+            Box(modifier = Modifier.padding(horizontal = 12.dp)) {
                 MiniPlayerSeekBar(
                     timeline = timeline,
-                    onUIEvent = onUIEvent,
+                    onUIEvent = onUIEvent
                 )
             }
         }
@@ -243,29 +235,27 @@ fun MediumMiniLayout(
     val isArtworkHovered by artworkInteractionSource.collectIsHoveredAsState()
     val artworkScale by animateFloatAsState(
         targetValue = if (isArtworkHovered) 1.05f else 1f,
-        animationSpec = tween(200),
+        animationSpec = tween(200)
     )
 
     Surface(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .animateContentSize(animationSpec = tween(300)),
-        color = Color.Transparent,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier
+            .fillMaxSize()
+            .animateContentSize(animationSpec = tween(300)),
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface
     ) {
         BoxWithConstraints {
             val showExtraButtons = maxWidth >= 300.dp
 
             Column(modifier = Modifier.fillMaxSize()) {
                 Row(
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     AsyncImage(
                         model = nowPlayingData.thumbnailURL,
@@ -273,44 +263,33 @@ fun MediumMiniLayout(
                         placeholder = rememberHolderPainter(),
                         error = rememberHolderPainter(),
                         contentScale = ContentScale.Crop,
-                        modifier =
-                            Modifier
-                                .size(48.dp)
-                                .scale(artworkScale)
-                                .clip(RoundedCornerShape(6.dp))
-                                .hoverable(artworkInteractionSource),
+                        modifier = Modifier
+                            .size(48.dp)
+                            .scale(artworkScale)
+                            .clip(RoundedCornerShape(6.dp))
+                            .hoverable(artworkInteractionSource)
                     )
 
                     Spacer(modifier = Modifier.weight(1f))
 
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         AnimatedVisibility(
                             visible = showExtraButtons,
                             enter = scaleIn() + fadeIn(),
-                            exit = scaleOut() + fadeOut(),
+                            exit = scaleOut() + fadeOut()
                         ) {
                             IconButton(
                                 onClick = { onUIEvent(UIEvent.ToggleLike) },
-                                modifier = Modifier.size(28.dp),
+                                modifier = Modifier.size(28.dp)
                             ) {
                                 Icon(
-                                    imageVector =
-                                        if (controllerState.isLiked) {
-                                            Icons.Filled.Favorite
-                                        } else {
-                                            Icons.Outlined.FavoriteBorder
-                                        },
+                                    imageVector = if (controllerState.isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                                     contentDescription = "Like",
-                                    tint =
-                                        if (controllerState.isLiked) {
-                                            Color(0xFFFF4081)
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                                        },
-                                    modifier = Modifier.size(18.dp),
+                                    tint = if (controllerState.isLiked) Color(0xFFFF4081) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                         }
@@ -323,14 +302,20 @@ fun MediumMiniLayout(
                                 if (controllerState.isPreviousAvailable) {
                                     onUIEvent(UIEvent.Previous)
                                 }
-                            },
+                            }
                         )
 
-                        PlayPauseButton(
-                            isPlaying = controllerState.isPlaying,
-                            modifier = Modifier.size(36.dp),
+                        IconButton(
                             onClick = { onUIEvent(UIEvent.PlayPause) },
-                        )
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (controllerState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                contentDescription = "Play/Pause",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
 
                         RippleIconButton(
                             resId = Res.drawable.baseline_skip_next_24,
@@ -340,31 +325,26 @@ fun MediumMiniLayout(
                                 if (controllerState.isNextAvailable) {
                                     onUIEvent(UIEvent.Next)
                                 }
-                            },
+                            }
                         )
 
                         AnimatedVisibility(
                             visible = showExtraButtons,
                             enter = scaleIn() + fadeIn(),
-                            exit = scaleOut() + fadeOut(),
+                            exit = scaleOut() + fadeOut()
                         ) {
                             IconButton(
                                 onClick = {
                                     val newVolume = if (controllerState.volume > 0f) 0f else 1f
                                     onUIEvent(UIEvent.UpdateVolume(newVolume))
                                 },
-                                modifier = Modifier.size(28.dp),
+                                modifier = Modifier.size(28.dp)
                             ) {
                                 Icon(
-                                    imageVector =
-                                        if (controllerState.volume > 0f) {
-                                            Icons.AutoMirrored.Filled.VolumeUp
-                                        } else {
-                                            Icons.AutoMirrored.Filled.VolumeOff
-                                        },
+                                    imageVector = if (controllerState.volume > 0f) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
                                     contentDescription = if (controllerState.volume > 0f) "Mute" else "Unmute",
                                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                                    modifier = Modifier.size(18.dp),
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                         }
@@ -372,27 +352,23 @@ fun MediumMiniLayout(
                 }
 
                 if (lyricsData != null && !lyricsData.lyrics.error && lyricsData.lyrics.lines != null) {
-                    val currentLine =
-                        remember(timeline.current) {
-                            lyricsData.lyrics.lines?.findLast { line ->
-                                line.startTimeMs.toLongOrNull()?.let { it <= timeline.current } ?: false
-                            }
+                    val currentLine = remember(timeline.current) {
+                        lyricsData.lyrics.lines?.findLast { line ->
+                            line.startTimeMs.toLongOrNull()?.let { it <= timeline.current } ?: false
                         }
+                    }
 
                     if (currentLine != null) {
                         Box(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 8.dp),
-                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp),
+                            contentAlignment = Alignment.Center
                         ) {
                             if (lyricsData.lyrics.syncType == "RICH_SYNCED") {
-                                val parsedLine =
-                                    remember(currentLine.words, currentLine.startTimeMs, currentLine.endTimeMs) {
-                                        val result = parseRichSyncWords(currentLine.words, currentLine.startTimeMs, currentLine.endTimeMs)
-                                        result
-                                    }
+                                val parsedLine = remember(currentLine.words, currentLine.startTimeMs, currentLine.endTimeMs) {
+                                    parseRichSyncWords(currentLine.words, currentLine.startTimeMs, currentLine.endTimeMs)
+                                }
 
                                 if (parsedLine != null) {
                                     RichSyncLyricsLineItem(
@@ -401,39 +377,36 @@ fun MediumMiniLayout(
                                         currentTimeMs = timeline.current,
                                         isCurrent = true,
                                         customFontSize = typo().bodySmall.fontSize,
-                                        modifier = Modifier,
+                                        modifier = Modifier
                                     )
                                 }
                             } else {
                                 Text(
-                                    modifier =
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .wrapContentHeight(
-                                                align = Alignment.CenterVertically,
-                                            ).basicMarquee(
-                                                iterations = Int.MAX_VALUE,
-                                                animationMode = MarqueeAnimationMode.Immediately,
-                                            ).focusable(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .wrapContentHeight(align = Alignment.CenterVertically)
+                                        .basicMarquee(
+                                            iterations = Int.MAX_VALUE,
+                                            animationMode = MarqueeAnimationMode.Immediately
+                                        )
+                                        .focusable(),
                                     textAlign = TextAlign.Center,
                                     text = currentLine.words,
                                     style = typo().bodySmall,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    fontSize = 11.sp,
+                                    fontSize = 11.sp
                                 )
                             }
                         }
                     }
                 }
 
-                Box(
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                ) {
+                Box(modifier = Modifier.padding(horizontal = 12.dp)) {
                     MiniPlayerSeekBar(
                         timeline = timeline,
-                        onUIEvent = onUIEvent,
+                        onUIEvent = onUIEvent
                     )
                 }
             }
@@ -453,24 +426,22 @@ fun SquareMiniLayout(
     val isArtworkHovered by artworkInteractionSource.collectIsHoveredAsState()
     val artworkScale by animateFloatAsState(
         targetValue = if (isArtworkHovered) 1.03f else 1f,
-        animationSpec = tween(300),
+        animationSpec = tween(300)
     )
 
     Surface(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .animateContentSize(animationSpec = tween(300)),
-        color = Color.Transparent,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier
+            .fillMaxSize()
+            .animateContentSize(animationSpec = tween(300)),
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface
     ) {
         Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween,
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -480,20 +451,19 @@ fun SquareMiniLayout(
                 placeholder = rememberHolderPainter(),
                 error = rememberHolderPainter(),
                 contentScale = ContentScale.Crop,
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .fillMaxWidth(0.85f)
-                        .scale(artworkScale)
-                        .clip(RoundedCornerShape(12.dp))
-                        .hoverable(artworkInteractionSource),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(0.85f)
+                    .scale(artworkScale)
+                    .clip(RoundedCornerShape(12.dp))
+                    .hoverable(artworkInteractionSource)
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = nowPlayingData.nowPlayingTitle,
@@ -501,7 +471,7 @@ fun SquareMiniLayout(
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    fontSize = 16.sp,
+                    fontSize = 16.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
@@ -510,27 +480,24 @@ fun SquareMiniLayout(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    fontSize = 13.sp,
+                    fontSize = 13.sp
                 )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
             if (lyricsData != null && !lyricsData.lyrics.error && lyricsData.lyrics.lines != null) {
-                val currentLine =
-                    remember(timeline.current) {
-                        lyricsData.lyrics.lines?.findLast { line ->
-                            line.startTimeMs.toLongOrNull()?.let { it <= timeline.current } ?: false
-                        }
+                val currentLine = remember(timeline.current) {
+                    lyricsData.lyrics.lines?.findLast { line ->
+                        line.startTimeMs.toLongOrNull()?.let { it <= timeline.current } ?: false
                     }
+                }
 
                 if (currentLine != null) {
                     if (lyricsData.lyrics.syncType == "RICH_SYNCED") {
-                        val parsedLine =
-                            remember(currentLine.words, currentLine.startTimeMs, currentLine.endTimeMs) {
-                                val result = parseRichSyncWords(currentLine.words, currentLine.startTimeMs, currentLine.endTimeMs)
-                                result
-                            }
+                        val parsedLine = remember(currentLine.words, currentLine.startTimeMs, currentLine.endTimeMs) {
+                            parseRichSyncWords(currentLine.words, currentLine.startTimeMs, currentLine.endTimeMs)
+                        }
 
                         if (parsedLine != null) {
                             RichSyncLyricsLineItem(
@@ -539,40 +506,37 @@ fun SquareMiniLayout(
                                 currentTimeMs = timeline.current,
                                 isCurrent = true,
                                 customFontSize = typo().bodySmall.fontSize,
-                                modifier = Modifier.padding(horizontal = 8.dp),
+                                modifier = Modifier.padding(horizontal = 8.dp)
                             )
                         }
                     } else {
                         Text(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 8.dp)
-                                    .wrapContentHeight(
-                                        align = Alignment.CenterVertically,
-                                    ).basicMarquee(
-                                        iterations = Int.MAX_VALUE,
-                                        animationMode = MarqueeAnimationMode.Immediately,
-                                    ).focusable(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp)
+                                .wrapContentHeight(align = Alignment.CenterVertically)
+                                .basicMarquee(
+                                    iterations = Int.MAX_VALUE,
+                                    animationMode = MarqueeAnimationMode.Immediately
+                                )
+                                .focusable(),
                             textAlign = TextAlign.Center,
                             text = currentLine.words,
                             style = typo().bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            fontSize = 12.sp,
+                            fontSize = 12.sp
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
             }
 
-            Box(
-                modifier = Modifier.padding(horizontal = 12.dp),
-            ) {
+            Box(modifier = Modifier.padding(horizontal = 12.dp)) {
                 MiniPlayerSeekBar(
                     timeline = timeline,
-                    onUIEvent = onUIEvent,
+                    onUIEvent = onUIEvent
                 )
             }
             Spacer(modifier = Modifier.height(12.dp))
@@ -580,27 +544,17 @@ fun SquareMiniLayout(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
                     onClick = { onUIEvent(UIEvent.ToggleLike) },
-                    modifier = Modifier.size(32.dp),
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
-                        imageVector =
-                            if (controllerState.isLiked) {
-                                Icons.Filled.Favorite
-                            } else {
-                                Icons.Outlined.FavoriteBorder
-                            },
+                        imageVector = if (controllerState.isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                         contentDescription = "Like",
-                        tint =
-                            if (controllerState.isLiked) {
-                                Color(0xFFFF4081)
-                            } else {
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                            },
-                        modifier = Modifier.size(24.dp),
+                        tint = if (controllerState.isLiked) Color(0xFFFF4081) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        modifier = Modifier.size(24.dp)
                     )
                 }
 
@@ -612,14 +566,20 @@ fun SquareMiniLayout(
                         if (controllerState.isPreviousAvailable) {
                             onUIEvent(UIEvent.Previous)
                         }
-                    },
+                    }
                 )
 
-                PlayPauseButton(
-                    isPlaying = controllerState.isPlaying,
-                    modifier = Modifier.size(52.dp),
+                IconButton(
                     onClick = { onUIEvent(UIEvent.PlayPause) },
-                )
+                    modifier = Modifier.size(52.dp)
+                ) {
+                    Icon(
+                        imageVector = if (controllerState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                        contentDescription = "Play/Pause",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
 
                 RippleIconButton(
                     resId = Res.drawable.baseline_skip_next_24,
@@ -629,7 +589,7 @@ fun SquareMiniLayout(
                         if (controllerState.isNextAvailable) {
                             onUIEvent(UIEvent.Next)
                         }
-                    },
+                    }
                 )
 
                 IconButton(
@@ -637,18 +597,13 @@ fun SquareMiniLayout(
                         val newVolume = if (controllerState.volume > 0f) 0f else 1f
                         onUIEvent(UIEvent.UpdateVolume(newVolume))
                     },
-                    modifier = Modifier.size(32.dp),
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
-                        imageVector =
-                            if (controllerState.volume > 0f) {
-                                Icons.AutoMirrored.Filled.VolumeUp
-                            } else {
-                                Icons.AutoMirrored.Filled.VolumeOff
-                            },
+                        imageVector = if (controllerState.volume > 0f) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
                         contentDescription = if (controllerState.volume > 0f) "Mute" else "Unmute",
                         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        modifier = Modifier.size(24.dp),
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
@@ -662,22 +617,22 @@ fun SquareMiniLayout(
 fun EmptyMiniPlayerState() {
     Box(
         modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+            verticalArrangement = Arrangement.Center
         ) {
             Text(
                 text = "No track playing",
                 style = typo().bodyMedium.copy(fontSize = 13.sp),
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Play something to see controls",
                 style = typo().bodySmall.copy(fontSize = 11.sp),
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
             )
         }
     }
@@ -695,28 +650,24 @@ fun ExpandedMiniLayout(
     val isArtworkHovered by artworkInteractionSource.collectIsHoveredAsState()
     val artworkScale by animateFloatAsState(
         targetValue = if (isArtworkHovered) 1.08f else 1f,
-        animationSpec = tween(250),
+        animationSpec = tween(250)
     )
 
     Surface(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .animateContentSize(animationSpec = tween(300)),
-        color = Color.Transparent,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier
+            .fillMaxSize()
+            .animateContentSize(animationSpec = tween(300)),
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-        ) {
+        Column(modifier = Modifier.fillMaxSize()) {
             Row(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 AsyncImage(
                     model = nowPlayingData.thumbnailURL,
@@ -724,17 +675,16 @@ fun ExpandedMiniLayout(
                     placeholder = rememberHolderPainter(),
                     error = rememberHolderPainter(),
                     contentScale = ContentScale.Crop,
-                    modifier =
-                        Modifier
-                            .size(64.dp)
-                            .scale(artworkScale)
-                            .clip(RoundedCornerShape(8.dp))
-                            .hoverable(artworkInteractionSource),
+                    modifier = Modifier
+                        .size(64.dp)
+                        .scale(artworkScale)
+                        .clip(RoundedCornerShape(8.dp))
+                        .hoverable(artworkInteractionSource)
                 )
 
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.Center,
+                    verticalArrangement = Arrangement.Center
                 ) {
                     Text(
                         text = nowPlayingData.nowPlayingTitle,
@@ -742,7 +692,7 @@ fun ExpandedMiniLayout(
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        fontSize = 14.sp,
+                        fontSize = 14.sp
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -751,38 +701,28 @@ fun ExpandedMiniLayout(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        fontSize = 12.sp,
+                        fontSize = 12.sp
                     )
                 }
 
                 AnimatedVisibility(
                     visible = true,
                     enter = fadeIn(tween(300, delayMillis = 150)),
-                    exit = fadeOut(tween(200)),
+                    exit = fadeOut(tween(200))
                 ) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(
                             onClick = { onUIEvent(UIEvent.ToggleLike) },
-                            modifier = Modifier.size(28.dp),
+                            modifier = Modifier.size(28.dp)
                         ) {
                             Icon(
-                                imageVector =
-                                    if (controllerState.isLiked) {
-                                        Icons.Filled.Favorite
-                                    } else {
-                                        Icons.Outlined.FavoriteBorder
-                                    },
+                                imageVector = if (controllerState.isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                                 contentDescription = "Like",
-                                tint =
-                                    if (controllerState.isLiked) {
-                                        Color(0xFFFF4081)
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                                    },
-                                modifier = Modifier.size(20.dp),
+                                tint = if (controllerState.isLiked) Color(0xFFFF4081) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                modifier = Modifier.size(20.dp)
                             )
                         }
 
@@ -794,16 +734,20 @@ fun ExpandedMiniLayout(
                                 if (controllerState.isPreviousAvailable) {
                                     onUIEvent(UIEvent.Previous)
                                 }
-                            },
+                            }
                         )
 
-                        PlayPauseButton(
-                            isPlaying = controllerState.isPlaying,
-                            modifier = Modifier.size(40.dp),
-                            onClick = {
-                                onUIEvent(UIEvent.PlayPause)
-                            },
-                        )
+                        IconButton(
+                            onClick = { onUIEvent(UIEvent.PlayPause) },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (controllerState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                contentDescription = "Play/Pause",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
 
                         RippleIconButton(
                             resId = Res.drawable.baseline_skip_next_24,
@@ -813,7 +757,7 @@ fun ExpandedMiniLayout(
                                 if (controllerState.isNextAvailable) {
                                     onUIEvent(UIEvent.Next)
                                 }
-                            },
+                            }
                         )
 
                         IconButton(
@@ -821,18 +765,13 @@ fun ExpandedMiniLayout(
                                 val newVolume = if (controllerState.volume > 0f) 0f else 1f
                                 onUIEvent(UIEvent.UpdateVolume(newVolume))
                             },
-                            modifier = Modifier.size(28.dp),
+                            modifier = Modifier.size(28.dp)
                         ) {
                             Icon(
-                                imageVector =
-                                    if (controllerState.volume > 0f) {
-                                        Icons.AutoMirrored.Filled.VolumeUp
-                                    } else {
-                                        Icons.AutoMirrored.Filled.VolumeOff
-                                    },
+                                imageVector = if (controllerState.volume > 0f) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
                                 contentDescription = if (controllerState.volume > 0f) "Mute" else "Unmute",
                                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                                modifier = Modifier.size(20.dp),
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
@@ -840,26 +779,22 @@ fun ExpandedMiniLayout(
             }
 
             if (lyricsData != null && !lyricsData.lyrics.error && lyricsData.lyrics.lines != null) {
-                val currentLine =
-                    remember(timeline.current) {
-                        lyricsData.lyrics.lines?.findLast { line ->
-                            line.startTimeMs.toLongOrNull()?.let { it <= timeline.current } ?: false
-                        }
+                val currentLine = remember(timeline.current) {
+                    lyricsData.lyrics.lines?.findLast { line ->
+                        line.startTimeMs.toLongOrNull()?.let { it <= timeline.current } ?: false
                     }
+                }
 
                 if (currentLine != null) {
                     Box(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp)
                     ) {
                         if (lyricsData.lyrics.syncType == "RICH_SYNCED") {
-                            val parsedLine =
-                                remember(currentLine.words, currentLine.startTimeMs, currentLine.endTimeMs) {
-                                    val result = parseRichSyncWords(currentLine.words, currentLine.startTimeMs, currentLine.endTimeMs)
-                                    result
-                                }
+                            val parsedLine = remember(currentLine.words, currentLine.startTimeMs, currentLine.endTimeMs) {
+                                parseRichSyncWords(currentLine.words, currentLine.startTimeMs, currentLine.endTimeMs)
+                            }
 
                             if (parsedLine != null) {
                                 RichSyncLyricsLineItem(
@@ -869,40 +804,37 @@ fun ExpandedMiniLayout(
                                     isCurrent = true,
                                     customFontSize = typo().bodySmall.fontSize,
                                     customPadding = 4.dp,
-                                    modifier = Modifier,
+                                    modifier = Modifier
                                 )
                             }
                         } else {
                             Text(
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .wrapContentHeight(
-                                            align = Alignment.CenterVertically,
-                                        ).basicMarquee(
-                                            iterations = Int.MAX_VALUE,
-                                            animationMode = MarqueeAnimationMode.Immediately,
-                                        ).focusable()
-                                        .padding(bottom = 4.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .wrapContentHeight(align = Alignment.CenterVertically)
+                                    .basicMarquee(
+                                        iterations = Int.MAX_VALUE,
+                                        animationMode = MarqueeAnimationMode.Immediately
+                                    )
+                                    .focusable()
+                                    .padding(bottom = 4.dp),
                                 textAlign = TextAlign.Center,
                                 text = currentLine.words,
                                 style = typo().bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                fontSize = 11.sp,
+                                fontSize = 11.sp
                             )
                         }
                     }
                 }
             }
 
-            Box(
-                modifier = Modifier.padding(horizontal = 12.dp),
-            ) {
+            Box(modifier = Modifier.padding(horizontal = 12.dp)) {
                 MiniPlayerSeekBar(
                     timeline = timeline,
-                    onUIEvent = onUIEvent,
+                    onUIEvent = onUIEvent
                 )
             }
         }
