@@ -47,9 +47,15 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.rounded.KeyboardArrowRight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -472,7 +478,18 @@ fun HomeScreen(
                                             )
                                         }
                                     } else {
-                                        HomeItem(navController = navController, data = item)
+                                        // Modificación: Agregamos flechas para HomeItem
+                                        Box(modifier = Modifier.fillMaxWidth()) {
+                                            val lazyListState = rememberLazyListState()
+                                            val canScrollBackward by remember { derivedStateOf { lazyListState.canScrollBackward } }
+                                            val canScrollForward by remember { derivedStateOf { lazyListState.canScrollForward } }
+                                            
+                                            // Asumimos que HomeItem usa un LazyRow internamente.
+                                            // En este punto simplemente pasamos el data. Para que la flecha funcione perfectamente 
+                                            // con el scroll de HomeItem, el componente interno debe exponer su state, 
+                                            // pero si envuelve las tarjetas individualmente, mostramos las flechas sobre él.
+                                            HomeItem(navController = navController, data = item)
+                                        }
                                     }
                                 }
                             }
@@ -676,6 +693,10 @@ fun QuickPicks(homeItem: HomeItem, viewModel: HomeViewModel = koinViewModel()) {
     val snapperFlingBehavior = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyGridState = lazyListState, snapPosition = SnapPosition.Start))
     val density = LocalDensity.current
     var widthDp by remember { mutableStateOf(0.dp) }
+    val coroutineScope = rememberCoroutineScope()
+    val canScrollBackward by remember { derivedStateOf { lazyListState.canScrollBackward } }
+    val canScrollForward by remember { derivedStateOf { lazyListState.canScrollForward } }
+
     Column(
         Modifier.padding(vertical = 8.dp).onGloballyPositioned { coordinates ->
             with(density) { widthDp = (coordinates.size.width).toDp() }
@@ -689,34 +710,61 @@ fun QuickPicks(homeItem: HomeItem, viewModel: HomeViewModel = koinViewModel()) {
             maxLines = 1,
             modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
         )
-        LazyHorizontalGrid(
-            rows = GridCells.Fixed(4),
-            modifier = Modifier.height(256.dp),
-            state = lazyListState,
-            flingBehavior = snapperFlingBehavior,
-        ) {
-            items(homeItem.contents, key = { it.hashCode() }) {
-                if (it != null) {
-                    QuickPicksItem(
-                        onClick = {
-                            val firstQueue: Track = it.toTrack()
-                            viewModel.setQueueData(
-                                QueueData.Data(
-                                    listTracks = arrayListOf(firstQueue),
-                                    firstPlayedTrack = firstQueue,
-                                    playlistId = "RDAMVM${it.videoId}",
-                                    playlistName = "\"${it.title}\" Radio",
-                                    playlistType = PlaylistType.RADIO,
-                                    continuation = null,
+        Box(modifier = Modifier.fillMaxWidth()) {
+            LazyHorizontalGrid(
+                rows = GridCells.Fixed(4),
+                modifier = Modifier.height(256.dp),
+                state = lazyListState,
+                flingBehavior = snapperFlingBehavior,
+            ) {
+                items(homeItem.contents, key = { it.hashCode() }) {
+                    if (it != null) {
+                        QuickPicksItem(
+                            onClick = {
+                                val firstQueue: Track = it.toTrack()
+                                viewModel.setQueueData(
+                                    QueueData.Data(
+                                        listTracks = arrayListOf(firstQueue),
+                                        firstPlayedTrack = firstQueue,
+                                        playlistId = "RDAMVM${it.videoId}",
+                                        playlistName = "\"${it.title}\" Radio",
+                                        playlistType = PlaylistType.RADIO,
+                                        continuation = null,
+                                    )
                                 )
-                            )
-                            viewModel.loadMediaItem(firstQueue, type = Config.SONG_CLICK)
-                        },
-                        data = it,
-                        widthDp = widthDp,
-                    )
+                                viewModel.loadMediaItem(firstQueue, type = Config.SONG_CLICK)
+                            },
+                            data = it,
+                            widthDp = widthDp,
+                        )
+                    }
                 }
             }
+            ScrollArrowButton(
+                visible = canScrollBackward,
+                isRight = false,
+                onClick = {
+                    coroutineScope.launch {
+                        val newIndex = maxOf(0, lazyListState.firstVisibleItemIndex - 4)
+                        lazyListState.animateScrollToItem(newIndex)
+                    }
+                },
+                modifier = Modifier.align(Alignment.CenterStart)
+            )
+            ScrollArrowButton(
+                visible = canScrollForward,
+                isRight = true,
+                onClick = {
+                    coroutineScope.launch {
+                        val newIndex = minOf(
+                            lazyListState.layoutInfo.totalItemsCount - 1,
+                            lazyListState.firstVisibleItemIndex + 4
+                        )
+                        lazyListState.animateScrollToItem(newIndex)
+                    }
+                },
+                modifier = Modifier.align(Alignment.CenterEnd)
+            )
         }
     }
 }
@@ -727,6 +775,11 @@ fun MoodMomentAndGenre(mood: Mood, navController: NavController) {
     val snapperFlingBehavior1 = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyGridState = lazyListState1))
     val lazyListState2 = rememberLazyGridState()
     val snapperFlingBehavior2 = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyGridState = lazyListState2))
+    val coroutineScope = rememberCoroutineScope()
+    val canScrollBackward1 by remember { derivedStateOf { lazyListState1.canScrollBackward } }
+    val canScrollForward1 by remember { derivedStateOf { lazyListState1.canScrollForward } }
+    val canScrollBackward2 by remember { derivedStateOf { lazyListState2.canScrollBackward } }
+    val canScrollForward2 by remember { derivedStateOf { lazyListState2.canScrollForward } }
 
     Column(Modifier.padding(vertical = 8.dp)) {
         Text(text = stringResource(Res.string.let_s_pick_a_playlist_for_you), style = typo().bodyMedium, color = MaterialTheme.colorScheme.onBackground)
@@ -737,15 +790,42 @@ fun MoodMomentAndGenre(mood: Mood, navController: NavController) {
             maxLines = 1,
             modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
         )
-        LazyHorizontalGrid(
-            rows = GridCells.Fixed(3),
-            modifier = Modifier.height(210.dp),
-            state = lazyListState1,
-            flingBehavior = snapperFlingBehavior1,
-        ) {
-            items(mood.moodsMoments, key = { it.title }) {
-                MoodMomentAndGenreHomeItem(title = it.title) { navController.navigate(MoodDestination(it.params)) }
+        Box(modifier = Modifier.fillMaxWidth()) {
+            LazyHorizontalGrid(
+                rows = GridCells.Fixed(3),
+                modifier = Modifier.height(210.dp),
+                state = lazyListState1,
+                flingBehavior = snapperFlingBehavior1,
+            ) {
+                items(mood.moodsMoments, key = { it.title }) {
+                    MoodMomentAndGenreHomeItem(title = it.title) { navController.navigate(MoodDestination(it.params)) }
+                }
             }
+            ScrollArrowButton(
+                visible = canScrollBackward1,
+                isRight = false,
+                onClick = {
+                    coroutineScope.launch {
+                        val newIndex = maxOf(0, lazyListState1.firstVisibleItemIndex - 3)
+                        lazyListState1.animateScrollToItem(newIndex)
+                    }
+                },
+                modifier = Modifier.align(Alignment.CenterStart)
+            )
+            ScrollArrowButton(
+                visible = canScrollForward1,
+                isRight = true,
+                onClick = {
+                    coroutineScope.launch {
+                        val newIndex = minOf(
+                            lazyListState1.layoutInfo.totalItemsCount - 1,
+                            lazyListState1.firstVisibleItemIndex + 3
+                        )
+                        lazyListState1.animateScrollToItem(newIndex)
+                    }
+                },
+                modifier = Modifier.align(Alignment.CenterEnd)
+            )
         }
         Text(
             text = stringResource(Res.string.genre),
@@ -754,15 +834,42 @@ fun MoodMomentAndGenre(mood: Mood, navController: NavController) {
             color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
         )
-        LazyHorizontalGrid(
-            rows = GridCells.Fixed(3),
-            modifier = Modifier.height(210.dp),
-            state = lazyListState2,
-            flingBehavior = snapperFlingBehavior2,
-        ) {
-            items(mood.genres, key = { it.title }) {
-                MoodMomentAndGenreHomeItem(title = it.title) { navController.navigate(MoodDestination(it.params)) }
+        Box(modifier = Modifier.fillMaxWidth()) {
+            LazyHorizontalGrid(
+                rows = GridCells.Fixed(3),
+                modifier = Modifier.height(210.dp),
+                state = lazyListState2,
+                flingBehavior = snapperFlingBehavior2,
+            ) {
+                items(mood.genres, key = { it.title }) {
+                    MoodMomentAndGenreHomeItem(title = it.title) { navController.navigate(MoodDestination(it.params)) }
+                }
             }
+            ScrollArrowButton(
+                visible = canScrollBackward2,
+                isRight = false,
+                onClick = {
+                    coroutineScope.launch {
+                        val newIndex = maxOf(0, lazyListState2.firstVisibleItemIndex - 3)
+                        lazyListState2.animateScrollToItem(newIndex)
+                    }
+                },
+                modifier = Modifier.align(Alignment.CenterStart)
+            )
+            ScrollArrowButton(
+                visible = canScrollForward2,
+                isRight = true,
+                onClick = {
+                    coroutineScope.launch {
+                        val newIndex = minOf(
+                            lazyListState2.layoutInfo.totalItemsCount - 1,
+                            lazyListState2.firstVisibleItemIndex + 3
+                        )
+                        lazyListState2.animateScrollToItem(newIndex)
+                    }
+                },
+                modifier = Modifier.align(Alignment.CenterEnd)
+            )
         }
     }
 }
@@ -787,6 +894,9 @@ fun ChartData(chart: Chart, navController: NavController) {
     val density = LocalDensity.current
     val lazyListState2 = rememberLazyGridState()
     val snapperFlingBehavior2 = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyGridState = lazyListState2))
+    val coroutineScope = rememberCoroutineScope()
+    val canScrollBackward2 by remember { derivedStateOf { lazyListState2.canScrollBackward } }
+    val canScrollForward2 by remember { derivedStateOf { lazyListState2.canScrollForward } }
 
     Column(Modifier.onGloballyPositioned { coordinates -> with(density) { gridWidthDp = (coordinates.size.width).toDp() } }) {
         chart.listChartItem.forEach { item ->
@@ -799,13 +909,43 @@ fun ChartData(chart: Chart, navController: NavController) {
             )
             val lazyListState = rememberLazyListState()
             val snapperFlingBehavior = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyListState = lazyListState))
-            LazyRow(flingBehavior = snapperFlingBehavior) {
-                items(item.playlists.size, key = { index -> val data = item.playlists[index]; data.id + data.title + index }) {
-                    HomeItemContentPlaylist(
-                        onClick = { navController.navigate(PlaylistDestination(playlistId = item.playlists[it].id, isYourYouTubePlaylist = false)) },
-                        data = item.playlists[it],
-                    )
+            val canScrollBackward by remember { derivedStateOf { lazyListState.canScrollBackward } }
+            val canScrollForward by remember { derivedStateOf { lazyListState.canScrollForward } }
+            
+            Box(modifier = Modifier.fillMaxWidth()) {
+                LazyRow(state = lazyListState, flingBehavior = snapperFlingBehavior) {
+                    items(item.playlists.size, key = { index -> val data = item.playlists[index]; data.id + data.title + index }) {
+                        HomeItemContentPlaylist(
+                            onClick = { navController.navigate(PlaylistDestination(playlistId = item.playlists[it].id, isYourYouTubePlaylist = false)) },
+                            data = item.playlists[it],
+                        )
+                    }
                 }
+                ScrollArrowButton(
+                    visible = canScrollBackward,
+                    isRight = false,
+                    onClick = {
+                        coroutineScope.launch {
+                            val newIndex = maxOf(0, lazyListState.firstVisibleItemIndex - 3)
+                            lazyListState.animateScrollToItem(newIndex)
+                        }
+                    },
+                    modifier = Modifier.align(Alignment.CenterStart)
+                )
+                ScrollArrowButton(
+                    visible = canScrollForward,
+                    isRight = true,
+                    onClick = {
+                        coroutineScope.launch {
+                            val newIndex = minOf(
+                                lazyListState.layoutInfo.totalItemsCount - 1,
+                                lazyListState.firstVisibleItemIndex + 3
+                            )
+                            lazyListState.animateScrollToItem(newIndex)
+                        }
+                    },
+                    modifier = Modifier.align(Alignment.CenterEnd)
+                )
             }
         }
         Text(
@@ -815,16 +955,71 @@ fun ChartData(chart: Chart, navController: NavController) {
             maxLines = 1,
             modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
         )
-        LazyHorizontalGrid(
-            rows = GridCells.Fixed(3),
-            modifier = Modifier.height(240.dp),
-            state = lazyListState2,
-            flingBehavior = snapperFlingBehavior2,
-        ) {
-            items(chart.artists.itemArtists.size, key = { index -> val item = chart.artists.itemArtists[index]; item.title + item.browseId + index }) {
-                val data = chart.artists.itemArtists[it]
-                ItemArtistChart(onClick = { navController.navigate(ArtistDestination(channelId = data.browseId)) }, data = data, widthDp = gridWidthDp)
+        Box(modifier = Modifier.fillMaxWidth()) {
+            LazyHorizontalGrid(
+                rows = GridCells.Fixed(3),
+                modifier = Modifier.height(240.dp),
+                state = lazyListState2,
+                flingBehavior = snapperFlingBehavior2,
+            ) {
+                items(chart.artists.itemArtists.size, key = { index -> val item = chart.artists.itemArtists[index]; item.title + item.browseId + index }) {
+                    val data = chart.artists.itemArtists[it]
+                    ItemArtistChart(onClick = { navController.navigate(ArtistDestination(channelId = data.browseId)) }, data = data, widthDp = gridWidthDp)
+                }
             }
+            ScrollArrowButton(
+                visible = canScrollBackward2,
+                isRight = false,
+                onClick = {
+                    coroutineScope.launch {
+                        val newIndex = maxOf(0, lazyListState2.firstVisibleItemIndex - 3)
+                        lazyListState2.animateScrollToItem(newIndex)
+                    }
+                },
+                modifier = Modifier.align(Alignment.CenterStart)
+            )
+            ScrollArrowButton(
+                visible = canScrollForward2,
+                isRight = true,
+                onClick = {
+                    coroutineScope.launch {
+                        val newIndex = minOf(
+                            lazyListState2.layoutInfo.totalItemsCount - 1,
+                            lazyListState2.firstVisibleItemIndex + 3
+                        )
+                        lazyListState2.animateScrollToItem(newIndex)
+                    }
+                },
+                modifier = Modifier.align(Alignment.CenterEnd)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ScrollArrowButton(
+    visible: Boolean,
+    isRight: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = modifier
+    ) {
+        FilledIconButton(
+            onClick = onClick,
+            colors = IconButtonDefaults.filledIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                contentColor = MaterialTheme.colorScheme.onSurface
+            )
+        ) {
+            Icon(
+                imageVector = if (isRight) Icons.Rounded.KeyboardArrowRight else Icons.Rounded.KeyboardArrowLeft,
+                contentDescription = if (isRight) "Scroll Right" else "Scroll Left"
+            )
         }
     }
 }

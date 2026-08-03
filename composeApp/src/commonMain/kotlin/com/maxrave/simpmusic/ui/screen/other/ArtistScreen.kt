@@ -39,14 +39,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Sensors
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.PersonAddAlt1
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -62,6 +66,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -133,6 +138,7 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
@@ -202,14 +208,8 @@ fun ArtistScreen(
         }
     }
 
-    // CORRECCIÓN: En lugar de forzar un color inmersivo quemado, usamos el color de fondo del tema actual
-    // (Blanco de día, Oscuro de noche) para que las letras contrasten perfectamente.
     val mutedPaletteBg = MaterialTheme.colorScheme.background
-
     val sectionTint = paletteState.palette.getColorFromPalette()
-
-    // CORRECCIÓN: Si el logo falla, caemos en el color primario del tema en lugar de Blanco absoluto,
-    // para que los botones se vean en fondo blanco.
     val artistAccent = artistLogo?.bgColorHex?.hexToColorOrNull() ?: MaterialTheme.colorScheme.primary
 
     val hazeState = rememberHazeState(blurEnabled = true)
@@ -240,54 +240,57 @@ fun ArtistScreen(
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
-                                    .background(mutedPaletteBg) // Ahora se adapta de blanco a negro según el tema
+                                    .background(mutedPaletteBg) 
                                     .hazeSource(hazeState),
                             state = lazyState,
                         ) {
                             item(contentType = "header") {
-                                Column(
-                                    verticalArrangement = Arrangement.spacedBy((-36).dp),
-                                ) {
-                                    val artworkBackdrop = rememberBackdrop(Color.Black)
-                                    val headerHaze = rememberHazeState(blurEnabled = true)
-                                    val headerImageUrl = state.data.imageUrl?.toSquareThumbnailUrl()
-                                    Box(
-                                        modifier =
-                                            Modifier
-                                                .fillMaxWidth()
-                                                .aspectRatio(1f),
+                                val artworkBackdrop = rememberBackdrop(Color.Black)
+                                val headerHaze = rememberHazeState(blurEnabled = true)
+                                val headerImageUrl = state.data.imageUrl?.toSquareThumbnailUrl()
+                                
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy((-36).dp),
                                     ) {
-                                        Box(modifier = Modifier.fillMaxSize().clipToBounds().layerBackdrop(artworkBackdrop)) {
-                                            Box(modifier = Modifier.fillMaxSize().hazeSource(headerHaze)) {
-                                                AsyncImage(
-                                                    model =
-                                                        ImageRequest
-                                                            .Builder(LocalPlatformContext.current)
-                                                            .data(headerImageUrl)
-                                                            .diskCachePolicy(CachePolicy.ENABLED)
-                                                            .memoryCachePolicy(CachePolicy.ENABLED)
-                                                            .diskCacheKey(headerImageUrl)
-                                                            .memoryCacheKey(headerImageUrl)
-                                                            .crossfade(false)
-                                                            .build(),
-                                                    placeholder = rememberHolderPainter(),
-                                                    error = rememberHolderPainter(),
-                                                    contentDescription = null,
-                                                    contentScale = ContentScale.FillWidth,
-                                                    onSuccess = {
-                                                        bitmap = it.result.image.toImageBitmap()
-                                                    },
-                                                    modifier =
-                                                        Modifier
-                                                            .fillMaxSize()
-                                                            .alpha(if (canvasUrl != null) 0f else 1f),
-                                                )
-                                                canvasUrl?.let { canvas ->
-                                                    MediaPlayerView(
-                                                        url = canvas.first,
-                                                        modifier = Modifier.fillMaxSize(),
-                                                        cropToBounds = true,
+                                        Box(
+                                            modifier =
+                                                Modifier
+                                                    .fillMaxWidth()
+                                                    .aspectRatio(1f),
+                                        ) {
+                                            Box(modifier = Modifier.fillMaxSize().clipToBounds().layerBackdrop(artworkBackdrop)) {
+                                                Box(modifier = Modifier.fillMaxSize().hazeSource(headerHaze)) {
+                                                    AsyncImage(
+                                                        model =
+                                                            ImageRequest
+                                                                .Builder(LocalPlatformContext.current)
+                                                                .data(headerImageUrl)
+                                                                .diskCachePolicy(CachePolicy.ENABLED)
+                                                                .memoryCachePolicy(CachePolicy.ENABLED)
+                                                                .diskCacheKey(headerImageUrl)
+                                                                .memoryCacheKey(headerImageUrl)
+                                                                .crossfade(false)
+                                                                .build(),
+                                                        placeholder = rememberHolderPainter(),
+                                                        error = rememberHolderPainter(),
+                                                        contentDescription = null,
+                                                        contentScale = ContentScale.FillWidth,
+                                                        onSuccess = {
+                                                            bitmap = it.result.image.toImageBitmap()
+                                                        },
+                                                        modifier =
+                                                            Modifier
+                                                                .fillMaxSize()
+                                                                .alpha(if (canvasUrl != null) 0f else 1f),
                                                     )
+                                                    canvasUrl?.let { canvas ->
+                                                        MediaPlayerView(
+                                                            url = canvas.first,
+                                                            modifier = Modifier.fillMaxSize(),
+                                                            cropToBounds = true,
+                                                        )
+                                                    }
                                                 }
                                             }
                                             Box(
@@ -314,148 +317,146 @@ fun ArtistScreen(
                                                             ),
                                                         ),
                                             )
-                                            Column(
-                                                modifier =
-                                                    Modifier
-                                                        .align(Alignment.BottomCenter)
-                                                        .offset(y = (-36).dp)
-                                                        .fillMaxWidth()
-                                                        .padding(horizontal = 20.dp)
-                                                        .padding(bottom = 16.dp),
-                                                horizontalAlignment = Alignment.CenterHorizontally,
-                                            ) {
-                                                val logo = artistLogo
-                                                if (logo != null) {
-                                                    AsyncImage(
-                                                        model = logo.logoUrl,
-                                                        contentDescription = state.data.title,
-                                                        contentScale = ContentScale.Fit,
-                                                        modifier =
-                                                            Modifier
-                                                                .fillMaxWidth(0.7f)
-                                                                .heightIn(max = 84.dp),
-                                                    )
-                                                } else {
-                                                    Text(
-                                                        text = state.data.title ?: stringResource(Res.string.unknown),
-                                                        style = typo().titleLarge,
-                                                        // CORRECCIÓN: Color dinámico en lugar de Color.White quemado
-                                                        color = MaterialTheme.colorScheme.onBackground,
-                                                        maxLines = 2,
-                                                        textAlign = TextAlign.Center,
-                                                    )
-                                                }
-                                                val meta =
-                                                    listOfNotNull(
-                                                        state.data.subscribers?.takeIf { it.isNotBlank() },
-                                                        state.data.playCount?.takeIf { it.isNotBlank() },
-                                                    ).joinToString(" · ")
-                                                if (meta.isNotBlank()) {
-                                                    Spacer(modifier = Modifier.height(4.dp))
-                                                    Text(
-                                                        text = meta,
-                                                        style = typo().bodyMedium,
-                                                        // CORRECCIÓN: Color dinámico
-                                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
-                                                        textAlign = TextAlign.Center,
-                                                    )
-                                                }
+                                        }
+                                        Column(
+                                            modifier =
+                                                Modifier
+                                                    .offset(y = (-36).dp)
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 20.dp)
+                                                    .padding(bottom = 16.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                        ) {
+                                            val logo = artistLogo
+                                            if (logo != null) {
+                                                AsyncImage(
+                                                    model = logo.logoUrl,
+                                                    contentDescription = state.data.title,
+                                                    contentScale = ContentScale.Fit,
+                                                    modifier =
+                                                        Modifier
+                                                            .fillMaxWidth(0.7f)
+                                                            .heightIn(max = 84.dp),
+                                                )
+                                            } else {
+                                                Text(
+                                                    text = state.data.title ?: stringResource(Res.string.unknown),
+                                                    style = typo().titleLarge,
+                                                    color = MaterialTheme.colorScheme.onBackground,
+                                                    maxLines = 2,
+                                                    textAlign = TextAlign.Center,
+                                                )
+                                            }
+                                            val meta =
+                                                listOfNotNull(
+                                                    state.data.subscribers?.takeIf { it.isNotBlank() },
+                                                    state.data.playCount?.takeIf { it.isNotBlank() },
+                                                ).joinToString(" · ")
+                                            if (meta.isNotBlank()) {
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = meta,
+                                                    style = typo().bodyMedium,
+                                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
+                                                    textAlign = TextAlign.Center,
+                                                )
                                             }
                                         }
-                                        LiquidGlassIconButton(
-                                            backdrop = artworkBackdrop,
-                                            resId = Res.drawable.baseline_arrow_back_ios_new_24,
-                                            modifier =
-                                                Modifier
-                                                    .align(Alignment.TopStart)
-                                                    .padding(12.dp)
-                                                    .windowInsetsPadding(WindowInsets.statusBars)
-                                                    .size(48.dp),
-                                        ) {
-                                            navController.navigateUp()
-                                        }
                                     }
-
-                                    Row(
+                                    LiquidGlassIconButton(
+                                        backdrop = artworkBackdrop,
+                                        resId = Res.drawable.baseline_arrow_back_ios_new_24,
                                         modifier =
                                             Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 32.dp)
-                                                .padding(vertical = 8.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
-                                        verticalAlignment = Alignment.CenterVertically,
+                                                .align(Alignment.TopStart)
+                                                .padding(12.dp)
+                                                .windowInsetsPadding(WindowInsets.statusBars)
+                                                .size(48.dp),
                                     ) {
-                                        Box(
-                                            modifier =
-                                                Modifier
-                                                    .size(48.dp)
-                                                    .clip(CircleShape)
-                                                    .border(1.5.dp, artistAccent, CircleShape)
-                                                    .clickable {
-                                                        val param = state.data.radioParam
-                                                        if (param != null) {
-                                                            viewModel.onRadioClick(param)
-                                                        } else {
-                                                            viewModel.makeToast(runBlocking { getString(Res.string.error) })
-                                                        }
-                                                    },
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.Sensors,
-                                                contentDescription = "Radio",
-                                                tint = artistAccent,
-                                                modifier = Modifier.size(22.dp),
-                                            )
-                                        }
-                                        Box(
-                                            modifier =
-                                                Modifier
-                                                    .size(64.dp)
-                                                    .clip(CircleShape)
-                                                    .background(artistAccent)
-                                                    .clickable {
-                                                        val param = state.data.shuffleParam
-                                                        if (param != null) {
-                                                            viewModel.onShuffleClick(param)
-                                                        } else {
-                                                            viewModel.makeToast(runBlocking { getString(Res.string.error) })
-                                                        }
-                                                    },
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Shuffle,
-                                                contentDescription = "Shuffle",
-                                                tint = mutedPaletteBg,
-                                                modifier = Modifier.size(28.dp),
-                                            )
-                                        }
-                                        Box(
-                                            modifier =
-                                                Modifier
-                                                    .size(48.dp)
-                                                    .clip(CircleShape)
-                                                    .background(if (isFollowed) artistAccent else Color.Transparent)
-                                                    .border(1.5.dp, artistAccent, CircleShape)
-                                                    .clickable {
-                                                        viewModel.updateFollowed(
-                                                            if (isFollowed) 0 else 1,
-                                                            state.data.channelId ?: return@clickable,
-                                                        )
-                                                    },
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            Icon(
-                                                imageVector = if (isFollowed) Icons.Rounded.Check else Icons.Rounded.PersonAddAlt1,
-                                                contentDescription = if (isFollowed) "Followed" else "Follow",
-                                                tint = if (isFollowed) mutedPaletteBg else artistAccent,
-                                                modifier = Modifier.size(22.dp),
-                                            )
-                                        }
+                                        navController.navigateUp()
+                                    }
+                                }
+
+                                Row(
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 32.dp)
+                                            .padding(vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Box(
+                                        modifier =
+                                            Modifier
+                                                .size(48.dp)
+                                                .clip(CircleShape)
+                                                .border(1.5.dp, artistAccent, CircleShape)
+                                                .clickable {
+                                                    val param = state.data.radioParam
+                                                    if (param != null) {
+                                                        viewModel.onRadioClick(param)
+                                                    } else {
+                                                        viewModel.makeToast(runBlocking { getString(Res.string.error) })
+                                                    }
+                                                },
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Sensors,
+                                            contentDescription = "Radio",
+                                            tint = artistAccent,
+                                            modifier = Modifier.size(22.dp),
+                                        )
+                                    }
+                                    Box(
+                                        modifier =
+                                            Modifier
+                                                .size(64.dp)
+                                                .clip(CircleShape)
+                                                .background(artistAccent)
+                                                .clickable {
+                                                    val param = state.data.shuffleParam
+                                                    if (param != null) {
+                                                        viewModel.onShuffleClick(param)
+                                                    } else {
+                                                        viewModel.makeToast(runBlocking { getString(Res.string.error) })
+                                                    }
+                                                },
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Shuffle,
+                                            contentDescription = "Shuffle",
+                                            tint = mutedPaletteBg,
+                                            modifier = Modifier.size(28.dp),
+                                        )
+                                    }
+                                    Box(
+                                        modifier =
+                                            Modifier
+                                                .size(48.dp)
+                                                .clip(CircleShape)
+                                                .background(if (isFollowed) artistAccent else Color.Transparent)
+                                                .border(1.5.dp, artistAccent, CircleShape)
+                                                .clickable {
+                                                    viewModel.updateFollowed(
+                                                        if (isFollowed) 0 else 1,
+                                                        state.data.channelId ?: return@clickable,
+                                                    )
+                                                },
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isFollowed) Icons.Rounded.Check else Icons.Rounded.PersonAddAlt1,
+                                            contentDescription = if (isFollowed) "Followed" else "Follow",
+                                            tint = if (isFollowed) mutedPaletteBg else artistAccent,
+                                            modifier = Modifier.size(22.dp),
+                                        )
                                     }
                                 }
                             }
+                            
                             item(contentType = "sections") {
                                 ArtistSections(
                                     state = state,
@@ -502,7 +503,6 @@ fun ArtistScreen(
                                                         Res.drawable.baseline_arrow_back_ios_new_24,
                                                     ),
                                                 contentDescription = "Back",
-                                                // CORRECCIÓN: Icono de retroceso adaptativo, no siempre blanco
                                                 tint = MaterialTheme.colorScheme.onBackground,
                                                 modifier = Modifier.size(20.dp),
                                             )
@@ -837,28 +837,63 @@ private fun ArtistSections(
                         Text(stringResource(Res.string.more), style = typo().bodySmall)
                     }
                 }
-                LazyRow(
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    item {
-                        Spacer(Modifier.size(10.dp))
+                
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    val lazyListState = rememberLazyListState()
+                    val coroutineScope = rememberCoroutineScope()
+                    val canScrollBackward by remember { derivedStateOf { lazyListState.canScrollBackward } }
+                    val canScrollForward by remember { derivedStateOf { lazyListState.canScrollForward } }
+
+                    LazyRow(
+                        state = lazyListState,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        item {
+                            Spacer(Modifier.size(10.dp))
+                        }
+                        items(state.data.singles?.results ?: emptyList()) { single ->
+                            HomeItemContentPlaylist(
+                                onClick = {
+                                    navController.navigate(
+                                        AlbumDestination(
+                                            single.browseId,
+                                        ),
+                                    )
+                                },
+                                data = single,
+                                thumbSize = 180.dp,
+                            )
+                        }
+                        item {
+                            Spacer(Modifier.size(10.dp))
+                        }
                     }
-                    items(state.data.singles?.results ?: emptyList()) { single ->
-                        HomeItemContentPlaylist(
-                            onClick = {
-                                navController.navigate(
-                                    AlbumDestination(
-                                        single.browseId,
-                                    ),
+
+                    ScrollArrowButton(
+                        visible = canScrollBackward,
+                        isRight = false,
+                        onClick = {
+                            coroutineScope.launch {
+                                val newIndex = maxOf(0, lazyListState.firstVisibleItemIndex - 3)
+                                lazyListState.animateScrollToItem(newIndex)
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.CenterStart)
+                    )
+                    ScrollArrowButton(
+                        visible = canScrollForward,
+                        isRight = true,
+                        onClick = {
+                            coroutineScope.launch {
+                                val newIndex = minOf(
+                                    lazyListState.layoutInfo.totalItemsCount - 1,
+                                    lazyListState.firstVisibleItemIndex + 3
                                 )
-                            },
-                            data = single,
-                            thumbSize = 180.dp,
-                        )
-                    }
-                    item {
-                        Spacer(Modifier.size(10.dp))
-                    }
+                                lazyListState.animateScrollToItem(newIndex)
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.CenterEnd)
+                    )
                 }
             }
         }
@@ -904,28 +939,63 @@ private fun ArtistSections(
                         Text(stringResource(Res.string.more), style = typo().bodySmall)
                     }
                 }
-                LazyRow(
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    item {
-                        Spacer(Modifier.size(10.dp))
+
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    val lazyListState = rememberLazyListState()
+                    val coroutineScope = rememberCoroutineScope()
+                    val canScrollBackward by remember { derivedStateOf { lazyListState.canScrollBackward } }
+                    val canScrollForward by remember { derivedStateOf { lazyListState.canScrollForward } }
+
+                    LazyRow(
+                        state = lazyListState,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        item {
+                            Spacer(Modifier.size(10.dp))
+                        }
+                        items(state.data.albums?.results ?: emptyList()) { album ->
+                            HomeItemContentPlaylist(
+                                onClick = {
+                                    navController.navigate(
+                                        AlbumDestination(
+                                            browseId = album.browseId,
+                                        ),
+                                    )
+                                },
+                                data = album,
+                                thumbSize = 180.dp,
+                            )
+                        }
+                        item {
+                            Spacer(Modifier.size(10.dp))
+                        }
                     }
-                    items(state.data.albums?.results ?: emptyList()) { album ->
-                        HomeItemContentPlaylist(
-                            onClick = {
-                                navController.navigate(
-                                    AlbumDestination(
-                                        browseId = album.browseId,
-                                    ),
+
+                    ScrollArrowButton(
+                        visible = canScrollBackward,
+                        isRight = false,
+                        onClick = {
+                            coroutineScope.launch {
+                                val newIndex = maxOf(0, lazyListState.firstVisibleItemIndex - 3)
+                                lazyListState.animateScrollToItem(newIndex)
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.CenterStart)
+                    )
+                    ScrollArrowButton(
+                        visible = canScrollForward,
+                        isRight = true,
+                        onClick = {
+                            coroutineScope.launch {
+                                val newIndex = minOf(
+                                    lazyListState.layoutInfo.totalItemsCount - 1,
+                                    lazyListState.firstVisibleItemIndex + 3
                                 )
-                            },
-                            data = album,
-                            thumbSize = 180.dp,
-                        )
-                    }
-                    item {
-                        Spacer(Modifier.size(10.dp))
-                    }
+                                lazyListState.animateScrollToItem(newIndex)
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.CenterEnd)
+                    )
                 }
             }
         }
@@ -970,52 +1040,87 @@ private fun ArtistSections(
                         Text(stringResource(Res.string.more), style = typo().bodySmall)
                     }
                 }
-                LazyRow(
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    item {
-                        Spacer(Modifier.size(10.dp))
-                    }
-                    items(state.data.video?.video ?: emptyList()) { video ->
-                        HomeItemVideo(
-                            onClick = {
-                                val firstQueue: Track = video
-                                viewModel.setQueueData(
-                                    QueueData.Data(
-                                        listTracks = arrayListOf(firstQueue),
-                                        firstPlayedTrack = firstQueue,
-                                        playlistId = "RDAMVM${video.videoId}",
-                                        playlistName = (state.data.title ?: "") + getStringBlocking(Res.string.videos),
-                                        playlistType = PlaylistType.RADIO,
-                                        continuation = null,
+                
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    val lazyListState = rememberLazyListState()
+                    val coroutineScope = rememberCoroutineScope()
+                    val canScrollBackward by remember { derivedStateOf { lazyListState.canScrollBackward } }
+                    val canScrollForward by remember { derivedStateOf { lazyListState.canScrollForward } }
+
+                    LazyRow(
+                        state = lazyListState,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        item {
+                            Spacer(Modifier.size(10.dp))
+                        }
+                        items(state.data.video?.video ?: emptyList()) { video ->
+                            HomeItemVideo(
+                                onClick = {
+                                    val firstQueue: Track = video
+                                    viewModel.setQueueData(
+                                        QueueData.Data(
+                                            listTracks = arrayListOf(firstQueue),
+                                            firstPlayedTrack = firstQueue,
+                                            playlistId = "RDAMVM${video.videoId}",
+                                            playlistName = (state.data.title ?: "") + getStringBlocking(Res.string.videos),
+                                            playlistType = PlaylistType.RADIO,
+                                            continuation = null,
+                                        ),
+                                    )
+                                    viewModel.loadMediaItem(
+                                        firstQueue,
+                                        type = Config.VIDEO_CLICK,
+                                    )
+                                },
+                                onLongClick = {
+                                    onTrackMore(video)
+                                },
+                                data =
+                                    Content(
+                                        album = null,
+                                        artists = video.artists,
+                                        description = null,
+                                        isExplicit = video.isExplicit,
+                                        playlistId = null,
+                                        browseId = null,
+                                        thumbnails = video.thumbnails ?: emptyList(),
+                                        title = video.title,
+                                        videoId = video.videoId,
+                                        views = video.videoType,
                                     ),
-                                )
-                                viewModel.loadMediaItem(
-                                    firstQueue,
-                                    type = Config.VIDEO_CLICK,
-                                )
-                            },
-                            onLongClick = {
-                                onTrackMore(video)
-                            },
-                            data =
-                                Content(
-                                    album = null,
-                                    artists = video.artists,
-                                    description = null,
-                                    isExplicit = video.isExplicit,
-                                    playlistId = null,
-                                    browseId = null,
-                                    thumbnails = video.thumbnails ?: emptyList(),
-                                    title = video.title,
-                                    videoId = video.videoId,
-                                    views = video.videoType,
-                                ),
-                        )
+                            )
+                        }
+                        item {
+                            Spacer(Modifier.size(10.dp))
+                        }
                     }
-                    item {
-                        Spacer(Modifier.size(10.dp))
-                    }
+
+                    ScrollArrowButton(
+                        visible = canScrollBackward,
+                        isRight = false,
+                        onClick = {
+                            coroutineScope.launch {
+                                val newIndex = maxOf(0, lazyListState.firstVisibleItemIndex - 3)
+                                lazyListState.animateScrollToItem(newIndex)
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.CenterStart)
+                    )
+                    ScrollArrowButton(
+                        visible = canScrollForward,
+                        isRight = true,
+                        onClick = {
+                            coroutineScope.launch {
+                                val newIndex = minOf(
+                                    lazyListState.layoutInfo.totalItemsCount - 1,
+                                    lazyListState.firstVisibleItemIndex + 3
+                                )
+                                lazyListState.animateScrollToItem(newIndex)
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.CenterEnd)
+                    )
                 }
             }
         }
@@ -1036,28 +1141,63 @@ private fun ArtistSections(
                                 .padding(vertical = 10.dp),
                     )
                 }
-                LazyRow(
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    item {
-                        Spacer(Modifier.size(10.dp))
+                
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    val lazyListState = rememberLazyListState()
+                    val coroutineScope = rememberCoroutineScope()
+                    val canScrollBackward by remember { derivedStateOf { lazyListState.canScrollBackward } }
+                    val canScrollForward by remember { derivedStateOf { lazyListState.canScrollForward } }
+
+                    LazyRow(
+                        state = lazyListState,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        item {
+                            Spacer(Modifier.size(10.dp))
+                        }
+                        items(state.data.featuredOn) { feature ->
+                            HomeItemContentPlaylist(
+                                onClick = {
+                                    navController.navigate(
+                                        PlaylistDestination(
+                                            feature.id,
+                                        ),
+                                    )
+                                },
+                                data = feature,
+                                thumbSize = 180.dp,
+                            )
+                        }
+                        item {
+                            Spacer(Modifier.size(10.dp))
+                        }
                     }
-                    items(state.data.featuredOn) { feature ->
-                        HomeItemContentPlaylist(
-                            onClick = {
-                                navController.navigate(
-                                    PlaylistDestination(
-                                        feature.id,
-                                    ),
+
+                    ScrollArrowButton(
+                        visible = canScrollBackward,
+                        isRight = false,
+                        onClick = {
+                            coroutineScope.launch {
+                                val newIndex = maxOf(0, lazyListState.firstVisibleItemIndex - 3)
+                                lazyListState.animateScrollToItem(newIndex)
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.CenterStart)
+                    )
+                    ScrollArrowButton(
+                        visible = canScrollForward,
+                        isRight = true,
+                        onClick = {
+                            coroutineScope.launch {
+                                val newIndex = minOf(
+                                    lazyListState.layoutInfo.totalItemsCount - 1,
+                                    lazyListState.firstVisibleItemIndex + 3
                                 )
-                            },
-                            data = feature,
-                            thumbSize = 180.dp,
-                        )
-                    }
-                    item {
-                        Spacer(Modifier.size(10.dp))
-                    }
+                                lazyListState.animateScrollToItem(newIndex)
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.CenterEnd)
+                    )
                 }
             }
         }
@@ -1084,47 +1224,82 @@ private fun ArtistSections(
                                 .padding(vertical = 10.dp),
                     )
                 }
-                LazyRow(
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    item {
-                        Spacer(Modifier.size(10.dp))
-                    }
-                    items(state.data.related?.results ?: emptyList()) { related ->
-                        HomeItemArtist(
-                            onClick = {
-                                navController.navigate(
-                                    ArtistDestination(
-                                        channelId = related.browseId,
-                                    ),
-                                )
-                            },
-                            data =
-                                Content(
-                                    album = null,
-                                    artists =
-                                        listOf(
-                                            Artist(
-                                                id = related.browseId,
-                                                name = related.title,
-                                            ),
+                
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    val lazyListState = rememberLazyListState()
+                    val coroutineScope = rememberCoroutineScope()
+                    val canScrollBackward by remember { derivedStateOf { lazyListState.canScrollBackward } }
+                    val canScrollForward by remember { derivedStateOf { lazyListState.canScrollForward } }
+
+                    LazyRow(
+                        state = lazyListState,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        item {
+                            Spacer(Modifier.size(10.dp))
+                        }
+                        items(state.data.related?.results ?: emptyList()) { related ->
+                            HomeItemArtist(
+                                onClick = {
+                                    navController.navigate(
+                                        ArtistDestination(
+                                            channelId = related.browseId,
                                         ),
-                                    description = related.subscribers,
-                                    isExplicit = null,
-                                    playlistId = null,
-                                    browseId = related.browseId,
-                                    thumbnails = related.thumbnails,
-                                    title = related.title,
-                                    videoId = null,
-                                    views = null,
-                                    durationSeconds = null,
-                                    radio = null,
-                                ),
-                        )
+                                    )
+                                },
+                                data =
+                                    Content(
+                                        album = null,
+                                        artists =
+                                            listOf(
+                                                Artist(
+                                                    id = related.browseId,
+                                                    name = related.title,
+                                                ),
+                                            ),
+                                        description = related.subscribers,
+                                        isExplicit = null,
+                                        playlistId = null,
+                                        browseId = related.browseId,
+                                        thumbnails = related.thumbnails,
+                                        title = related.title,
+                                        videoId = null,
+                                        views = null,
+                                        durationSeconds = null,
+                                        radio = null,
+                                    ),
+                            )
+                        }
+                        item {
+                            Spacer(Modifier.size(10.dp))
+                        }
                     }
-                    item {
-                        Spacer(Modifier.size(10.dp))
-                    }
+
+                    ScrollArrowButton(
+                        visible = canScrollBackward,
+                        isRight = false,
+                        onClick = {
+                            coroutineScope.launch {
+                                val newIndex = maxOf(0, lazyListState.firstVisibleItemIndex - 3)
+                                lazyListState.animateScrollToItem(newIndex)
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.CenterStart)
+                    )
+                    ScrollArrowButton(
+                        visible = canScrollForward,
+                        isRight = true,
+                        onClick = {
+                            coroutineScope.launch {
+                                val newIndex = minOf(
+                                    lazyListState.layoutInfo.totalItemsCount - 1,
+                                    lazyListState.firstVisibleItemIndex + 3
+                                )
+                                lazyListState.animateScrollToItem(newIndex)
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.CenterEnd)
+                    )
                 }
             }
         }
@@ -1163,5 +1338,33 @@ private fun ArtistSections(
             )
         }
         EndOfPage()
+    }
+}
+
+@Composable
+private fun ScrollArrowButton(
+    visible: Boolean,
+    isRight: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = modifier
+    ) {
+        FilledIconButton(
+            onClick = onClick,
+            colors = IconButtonDefaults.filledIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                contentColor = MaterialTheme.colorScheme.onSurface
+            )
+        ) {
+            Icon(
+                imageVector = if (isRight) Icons.Rounded.KeyboardArrowRight else Icons.Rounded.KeyboardArrowLeft,
+                contentDescription = if (isRight) "Scroll Right" else "Scroll Left"
+            )
+        }
     }
 }

@@ -2,6 +2,8 @@ package com.maxrave.simpmusic.ui.component
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.MarqueeAnimationMode
 import androidx.compose.foundation.background
@@ -32,14 +34,22 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.rounded.KeyboardArrowRight
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -95,6 +105,7 @@ import com.maxrave.simpmusic.ui.navigation.destination.list.PodcastDestination
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.HomeViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
@@ -128,6 +139,9 @@ fun HomeItem(
     val snapperFlingBehavior = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyListState = lazyListState))
 
     var track by remember { mutableStateOf<Track?>(null) }
+    val coroutineScope = rememberCoroutineScope()
+    val canScrollBackward by remember { derivedStateOf { lazyListState.canScrollBackward } }
+    val canScrollForward by remember { derivedStateOf { lazyListState.canScrollForward } }
 
     if (bottomSheetShow) {
         NowPlayingBottomSheet(
@@ -200,111 +214,139 @@ fun HomeItem(
                 )
             }
         }
-        LazyRow(
-            state = lazyListState,
-            flingBehavior = snapperFlingBehavior,
-        ) {
-            items(data.contents) { temp ->
-                if (temp != null) {
-                    val browseId = temp.browseId
-                    val playlistId = temp.playlistId
-                    if ((playlistId != null && temp.videoId == null) || (playlistId != null && temp.videoId == "")) {
-                        if (playlistId.startsWith("UC")) {
-                            HomeItemArtist(onClick = {
-                                navController.navigate(
-                                    ArtistDestination(
-                                        channelId = playlistId,
-                                    ),
-                                )
-                            }, data = temp)
+
+        Box(modifier = Modifier.fillMaxWidth()) {
+            LazyRow(
+                state = lazyListState,
+                flingBehavior = snapperFlingBehavior,
+            ) {
+                items(data.contents) { temp ->
+                    if (temp != null) {
+                        val browseId = temp.browseId
+                        val playlistId = temp.playlistId
+                        if ((playlistId != null && temp.videoId == null) || (playlistId != null && temp.videoId == "")) {
+                            if (playlistId.startsWith("UC")) {
+                                HomeItemArtist(onClick = {
+                                    navController.navigate(
+                                        ArtistDestination(
+                                            channelId = playlistId,
+                                        ),
+                                    )
+                                }, data = temp)
+                            } else {
+                                HomeItemContentPlaylist(onClick = {
+                                    navController.navigate(
+                                        PlaylistDestination(
+                                            playlistId = playlistId,
+                                        ),
+                                    )
+                                }, data = temp)
+                            }
+                        } else if ((browseId != null && temp.videoId == null) || (browseId != null && temp.videoId == "")) {
+                            if (browseId.startsWith("UC")) {
+                                HomeItemArtist(onClick = {
+                                    navController.navigate(
+                                        ArtistDestination(
+                                            channelId = browseId,
+                                        ),
+                                    )
+                                }, data = temp)
+                            } else if (browseId.startsWith("MPSP")) {
+                                HomeItemContentPlaylist(onClick = {
+                                    navController.navigate(
+                                        PodcastDestination(
+                                            podcastId = browseId,
+                                        ),
+                                    )
+                                }, data = temp)
+                            } else {
+                                HomeItemContentPlaylist(onClick = {
+                                    navController.navigate(
+                                        AlbumDestination(
+                                            browseId = browseId,
+                                        ),
+                                    )
+                                }, data = temp)
+                            }
+                        } else if (temp.thumbnails.firstOrNull()?.width != temp.thumbnails.firstOrNull()?.height) {
+                            HomeItemVideo(
+                                onClick = {
+                                    val firstQueue: Track = temp.toTrack()
+                                    homeViewModel.setQueueData(
+                                        QueueData.Data(
+                                            listTracks = arrayListOf(firstQueue),
+                                            firstPlayedTrack = firstQueue,
+                                            playlistId = "RDAMVM${temp.videoId}",
+                                            playlistName = temp.title,
+                                            playlistType = PlaylistType.RADIO,
+                                            continuation = null,
+                                        ),
+                                    )
+                                    homeViewModel.loadMediaItem(
+                                        firstQueue,
+                                        Config.SONG_CLICK,
+                                    )
+                                },
+                                onLongClick = {
+                                    track = temp.toTrack()
+                                    bottomSheetShow = true
+                                },
+                                data = temp,
+                            )
                         } else {
-                            HomeItemContentPlaylist(onClick = {
-                                navController.navigate(
-                                    PlaylistDestination(
-                                        playlistId = playlistId,
-                                    ),
-                                )
-                            }, data = temp)
+                            HomeItemSong(
+                                onClick = {
+                                    val firstQueue: Track = temp.toTrack()
+                                    homeViewModel.setQueueData(
+                                        QueueData.Data(
+                                            listTracks = arrayListOf(firstQueue),
+                                            firstPlayedTrack = firstQueue,
+                                            playlistId = "RDAMVM${temp.videoId}",
+                                            playlistName = temp.title,
+                                            playlistType = PlaylistType.RADIO,
+                                            continuation = null,
+                                        ),
+                                    )
+                                    homeViewModel.loadMediaItem(
+                                        firstQueue,
+                                        Config.SONG_CLICK,
+                                    )
+                                },
+                                onLongClick = {
+                                    track = temp.toTrack()
+                                    bottomSheetShow = true
+                                },
+                                data = temp,
+                            )
                         }
-                    } else if ((browseId != null && temp.videoId == null) || (browseId != null && temp.videoId == "")) {
-                        if (browseId.startsWith("UC")) {
-                            HomeItemArtist(onClick = {
-                                navController.navigate(
-                                    ArtistDestination(
-                                        channelId = browseId,
-                                    ),
-                                )
-                            }, data = temp)
-                        } else if (browseId.startsWith("MPSP")) {
-                            HomeItemContentPlaylist(onClick = {
-                                navController.navigate(
-                                    PodcastDestination(
-                                        podcastId = browseId,
-                                    ),
-                                )
-                            }, data = temp)
-                        } else {
-                            HomeItemContentPlaylist(onClick = {
-                                navController.navigate(
-                                    AlbumDestination(
-                                        browseId = browseId,
-                                    ),
-                                )
-                            }, data = temp)
-                        }
-                    } else if (temp.thumbnails.firstOrNull()?.width != temp.thumbnails.firstOrNull()?.height) {
-                        HomeItemVideo(
-                            onClick = {
-                                val firstQueue: Track = temp.toTrack()
-                                homeViewModel.setQueueData(
-                                    QueueData.Data(
-                                        listTracks = arrayListOf(firstQueue),
-                                        firstPlayedTrack = firstQueue,
-                                        playlistId = "RDAMVM${temp.videoId}",
-                                        playlistName = temp.title,
-                                        playlistType = PlaylistType.RADIO,
-                                        continuation = null,
-                                    ),
-                                )
-                                homeViewModel.loadMediaItem(
-                                    firstQueue,
-                                    Config.SONG_CLICK,
-                                )
-                            },
-                            onLongClick = {
-                                track = temp.toTrack()
-                                bottomSheetShow = true
-                            },
-                            data = temp,
-                        )
-                    } else {
-                        HomeItemSong(
-                            onClick = {
-                                val firstQueue: Track = temp.toTrack()
-                                homeViewModel.setQueueData(
-                                    QueueData.Data(
-                                        listTracks = arrayListOf(firstQueue),
-                                        firstPlayedTrack = firstQueue,
-                                        playlistId = "RDAMVM${temp.videoId}",
-                                        playlistName = temp.title,
-                                        playlistType = PlaylistType.RADIO,
-                                        continuation = null,
-                                    ),
-                                )
-                                homeViewModel.loadMediaItem(
-                                    firstQueue,
-                                    Config.SONG_CLICK,
-                                )
-                            },
-                            onLongClick = {
-                                track = temp.toTrack()
-                                bottomSheetShow = true
-                            },
-                            data = temp,
-                        )
                     }
                 }
             }
+            ScrollArrowButton(
+                visible = canScrollBackward,
+                isRight = false,
+                onClick = {
+                    coroutineScope.launch {
+                        val newIndex = maxOf(0, lazyListState.firstVisibleItemIndex - 3)
+                        lazyListState.animateScrollToItem(newIndex)
+                    }
+                },
+                modifier = Modifier.align(Alignment.CenterStart)
+            )
+            ScrollArrowButton(
+                visible = canScrollForward,
+                isRight = true,
+                onClick = {
+                    coroutineScope.launch {
+                        val newIndex = minOf(
+                            lazyListState.layoutInfo.totalItemsCount - 1,
+                            lazyListState.firstVisibleItemIndex + 3
+                        )
+                        lazyListState.animateScrollToItem(newIndex)
+                    }
+                },
+                modifier = Modifier.align(Alignment.CenterEnd)
+            )
         }
         if (getPlatform() == Platform.Desktop) {
             HorizontalScrollBar(
@@ -460,7 +502,7 @@ fun HomeItemContentPlaylist(
                                         } else {
                                             stringResource(Res.string.album)
                                         }
-                                        )
+                                    )
                                 } else {
                                     stringResource(Res.string.playlist)
                                 }
@@ -1294,9 +1336,8 @@ fun ItemTrackChart(
             )
             Column(
                 Modifier
-                    .padding(
-                        start = 20.dp,
-                    ).align(Alignment.CenterVertically),
+                    .padding(start = 20.dp)
+                    .align(Alignment.CenterVertically),
                 verticalArrangement = Arrangement.SpaceEvenly,
             ) {
                 Text(
@@ -1361,44 +1402,107 @@ fun MoodAndGenresContentItem(
                         horizontal = 15.dp,
                     ).fillMaxWidth(),
         )
-        LazyRow(
-            modifier =
-                Modifier.padding(
-                    10.dp,
-                ),
-        ) {
-            val itemList =
-                when (data) {
-                    is ItemsPlaylist -> (data).contents
-                    is Item -> (data).contents
-                    else -> listOf()
+        
+        Box(modifier = Modifier.fillMaxWidth()) {
+            val lazyListState = rememberLazyListState()
+            val coroutineScope = rememberCoroutineScope()
+            val canScrollBackward by remember { derivedStateOf { lazyListState.canScrollBackward } }
+            val canScrollForward by remember { derivedStateOf { lazyListState.canScrollForward } }
+
+            LazyRow(
+                state = lazyListState,
+                modifier =
+                    Modifier.padding(
+                        10.dp,
+                    ),
+            ) {
+                val itemList =
+                    when (data) {
+                        is ItemsPlaylist -> (data).contents
+                        is Item -> (data).contents
+                        else -> listOf()
+                    }
+                items(itemList) { item ->
+                    HomeItemContentPlaylist(onClick = {
+                        val playlistBrowseId: String
+                        val videoId: String?
+                        val isAlbum: Boolean
+
+                        if (item is com.maxrave.domain.data.model.mood.genre.Content) {
+                            playlistBrowseId = item.playlistBrowseId
+                            videoId = item.videoId
+                            isAlbum = item.isAlbum
+                        } else {
+                            val itm = item as com.maxrave.domain.data.model.mood.moodmoments.Content
+                            playlistBrowseId = itm.playlistBrowseId
+                            videoId = itm.videoId
+                            isAlbum = itm.isAlbum
+                        }
+
+                        if (videoId != null) {
+                            sharedViewModel.loadSharedMediaItem(videoId)
+                        } else if (isAlbum) {
+                            navController.navigate(AlbumDestination(playlistBrowseId))
+                        } else if (playlistBrowseId.isNotEmpty()) {
+                            navController.navigate(PlaylistDestination(playlistBrowseId))
+                        }
+                    }, data = item)
                 }
-            items(itemList) { item ->
-                HomeItemContentPlaylist(onClick = {
-                    val playlistBrowseId: String
-                    val videoId: String?
-                    val isAlbum: Boolean
-
-                    if (item is com.maxrave.domain.data.model.mood.genre.Content) {
-                        playlistBrowseId = item.playlistBrowseId
-                        videoId = item.videoId
-                        isAlbum = item.isAlbum
-                    } else {
-                        val itm = item as com.maxrave.domain.data.model.mood.moodmoments.Content
-                        playlistBrowseId = itm.playlistBrowseId
-                        videoId = itm.videoId
-                        isAlbum = itm.isAlbum
-                    }
-
-                    if (videoId != null) {
-                        sharedViewModel.loadSharedMediaItem(videoId)
-                    } else if (isAlbum) {
-                        navController.navigate(AlbumDestination(playlistBrowseId))
-                    } else if (playlistBrowseId.isNotEmpty()) {
-                        navController.navigate(PlaylistDestination(playlistBrowseId))
-                    }
-                }, data = item)
             }
+
+            ScrollArrowButton(
+                visible = canScrollBackward,
+                isRight = false,
+                onClick = {
+                    coroutineScope.launch {
+                        val newIndex = maxOf(0, lazyListState.firstVisibleItemIndex - 3)
+                        lazyListState.animateScrollToItem(newIndex)
+                    }
+                },
+                modifier = Modifier.align(Alignment.CenterStart)
+            )
+            ScrollArrowButton(
+                visible = canScrollForward,
+                isRight = true,
+                onClick = {
+                    coroutineScope.launch {
+                        val newIndex = minOf(
+                            lazyListState.layoutInfo.totalItemsCount - 1,
+                            lazyListState.firstVisibleItemIndex + 3
+                        )
+                        lazyListState.animateScrollToItem(newIndex)
+                    }
+                },
+                modifier = Modifier.align(Alignment.CenterEnd)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ScrollArrowButton(
+    visible: Boolean,
+    isRight: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = modifier
+    ) {
+        FilledIconButton(
+            onClick = onClick,
+            colors = IconButtonDefaults.filledIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                contentColor = MaterialTheme.colorScheme.onSurface
+            )
+        ) {
+            Icon(
+                imageVector = if (isRight) Icons.Rounded.KeyboardArrowRight else Icons.Rounded.KeyboardArrowLeft,
+                contentDescription = if (isRight) "Scroll Right" else "Scroll Left"
+            )
         }
     }
 }

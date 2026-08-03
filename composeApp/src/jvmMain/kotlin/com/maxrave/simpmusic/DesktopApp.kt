@@ -75,7 +75,6 @@ import multiplatform.network.cmptoast.ToastHost
 import multiplatform.network.cmptoast.showToast
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
-import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.core.context.loadKoinModules
@@ -86,11 +85,9 @@ import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.app_name
 import simpmusic.composeapp.generated.resources.circle_app_icon
 import simpmusic.composeapp.generated.resources.close_miniplayer
-import simpmusic.composeapp.generated.resources.explicit_content_blocked
 import simpmusic.composeapp.generated.resources.open_app
 import simpmusic.composeapp.generated.resources.open_miniplayer
 import simpmusic.composeapp.generated.resources.quit_app
-import simpmusic.composeapp.generated.resources.time_out_check_internet_connection_or_change_piped_instance_in_settings
 import java.util.concurrent.TimeUnit
 import kotlin.system.exitProcess
 
@@ -174,8 +171,8 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
     application {
         setSingletonImageLoaderFactory { context ->
             val okHttpClient = OkHttpClient.Builder()
-                .connectTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
+                .connectTimeout(90, TimeUnit.SECONDS)
+                .readTimeout(90, TimeUnit.SECONDS)
                 .followRedirects(true)
                 .followSslRedirects(true)
                 .addInterceptor(Interceptor { chain ->
@@ -296,7 +293,7 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
                 }
             }
         } else {
-            val windowState = rememberWindowState(size = DpSize(1500.dp, 860.dp))
+            val windowState = rememberWindowState(size = DpSize(1280.dp, 720.dp))
             var isVisible by remember { mutableStateOf(true) }
             val coroutineScope = rememberCoroutineScope()
 
