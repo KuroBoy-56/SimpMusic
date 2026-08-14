@@ -112,8 +112,12 @@ fun main(args: Array<String>) {
     Thread {
         try {
             var appWindowAppeared = false
-            while (!appWindowAppeared) {
+            var attempts = 0
+            val maxAttempts = 80 
+            
+            while (!appWindowAppeared && attempts < maxAttempts) {
                 Thread.sleep(100)
+                attempts++
                 for (window in java.awt.Window.getWindows()) {
                     if (window.isVisible && window !== splash) {
                         appWindowAppeared = true
@@ -123,7 +127,10 @@ fun main(args: Array<String>) {
             }
             splash.isVisible = false
             splash.dispose()
-        } catch (e: Exception) {}
+        } catch (e: Exception) {
+            splash.isVisible = false
+            splash.dispose()
+        }
     }.start()
     
     configureVlcPath()

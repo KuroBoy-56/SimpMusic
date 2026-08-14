@@ -95,7 +95,7 @@ fun MiniPlayerWindow(
 
     Window(
         onCloseRequest = onCloseRequest,
-        title = "SimpMusic - Mini Player",
+        title = "YT Music - Mini Player",
         icon = painterResource(Res.drawable.circle_app_icon),
         alwaysOnTop = true,
         undecorated = true,
