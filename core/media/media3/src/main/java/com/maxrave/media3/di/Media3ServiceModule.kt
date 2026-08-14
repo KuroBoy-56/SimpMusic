@@ -26,8 +26,6 @@ import androidx.media3.datasource.cache.NoOpCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
-import androidx.media3.exoplayer.DefaultLoadControl.DEFAULT_MAX_BUFFER_MS
-import androidx.media3.exoplayer.DefaultLoadControl.DEFAULT_MIN_BUFFER_MS
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.LoadControl
 import androidx.media3.exoplayer.audio.AudioSink
@@ -412,6 +410,8 @@ private fun provideCacheDataSource(
             CacheDataSource
                 .Factory()
                 .setCache(playerCache)
+                // CORRECCIÓN MAGISTRAL AQUÍ: Esto permite a la app guardar en memoria la canción en tiempo real mientras suena.
+                .setCacheWriteDataSinkFactory(androidx.media3.datasource.cache.CacheDataSink.Factory().setCache(playerCache))
                 .setUpstreamDataSourceFactory(
                     DefaultDataSource
                         .Factory(
@@ -439,11 +439,12 @@ private fun provideCacheDataSource(
 private fun provideLoadControl(): LoadControl =
     DefaultLoadControl
         .Builder()
+        // CORRECCIÓN MAGISTRAL AQUÍ: Carga inmediata a los 1.5 segundos.
         .setBufferDurationsMs(
-            DEFAULT_MIN_BUFFER_MS * 4,
-            DEFAULT_MAX_BUFFER_MS * 4,
-            0,
-            0,
+            32000,
+            64000,
+            1500,
+            3000,
         ).build()
 
 @UnstableApi
