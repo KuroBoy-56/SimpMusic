@@ -12,7 +12,7 @@ import javax.swing.JLabel
 import javax.swing.JWindow
 import javax.swing.SwingConstants
 
-private fun forceLinuxWmClass(appName: String = "SimpMusic") {
+private fun forceLinuxWmClass(appName: String = "KuroMusic") {
     if (!System.getProperty("os.name").orEmpty().contains("linux", ignoreCase = true)) return
     runCatching {
         val toolkit = Toolkit.getDefaultToolkit()
@@ -36,9 +36,9 @@ private fun configureVlcPath() {
         val osName = System.getProperty("os.name").lowercase()
         
         val userWritableDir = when {
-            osName.contains("win") -> File(System.getenv("LOCALAPPDATA") ?: (System.getProperty("user.home") + "/AppData/Local"), "SimpMusic")
-            osName.contains("mac") -> File(System.getProperty("user.home"), "Library/Application Support/SimpMusic")
-            else -> File(System.getProperty("user.home"), ".local/share/SimpMusic")
+            osName.contains("win") -> File(System.getenv("LOCALAPPDATA") ?: (System.getProperty("user.home") + "/AppData/Local"), "KuroMusic")
+            osName.contains("mac") -> File(System.getProperty("user.home"), "Library/Application Support/KuroMusic")
+            else -> File(System.getProperty("user.home"), ".local/share/KuroMusicMusic")
         }
         
         val vlcDir = File(userWritableDir, "vlc")
