@@ -469,4 +469,5 @@ internal class StreamRepositoryImpl(
             }
         }
     }
+    override fun getExtractSource(videoId: String): String? = null
 }
