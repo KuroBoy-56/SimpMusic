@@ -11,9 +11,11 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+import android.net.wifi.WifiManager
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.content.getSystemService
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -68,6 +70,9 @@ internal class SimpleMediaService :
 
     private lateinit var playerNotificationManager: PlayerNotificationManager
 
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
+
     inner class MusicBinder : Binder() {
         val service: SimpleMediaService
             get() = this@SimpleMediaService
@@ -96,6 +101,8 @@ internal class SimpleMediaService :
     override fun onCreate() {
         super.onCreate()
         Logger.w("Service", "Simple Media Service Created")
+
+        acquireLocks()
 
         setMediaNotificationProvider(
             DefaultMediaNotificationProvider(
@@ -174,12 +181,32 @@ internal class SimpleMediaService :
             playerNotificationManager.setSmallIcon(R.drawable.mono)
             mediaSession?.platformToken?.let { playerNotificationManager.setMediaSessionToken(it) }
         }
+    }
 
-        simpleMediaServiceHandler.onUpdateNotification = { list ->
-            val commandButtonList = list.map { it.toCommandButton(this) }
-            mediaSession?.setMediaButtonPreferences(
-                commandButtonList,
-            )
+    private fun acquireLocks() {
+        try {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "KuroMusic::PlaybackWakeLock")
+            wakeLock?.acquire()
+
+            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "KuroMusic::PlaybackWifiLock")
+            wifiLock?.acquire()
+        } catch (e: Exception) {
+            Logger.e("Service", "Failed to acquire power/wifi locks: ${e.message}")
+        }
+    }
+
+    private fun releaseLocks() {
+        try {
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+            }
+            if (wifiLock?.isHeld == true) {
+                wifiLock?.release()
+            }
+        } catch (e: Exception) {
+            Logger.e("Service", "Failed to release power/wifi locks: ${e.message}")
         }
     }
 
@@ -215,6 +242,7 @@ internal class SimpleMediaService :
                 }
                 simpleMediaServiceHandler.release()
                 mediaSession = null
+                releaseLocks()
                 Logger.w("Service", "Simple Media Service Released")
             } catch (e: Exception) {
                 Logger.e("Service", "Error during release")
@@ -228,6 +256,8 @@ internal class SimpleMediaService :
         Logger.w("Service", "Simple Media Service Destroyed")
         if (simpleMediaServiceHandler.shouldReleaseOnTaskRemoved()) {
             release()
+        } else {
+            releaseLocks()
         }
     }
 
