@@ -20,9 +20,9 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.ytmusic.kurompx"
+        applicationId = "com.ytmusic.kurompx" // <-- TU PERSONALIZACIÓN
         minSdk = 26
-        targetSdk = 37
+        targetSdk = 37 // <-- TU PERSONALIZACIÓN
         versionCode =
             libs.versions.version.code
                 .get()
@@ -73,6 +73,14 @@ android {
             abiFilters.add("armeabi-v7a")
             abiFilters.add("arm64-v8a")
         }
+    }
+
+    // =========================================================
+    // APAGAMOS EL LINT PARA QUE NO COLAPSE POR FALTA DE MEMORIA
+    // =========================================================
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 
     bundle {
@@ -132,6 +140,8 @@ android {
             )
         resources {
             excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+            excludes += "META-INF/*.md"
+            excludes += "com/atilika/kuromoji/ipadic/*.bin"
         }
     }
 }
@@ -141,7 +151,6 @@ dependencies {
     val debugImplementation = "debugImplementation"
     debugImplementation(libs.ui.tooling)
     implementation(libs.activity.compose)
-    implementation(libs.compose.material3)
     implementation(libs.customactivityoncrash)
     implementation(libs.easypermissions)
     implementation(libs.legacy.support.v4)
@@ -149,6 +158,7 @@ dependencies {
     implementation(libs.glance)
     implementation(libs.glance.appwidget)
     implementation(libs.glance.material3)
+
     implementation(projects.composeApp)
     implementation(projects.data)
 
@@ -165,28 +175,16 @@ sentry {
     ignoredFlavors.set(setOf("foss"))
     ignoredBuildTypes.set(setOf("debug"))
     autoInstallation.enabled = false
-    if (isFullBuild) {
-        val token =
-            try {
-                println("Full build detected, enabling Sentry Auth Token")
-                val properties = Properties()
-                properties.load(rootProject.file("local.properties").inputStream())
-                properties.getProperty("SENTRY_AUTH_TOKEN")
-            } catch (e: Exception) {
-                println("Failed to load SENTRY_AUTH_TOKEN from local.properties: ${e.message}")
-                null
-            }
-        authToken.set(token ?: "")
-        includeProguardMapping.set(false)
-        autoUploadProguardMapping.set(true)
-    } else {
-        includeProguardMapping.set(false)
-        autoUploadProguardMapping.set(false)
-        uploadNativeSymbols.set(false)
-        includeDependenciesReport.set(false)
-        includeSourceContext.set(false)
-        includeNativeSources.set(false)
-    }
+
+    // --- SOLUCIÓN AL ERROR DE SENTRY ---
+    // Apagamos la subida a Sentry para que no dé el Error 401 por falta de token.
+    // La ofuscación de la app (isMinifyEnabled) seguirá funcionando perfectamente.
+    includeProguardMapping.set(false)
+    autoUploadProguardMapping.set(false)
+    uploadNativeSymbols.set(false)
+    includeDependenciesReport.set(false)
+    includeSourceContext.set(false)
+    includeNativeSources.set(false)
     telemetry.set(false)
 }
 
@@ -227,9 +225,9 @@ if (!isFullBuild) {
             if (injectSentryFile.exists()) {
                 injectSentryFile.delete()
                 println("Deleted: ${injectSentryFile.absolutePath}")
-                val sentryFile = File(injectBuildAssetsDir, "sentry-debug-meta.properties")
-                sentryFile.writeText("")
-                println("✓ Overwritten: ${sentryFile.absolutePath}")
+                val sentryFile2 = File(injectBuildAssetsDir, "sentry-debug-meta.properties")
+                sentryFile2.writeText("")
+                println("✓ Overwritten: ${sentryFile2.absolutePath}")
             }
         }
     }

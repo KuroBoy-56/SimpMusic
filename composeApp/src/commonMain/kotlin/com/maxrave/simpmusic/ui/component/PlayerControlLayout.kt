@@ -12,33 +12,44 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.PauseCircle
-import androidx.compose.material.icons.rounded.PlayCircle
-import androidx.compose.material.icons.rounded.Repeat
-import androidx.compose.material.icons.rounded.RepeatOne
-import androidx.compose.material.icons.rounded.Shuffle
-import androidx.compose.material.icons.rounded.SkipNext
-import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.maxrave.domain.mediaservice.handler.ControlState
 import com.maxrave.domain.mediaservice.handler.RepeatState
+import com.maxrave.simpmusic.ui.icon.Pause
+import com.maxrave.simpmusic.ui.icon.PauseCircle
+import com.maxrave.simpmusic.ui.icon.PlayArrow
+import com.maxrave.simpmusic.ui.icon.PlayCircle
+import com.maxrave.simpmusic.ui.icon.Repeat
+import com.maxrave.simpmusic.ui.icon.RepeatOne
+import com.maxrave.simpmusic.ui.icon.Shuffle
+import com.maxrave.simpmusic.ui.icon.SimpIcons
+import com.maxrave.simpmusic.ui.icon.SkipNext
+import com.maxrave.simpmusic.ui.icon.SkipPrevious
 import com.maxrave.simpmusic.ui.theme.seed
-import com.maxrave.simpmusic.ui.theme.transparent
 import com.maxrave.simpmusic.viewModel.UIEvent
 
 @Composable
 fun PlayerControlLayout(
     controllerState: ControlState,
-    contentColor: Color = LocalContentColor.current,
     isSmallSize: Boolean = false,
+    // Bare ▶ / ⏸ glyphs instead of the disc-enclosed PlayCircle/PauseCircle pair.
+    // The desktop capsule asks for these; Now Playing keeps the discs.
+    plainPlayPause: Boolean = false,
+    // The capsule already pads its own edges; stacking this 20dp on top of that
+    // read as a hole at both ends of the transport cluster.
+    horizontalPadding: Dp = 20.dp,
+    // Tint for the ACTIVE shuffle/repeat state. The default keeps the raw seed (#8ECAE6) every
+    // existing call site had; the capsule passes a theme-aware colour because pastel seed on a
+    // light glass surface is nearly invisible.
+    activeColor: Color = seed,
+    contentColor: Color = Color.White,
     onUIEvent: (UIEvent) -> Unit,
 ) {
     val height = if (isSmallSize) 48.dp else 96.dp
@@ -52,13 +63,13 @@ fun PlayerControlLayout(
             Modifier
                 .fillMaxWidth()
                 .height(height)
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = horizontalPadding),
     ) {
         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             Box(
                 modifier =
                     Modifier
-                        .background(transparent)
+                        .background(Color.Transparent)
                         .size(smallIcon.second)
                         .aspectRatio(1f)
                         .clip(
@@ -72,15 +83,15 @@ fun PlayerControlLayout(
                 Crossfade(targetState = controllerState.isShuffle, label = "Shuffle Button") { isShuffle ->
                     if (!isShuffle) {
                         Icon(
-                            imageVector = Icons.Rounded.Shuffle,
+                            imageVector = SimpIcons.Shuffle,
                             tint = contentColor,
                             contentDescription = "",
                             modifier = Modifier.size(smallIcon.first),
                         )
                     } else {
                         Icon(
-                            imageVector = Icons.Rounded.Shuffle,
-                            tint = seed,
+                            imageVector = SimpIcons.Shuffle,
+                            tint = activeColor,
                             contentDescription = "",
                             modifier = Modifier.size(smallIcon.first),
                         )
@@ -92,7 +103,7 @@ fun PlayerControlLayout(
             Box(
                 modifier =
                     Modifier
-                        .background(transparent)
+                        .background(Color.Transparent)
                         .size(mediumIcon.second)
                         .aspectRatio(1f)
                         .clip(
@@ -106,8 +117,8 @@ fun PlayerControlLayout(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.SkipPrevious,
-                    tint = if (controllerState.isPreviousAvailable) contentColor else contentColor.copy(alpha = 0.5f),
+                    imageVector = SimpIcons.SkipPrevious,
+                    tint = if (controllerState.isPreviousAvailable) contentColor else contentColor.copy(alpha = 0.4f),
                     contentDescription = "",
                     modifier = Modifier.size(mediumIcon.first),
                 )
@@ -117,7 +128,7 @@ fun PlayerControlLayout(
             Box(
                 modifier =
                     Modifier
-                        .background(transparent)
+                        .background(Color.Transparent)
                         .size(bigIcon.second)
                         .aspectRatio(1f)
                         .clip(
@@ -131,14 +142,14 @@ fun PlayerControlLayout(
                 Crossfade(targetState = controllerState.isPlaying) { isPlaying ->
                     if (!isPlaying) {
                         Icon(
-                            imageVector = Icons.Rounded.PlayCircle,
+                            imageVector = if (plainPlayPause) SimpIcons.PlayArrow else SimpIcons.PlayCircle,
                             tint = contentColor,
                             contentDescription = "",
                             modifier = Modifier.size(bigIcon.first),
                         )
                     } else {
                         Icon(
-                            imageVector = Icons.Rounded.PauseCircle,
+                            imageVector = if (plainPlayPause) SimpIcons.Pause else SimpIcons.PauseCircle,
                             tint = contentColor,
                             contentDescription = "",
                             modifier = Modifier.size(bigIcon.first),
@@ -151,7 +162,7 @@ fun PlayerControlLayout(
             Box(
                 modifier =
                     Modifier
-                        .background(transparent)
+                        .background(Color.Transparent)
                         .size(mediumIcon.second)
                         .aspectRatio(1f)
                         .clip(
@@ -165,8 +176,8 @@ fun PlayerControlLayout(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.SkipNext,
-                    tint = if (controllerState.isNextAvailable) contentColor else contentColor.copy(alpha = 0.5f),
+                    imageVector = SimpIcons.SkipNext,
+                    tint = if (controllerState.isNextAvailable) contentColor else contentColor.copy(alpha = 0.4f),
                     contentDescription = "",
                     modifier = Modifier.size(mediumIcon.first),
                 )
@@ -190,7 +201,7 @@ fun PlayerControlLayout(
                     when (rs) {
                         is RepeatState.None -> {
                             Icon(
-                                imageVector = Icons.Rounded.Repeat,
+                                imageVector = SimpIcons.Repeat,
                                 tint = contentColor,
                                 contentDescription = "",
                                 modifier = Modifier.size(smallIcon.first),
@@ -199,8 +210,8 @@ fun PlayerControlLayout(
 
                         RepeatState.All -> {
                             Icon(
-                                imageVector = Icons.Rounded.Repeat,
-                                tint = seed,
+                                imageVector = SimpIcons.Repeat,
+                                tint = activeColor,
                                 contentDescription = "",
                                 modifier = Modifier.size(smallIcon.first),
                             )
@@ -208,8 +219,8 @@ fun PlayerControlLayout(
 
                         RepeatState.One -> {
                             Icon(
-                                imageVector = Icons.Rounded.RepeatOne,
-                                tint = seed,
+                                imageVector = SimpIcons.RepeatOne,
+                                tint = activeColor,
                                 contentDescription = "",
                                 modifier = Modifier.size(smallIcon.first),
                             )

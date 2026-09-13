@@ -16,3 +16,7 @@ actual fun ImageBitmap.toByteArray(): ByteArray? {
 
 actual fun coil3.Image.toImageBitmap(): ImageBitmap =
     this.toBitmap().asComposeImageBitmap()
+
+actual fun ImageBitmap.toPngByteArray(): ByteArray? {
+    TODO("Not yet implemented")
+}

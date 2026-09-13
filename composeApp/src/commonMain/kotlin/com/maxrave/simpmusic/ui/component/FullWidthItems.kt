@@ -8,10 +8,14 @@ import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.MarqueeAnimationMode
+import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -30,10 +34,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.QueueMusic
-import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -77,11 +77,19 @@ import com.maxrave.domain.data.type.PlaylistType
 import com.maxrave.domain.repository.SongRepository
 import com.maxrave.domain.utils.connectArtists
 import com.maxrave.domain.utils.toListName
+import com.maxrave.simpmusic.ui.icon.Add
+import com.maxrave.simpmusic.ui.icon.Check
+import com.maxrave.simpmusic.ui.icon.DownloadForOffline
+import com.maxrave.simpmusic.ui.icon.DragHandle
+import com.maxrave.simpmusic.ui.icon.MoreVert
+import com.maxrave.simpmusic.ui.icon.PushPin
+import com.maxrave.simpmusic.ui.icon.QueueMusic
+import com.maxrave.simpmusic.ui.icon.SimpIcons
+import com.maxrave.simpmusic.ui.screen.player.cleanMusicTitle
+import com.maxrave.simpmusic.ui.screen.player.rememberHighResArtwork
+import com.maxrave.simpmusic.ui.theme.LocalForceDarkText
+import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
-import io.github.alexzhirkevich.compottie.Compottie
-import io.github.alexzhirkevich.compottie.LottieCompositionSpec
-import io.github.alexzhirkevich.compottie.rememberLottieComposition
-import io.github.alexzhirkevich.compottie.rememberLottiePainter
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
@@ -91,16 +99,20 @@ import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.add_to_queue
 import simpmusic.composeapp.generated.resources.album
 import simpmusic.composeapp.generated.resources.artists
-import simpmusic.composeapp.generated.resources.baseline_add_24
-import simpmusic.composeapp.generated.resources.baseline_more_vert_24
-import simpmusic.composeapp.generated.resources.download_for_offline_white
-import simpmusic.composeapp.generated.resources.holder
 import simpmusic.composeapp.generated.resources.playlist
 import simpmusic.composeapp.generated.resources.podcasts
 import simpmusic.composeapp.generated.resources.radio
 import simpmusic.composeapp.generated.resources.you
 import kotlin.math.roundToInt
 
+/**
+ * This is the song item in the playlist or other places.
+ *
+ * Multi-selection is opt-in per screen: pass [onLongClick] to let a long press start it, then
+ * drive [selectionMode] and [isSelected] from the screen's
+ * [com.maxrave.simpmusic.ui.component.selection.SongSelectionState].
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SongFullWidthItems(
     track: Track? = null,
@@ -111,24 +123,37 @@ fun SongFullWidthItems(
     onMoreClickListener: ((videoId: String) -> Unit)? = null,
     onClickListener: ((videoId: String) -> Unit)? = null,
     onAddToQueue: ((videoId: String) -> Unit)? = null,
+    selectionMode: Boolean = false,
+    isSelected: Boolean = false,
+    onLongClick: ((videoId: String) -> Unit)? = null,
+    onSelectToggle: ((videoId: String) -> Unit)? = null,
     modifier: Modifier,
     rightView: @Composable (() -> Unit)? = null,
+    forceDark: Boolean = LocalForceDarkText.current,
 ) {
+    val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
+    val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
     val maxOffset = 360f
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
+
+    val itemVideoId = track?.videoId ?: songEntity?.videoId ?: ""
     val songRepository: SongRepository = koinInject<SongRepository>()
-    val downloadState by songRepository
-        .getSongAsFlow(songEntity?.videoId ?: track?.videoId ?: "")
-        .mapNotNull { it?.downloadState }
-        .collectAsState(initial = DownloadState.STATE_NOT_DOWNLOADED)
-    val composition by rememberLottieComposition {
-        LottieCompositionSpec.JsonString(
-            Res.readBytes("files/audio_playing_animation.json").decodeToString(),
-        )
+
+    // Corregido el error del Flow
+    val downloadStateFlow = remember(itemVideoId) {
+        songRepository.getSongAsFlow(itemVideoId).mapNotNull { it?.downloadState }
     }
+    val downloadState by downloadStateFlow.collectAsState(initial = DownloadState.STATE_NOT_DOWNLOADED)
+
     val offsetX = remember { Animatable(initialValue = 0f) }
     var heightDp by remember { mutableStateOf(0.dp) }
+
+    // Obtenemos título y artista limpios y buscamos la carátula
+    val rawTitle = track?.title ?: songEntity?.title ?: ""
+    val rawArtist = track?.artists?.toListName()?.connectArtists() ?: songEntity?.artistName?.connectArtists() ?: ""
+    val fallbackThumb = track?.thumbnails?.lastOrNull()?.url ?: songEntity?.thumbnails
+    val highResThumb = rememberHighResArtwork(title = rawTitle, artist = rawArtist, fallbackThumbnail = fallbackThumb)
 
     Box(
         modifier =
@@ -148,22 +173,37 @@ fun SongFullWidthItems(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        tint = MaterialTheme.colorScheme.onBackground,
-                        imageVector = Icons.AutoMirrored.Rounded.QueueMusic,
+                        tint = contentColor,
+                        imageVector = SimpIcons.QueueMusic,
                         contentDescription = stringResource(Res.string.add_to_queue),
                     )
                 }
             }
         }
+
         Box(
             modifier =
                 modifier
                     .offset { IntOffset(offsetX.value.roundToInt(), 0) }
-                    .clickable {
-                        onClickListener?.invoke(track?.videoId ?: songEntity?.videoId ?: "")
-                    }.animateContentSize()
-                    .pointerInput(Unit) {
-                        if (!isPlaying && onAddToQueue != null) {
+                    .background(
+                        if (isSelected) seed.copy(alpha = 0.18f) else Color.Transparent,
+                    ).combinedClickable(
+                        onClick = {
+                            if (selectionMode) {
+                                onSelectToggle?.invoke(itemVideoId)
+                            } else {
+                                onClickListener?.invoke(itemVideoId)
+                            }
+                        },
+                        onLongClick =
+                            if (onLongClick != null) {
+                                { onLongClick(itemVideoId) }
+                            } else {
+                                null
+                            },
+                    ).animateContentSize()
+                    .pointerInput(selectionMode) {
+                        if (!isPlaying && onAddToQueue != null && !selectionMode) {
                             detectHorizontalDragGestures(
                                 onHorizontalDrag = { change, dragAmount ->
                                     if (offsetX.value + dragAmount > 0) {
@@ -177,9 +217,7 @@ fun SongFullWidthItems(
                                 },
                                 onDragEnd = {
                                     if (offsetX.value == maxOffset) {
-                                        onAddToQueue(
-                                            track?.videoId ?: songEntity?.videoId ?: "",
-                                        )
+                                        onAddToQueue(itemVideoId)
                                     }
                                     coroutineScope.launch {
                                         offsetX.animateTo(0f)
@@ -200,22 +238,48 @@ fun SongFullWidthItems(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Spacer(modifier = Modifier.width(8.dp))
+                AnimatedVisibility(
+                    visible = selectionMode,
+                    enter = fadeIn() + expandHorizontally(),
+                    exit = fadeOut() + shrinkHorizontally(),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isSelected) seed else Color.Transparent)
+                                    .border(
+                                        width = 1.5.dp,
+                                        color = if (isSelected) seed else contentColor.copy(alpha = 0.6f),
+                                        shape = CircleShape,
+                                    ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = SimpIcons.Check,
+                                    contentDescription = null,
+                                    tint = Color.Black,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                    }
+                }
                 Box(
                     modifier = Modifier.size(48.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Crossfade(isPlaying) {
                         if (it) {
-                            Image(
-                                painter =
-                                    rememberLottiePainter(
-                                        composition = composition,
-                                        iterations = Compottie.IterateForever,
-                                    ),
-                                contentDescription = "Lottie animation",
+                            AudioPlayingIndicator(
+                                modifier = Modifier.fillMaxSize(),
                             )
                         } else if (index == null) {
-                            val thumb = track?.thumbnails?.lastOrNull()?.url ?: songEntity?.thumbnails
+                            val thumb = highResThumb
                             AsyncImage(
                                 model =
                                     ImageRequest
@@ -225,8 +289,8 @@ fun SongFullWidthItems(
                                         .diskCacheKey(thumb)
                                         .crossfade(true)
                                         .build(),
-                                placeholder = painterResource(Res.drawable.holder),
-                                error = painterResource(Res.drawable.holder),
+                                placeholder = rememberHolderPainter(),
+                                error = rememberHolderPainter(),
                                 contentDescription = null,
                                 contentScale = ContentScale.FillWidth,
                                 modifier =
@@ -237,7 +301,7 @@ fun SongFullWidthItems(
                         } else {
                             Text(
                                 text = (index + 1).toString(),
-                                color = MaterialTheme.colorScheme.onBackground,
+                                color = contentColor,
                                 style = typo().titleMedium,
                                 modifier = Modifier.align(Alignment.Center),
                             )
@@ -252,10 +316,10 @@ fun SongFullWidthItems(
                     verticalArrangement = Arrangement.SpaceEvenly,
                 ) {
                     Text(
-                        text = track?.title ?: songEntity?.title ?: "",
-                        style = typo().titleSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                        text = rawTitle.cleanMusicTitle(),
+                        style = typo().titleSmall,
                         maxLines = 1,
-                        color = MaterialTheme.colorScheme.onBackground,
+                        color = contentColor,
                         modifier =
                             Modifier
                                 .fillMaxWidth()
@@ -276,8 +340,8 @@ fun SongFullWidthItems(
                         ) {
                             Row {
                                 Icon(
-                                    painter = painterResource(Res.drawable.download_for_offline_white),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    imageVector = SimpIcons.DownloadForOffline,
+                                    tint = contentColor,
                                     contentDescription = "",
                                     modifier = Modifier.size(16.dp).padding(2.dp),
                                 )
@@ -297,14 +361,10 @@ fun SongFullWidthItems(
                             }
                         }
                         Text(
-                            text =
-                                (
-                                    track?.artists?.toListName()?.connectArtists()
-                                        ?: songEntity?.artistName?.connectArtists()
-                                    ) ?: "",
+                            text = rawArtist,
                             style = typo().bodySmall,
                             maxLines = 1,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = subtitleColor,
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
@@ -319,10 +379,9 @@ fun SongFullWidthItems(
                 if (rightView != null) {
                     rightView()
                 }
-                if (onMoreClickListener != null) {
-                    RippleIconButton(resId = Res.drawable.baseline_more_vert_24, fillMaxSize = false, tint = MaterialTheme.colorScheme.onBackground) {
-                        val videoId = track?.videoId ?: songEntity?.videoId
-                        videoId?.let { onMoreClickListener.invoke(it) }
+                if (onMoreClickListener != null && !selectionMode) {
+                    RippleIconButton(imageVector = SimpIcons.MoreVert, fillMaxSize = false, tint = contentColor) {
+                        if (itemVideoId.isNotBlank()) onMoreClickListener.invoke(itemVideoId)
                     }
                 }
                 AnimatedVisibility(
@@ -331,9 +390,9 @@ fun SongFullWidthItems(
                     exit = fadeOut() + shrinkHorizontally(),
                 ) {
                     Icon(
-                        Icons.Rounded.DragHandle,
+                        SimpIcons.DragHandle,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onBackground,
+                        tint = contentColor,
                         modifier = Modifier.padding(horizontal = 8.dp),
                     )
                 }
@@ -348,12 +407,16 @@ fun SuggestItems(
     isPlaying: Boolean,
     onClickListener: (() -> Unit)? = null,
     onAddClickListener: (() -> Unit)? = null,
+    forceDark: Boolean = LocalForceDarkText.current,
 ) {
-    val composition by rememberLottieComposition {
-        LottieCompositionSpec.JsonString(
-            Res.readBytes("files/audio_playing_animation.json").decodeToString(),
-        )
-    }
+    val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
+    val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
+
+    val rawTitle = track.title
+    val rawArtist = track.artists?.toListName()?.connectArtists() ?: ""
+    val fallbackThumb = track.thumbnails?.lastOrNull()?.url
+    val highResThumb = rememberHighResArtwork(title = rawTitle, artist = rawArtist, fallbackThumbnail = fallbackThumb)
+
     Box(
         modifier =
             Modifier
@@ -372,16 +435,11 @@ fun SuggestItems(
             Box(modifier = Modifier.size(40.dp)) {
                 Crossfade(isPlaying) {
                     if (it) {
-                        Image(
-                            painter =
-                                rememberLottiePainter(
-                                    composition = composition,
-                                    iterations = Compottie.IterateForever,
-                                ),
-                            contentDescription = "Lottie animation",
+                        AudioPlayingIndicator(
+                            modifier = Modifier.fillMaxSize(),
                         )
                     } else {
-                        val thumb = track.thumbnails?.lastOrNull()?.url
+                        val thumb = highResThumb
                         AsyncImage(
                             model =
                                 ImageRequest
@@ -391,8 +449,8 @@ fun SuggestItems(
                                     .diskCacheKey(thumb)
                                     .crossfade(true)
                                     .build(),
-                            placeholder = painterResource(Res.drawable.holder),
-                            error = painterResource(Res.drawable.holder),
+                            placeholder = rememberHolderPainter(),
+                            error = rememberHolderPainter(),
                             contentDescription = null,
                             contentScale = ContentScale.FillWidth,
                             modifier =
@@ -411,10 +469,10 @@ fun SuggestItems(
                     .align(Alignment.CenterVertically),
             ) {
                 Text(
-                    text = track.title,
-                    style = typo().titleSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                    text = rawTitle.cleanMusicTitle(),
+                    style = typo().titleSmall,
                     maxLines = 1,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = contentColor,
                     modifier =
                         Modifier
                             .fillMaxWidth()
@@ -425,13 +483,10 @@ fun SuggestItems(
                             ).focusable(),
                 )
                 Text(
-                    text =
-                        (
-                            track.artists?.toListName()?.connectArtists()
-                            ) ?: "",
+                    text = rawArtist,
                     style = typo().bodySmall,
                     maxLines = 1,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = subtitleColor,
                     modifier =
                         Modifier
                             .fillMaxWidth()
@@ -443,9 +498,8 @@ fun SuggestItems(
                 )
             }
             RippleIconButton(
-                resId = Res.drawable.baseline_add_24,
+                imageVector = SimpIcons.Add,
                 fillMaxSize = false,
-                tint = MaterialTheme.colorScheme.onBackground,
                 onClick =
                     onAddClickListener ?: {
                     },
@@ -460,7 +514,10 @@ fun PlaylistFullWidthItems(
     onClickListener: (() -> Unit)? = null,
     rightView: @Composable (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    forceDark: Boolean = LocalForceDarkText.current,
 ) {
+    val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
+    val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
     Box(
         modifier =
             modifier
@@ -544,8 +601,8 @@ fun PlaylistFullWidthItems(
                             .diskCacheKey(thumb)
                             .crossfade(true)
                             .build(),
-                    placeholder = painterResource(Res.drawable.holder),
-                    error = painterResource(Res.drawable.holder),
+                    placeholder = rememberHolderPainter(),
+                    error = rememberHolderPainter(),
                     contentDescription = null,
                     contentScale = ContentScale.FillWidth,
                     modifier =
@@ -562,9 +619,9 @@ fun PlaylistFullWidthItems(
             ) {
                 Text(
                     text = title,
-                    style = typo().titleSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                    style = typo().titleSmall,
                     maxLines = 1,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = contentColor,
                     modifier =
                         Modifier
                             .fillMaxWidth()
@@ -578,9 +635,9 @@ fun PlaylistFullWidthItems(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (shouldPin) {
                         Image(
-                            imageVector = Icons.Default.PushPin,
+                            imageVector = SimpIcons.PushPin,
                             contentDescription = null,
-                            colorFilter = ColorFilter.tint(Color.Cyan),
+                            colorFilter = ColorFilter.tint(if (forceDark) Color.Cyan else MaterialTheme.colorScheme.primary),
                             modifier =
                                 Modifier
                                     .rotate(30f)
@@ -591,7 +648,7 @@ fun PlaylistFullWidthItems(
                         text = "$firstSubtitle ${if (secondSubtitle.isNotEmpty()) " • $secondSubtitle" else ""}",
                         style = typo().bodySmall,
                         maxLines = 1,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = subtitleColor,
                         modifier =
                             Modifier
                                 .fillMaxWidth()
@@ -608,7 +665,7 @@ fun PlaylistFullWidthItems(
                         text = thirdRowSubtitle,
                         style = typo().bodySmall,
                         maxLines = 1,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = subtitleColor,
                         modifier =
                             Modifier
                                 .fillMaxWidth()
@@ -633,7 +690,10 @@ fun ArtistFullWidthItems(
     onClickListener: (() -> Unit)? = null,
     rightView: @Composable (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    forceDark: Boolean = LocalForceDarkText.current,
 ) {
+    val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
+    val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
     val (name: String, thumbnails: String?) =
         when (data) {
             is ArtistEntity -> Pair(data.name, data.thumbnails)
@@ -663,8 +723,8 @@ fun ArtistFullWidthItems(
                             .diskCacheKey(thumbnails)
                             .crossfade(true)
                             .build(),
-                    placeholder = painterResource(Res.drawable.holder),
-                    error = painterResource(Res.drawable.holder),
+                    placeholder = rememberHolderPainter(),
+                    error = rememberHolderPainter(),
                     contentDescription = null,
                     contentScale = ContentScale.FillHeight,
                     modifier =
@@ -681,9 +741,9 @@ fun ArtistFullWidthItems(
             ) {
                 Text(
                     text = name,
-                    style = typo().titleSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                    style = typo().titleSmall,
                     maxLines = 1,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = contentColor,
                     modifier =
                         Modifier
                             .fillMaxWidth()
@@ -698,7 +758,7 @@ fun ArtistFullWidthItems(
                     text = stringResource(Res.string.artists),
                     style = typo().bodySmall,
                     maxLines = 1,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = subtitleColor,
                     modifier =
                         Modifier
                             .fillMaxWidth()

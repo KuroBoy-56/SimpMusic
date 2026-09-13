@@ -14,7 +14,11 @@ fun parseSyncedLyrics(data: String): Lyrics {
             val seconds = matchResult.groupValues[2].toLong()
             val milliseconds = matchResult.groupValues[3].toLong()
             val timeInMillis = minutes * 60_000L + seconds * 1000L + milliseconds
-            val content = (if (matchResult.groupValues[4] == " ") " ♫" else matchResult.groupValues[4]).removeRange(0, 1)
+            // Trim, don't drop a fixed first character. Most providers leave a space after
+            // "]", but LRCLIB packs the text right against it — "[00:27.12]boy, you got me"
+            // — so removeRange(0, 1) ate the first letter of every single line.
+            val rawContent = matchResult.groupValues[4]
+            val content = if (rawContent.isBlank()) "♫" else rawContent.trimStart()
             linesLyrics.add(
                 Lyrics.LyricsX.Line(
                     endTimeMs = "0",
@@ -61,6 +65,10 @@ fun parseRichSyncLyrics(data: String): Lyrics {
 
     // Regex to match [MM:SS.mm] format (flexible with 1-2 digits)
     val regex = Regex("\\[(\\d{1,2}):(\\d{2})\\.(\\d{2,3})\\](.+)")
+    // Strip a leading voice marker (e.g. "v1:", "v2:") that some lyrics
+    // providers prepend before the first word timestamp, so it doesn't leak
+    // into the word content and stick to the first word.
+    val voiceMarkerRegex = Regex("""^v\d+:""")
     val linesLyrics = ArrayList<Lyrics.LyricsX.Line>()
 
     lyricsLines.forEachIndexed { index, line ->
@@ -77,7 +85,11 @@ fun parseRichSyncLyrics(data: String): Lyrics {
             val timeInMillis = minutes * 60_000L + seconds * 1000L + millisPart
 
             // Keep the rich sync content as-is (with <MM:SS.mm> word format)
-            val content = matchResult.groupValues[4].trimStart()
+            val content =
+                matchResult.groupValues[4]
+                    .trimStart()
+                    .replace(voiceMarkerRegex, "")
+                    .trimStart()
 
             if (content.isNotBlank()) {
                 linesLyrics.add(

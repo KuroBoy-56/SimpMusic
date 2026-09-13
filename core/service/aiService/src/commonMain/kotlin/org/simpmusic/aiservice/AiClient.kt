@@ -50,14 +50,21 @@ class AiClient {
         targetLanguage: String,
     ): Result<Lyrics> =
         runCatching {
-            aiService?.translateLyrics(inputLyrics, targetLanguage).also { data ->
-                if (data?.lines?.map { it.words }?.containsAll(
-                        inputLyrics.lines?.map { it.words } ?: emptyList(),
-                    ) == true
-                ) {
-                    throw IllegalStateException("Translation failed or returned empty lyrics.")
-                }
+            val result =
+                aiService?.translateLyrics(inputLyrics, targetLanguage)
+                    ?: throw IllegalStateException("AI service is not initialized. Please set host and apiKey.")
+
+            // Validate: check that at least some lines were actually translated
+            val originalWords = inputLyrics.lines?.map { it.words } ?: emptyList()
+            val translatedWords = result.lines?.map { it.words } ?: emptyList()
+            val unchangedCount = originalWords.zip(translatedWords).count { (orig, trans) -> orig == trans }
+            val translatableCount = originalWords.count { it.trim().isNotEmpty() && it.trim() != "♫" }
+
+            // Reject if >80% of translatable lines are unchanged (likely same language or translation failed)
+            if (translatableCount > 0 && unchangedCount.toFloat() / translatableCount > 0.8f) {
+                throw IllegalStateException("Translation failed or returned empty lyrics or same language.")
             }
-                ?: throw IllegalStateException("AI service is not initialized. Please set host and apiKey.")
+
+            result
         }
 }

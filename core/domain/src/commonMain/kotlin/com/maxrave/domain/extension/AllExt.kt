@@ -9,7 +9,6 @@ import com.maxrave.domain.data.player.GenericMediaMetadata
 import com.maxrave.domain.utils.connectArtists
 import com.maxrave.domain.utils.toListName
 import kotlinx.datetime.DateTimeUnit
-import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atTime
@@ -19,12 +18,14 @@ import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 
 @OptIn(ExperimentalTime::class)
 fun now(): LocalDateTime = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
 
-fun epochMillisToLocalDateTime(millis: Long): LocalDateTime =
-    Instant.fromEpochMilliseconds(millis).toLocalDateTime(TimeZone.currentSystemDefault())
+@OptIn(ExperimentalTime::class)
+fun epochMillisToLocalDateTime(epochMillis: Long): LocalDateTime =
+    Instant.fromEpochMilliseconds(epochMillis).toLocalDateTime(TimeZone.currentSystemDefault())
 
 fun LocalDateTime.isBefore(other: LocalDateTime): Boolean = this < other
 
@@ -68,7 +69,14 @@ fun GenericMediaItem.toSongEntity(): SongEntity =
     )
 
 fun SongEntity.toGenericMediaItem(): GenericMediaItem {
-    val isSong = (this.thumbnails?.contains("w544") == true && this.thumbnails.contains("h544"))
+    val thumb = if (this.thumbnails.isNullOrBlank()) {
+        "https://i.ytimg.com/vi/${this.videoId}/hqdefault.jpg"
+    } else {
+        this.thumbnails!!
+    }
+
+    val isSong = (thumb.contains("w544") && thumb.contains("h544"))
+
     return GenericMediaItem(
         mediaId = this.videoId,
         uri = this.videoId,
@@ -77,7 +85,7 @@ fun SongEntity.toGenericMediaItem(): GenericMediaItem {
                 title = this.title,
                 artist = this.artistName?.connectArtists(),
                 albumTitle = this.albumName,
-                artworkUri = this.thumbnails,
+                artworkUri = thumb,
                 description = if (isSong) MERGING_DATA_TYPE.SONG else MERGING_DATA_TYPE.VIDEO,
             ),
         customCacheKey = this.videoId,
@@ -86,19 +94,22 @@ fun SongEntity.toGenericMediaItem(): GenericMediaItem {
 
 fun Track.toGenericMediaItem(): GenericMediaItem {
     var thumbUrl =
-        this.thumbnails?.last()?.url
-            ?: "http://i.ytimg.com/vi/${this.videoId}/maxresdefault.jpg"
+        this.thumbnails?.lastOrNull()?.url
+            ?: "https://i.ytimg.com/vi/${this.videoId}/hqdefault.jpg"
+
     if (thumbUrl.contains("w120")) {
         thumbUrl = Regex("([wh])120").replace(thumbUrl, "$1544")
     }
+
     val artistName: String = this.artists.toListName().connectArtists()
     val isSong =
         (
-            this.thumbnails?.last()?.height != 0 &&
-                this.thumbnails?.last()?.height == this.thumbnails?.last()?.width &&
-                this.thumbnails?.last()?.height != null
-        ) &&
+            this.thumbnails?.lastOrNull()?.height != 0 &&
+                this.thumbnails?.lastOrNull()?.height == this.thumbnails?.lastOrNull()?.width &&
+                this.thumbnails?.lastOrNull()?.height != null
+            ) &&
             (!thumbUrl.contains("hq720") && !thumbUrl.contains("maxresdefault"))
+
     return GenericMediaItem(
         mediaId = this.videoId,
         uri = this.videoId,

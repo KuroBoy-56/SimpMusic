@@ -1,8 +1,10 @@
 package com.maxrave.kotlinytmusicscraper
 
 import com.eygraber.uri.toKmpUri
+import com.maxrave.common.ITAG
 import com.maxrave.kotlinytmusicscraper.YouTube.Companion.DEFAULT_VISITOR_DATA
 import com.maxrave.kotlinytmusicscraper.extension.toListFormat
+import com.maxrave.kotlinytmusicscraper.extractor.ExtractSource
 import com.maxrave.kotlinytmusicscraper.models.AccountInfo
 import com.maxrave.kotlinytmusicscraper.models.AlbumItem
 import com.maxrave.kotlinytmusicscraper.models.Artist
@@ -10,8 +12,6 @@ import com.maxrave.kotlinytmusicscraper.models.ArtistItem
 import com.maxrave.kotlinytmusicscraper.models.BrowseEndpoint
 import com.maxrave.kotlinytmusicscraper.models.GridRenderer
 import com.maxrave.kotlinytmusicscraper.models.MediaType
-import com.maxrave.kotlinytmusicscraper.models.TidalMetadataResult
-import com.maxrave.kotlinytmusicscraper.models.TidalStreamResult
 import com.maxrave.kotlinytmusicscraper.models.MusicCarouselShelfRenderer
 import com.maxrave.kotlinytmusicscraper.models.MusicShelfRenderer
 import com.maxrave.kotlinytmusicscraper.models.MusicTwoRowItemRenderer
@@ -21,6 +21,7 @@ import com.maxrave.kotlinytmusicscraper.models.Run
 import com.maxrave.kotlinytmusicscraper.models.SearchSuggestions
 import com.maxrave.kotlinytmusicscraper.models.SongInfo
 import com.maxrave.kotlinytmusicscraper.models.SongItem
+import com.maxrave.kotlinytmusicscraper.models.TidalMetadataResult
 import com.maxrave.kotlinytmusicscraper.models.VideoItem
 import com.maxrave.kotlinytmusicscraper.models.WatchEndpoint
 import com.maxrave.kotlinytmusicscraper.models.YTItemType
@@ -36,6 +37,7 @@ import com.maxrave.kotlinytmusicscraper.models.response.AccountSwitcherEndpointR
 import com.maxrave.kotlinytmusicscraper.models.response.AddItemYouTubePlaylistResponse
 import com.maxrave.kotlinytmusicscraper.models.response.BrowseResponse
 import com.maxrave.kotlinytmusicscraper.models.response.CreatePlaylistResponse
+import com.maxrave.kotlinytmusicscraper.models.response.ImageUploadResponse
 import com.maxrave.kotlinytmusicscraper.models.response.DownloadProgress
 import com.maxrave.kotlinytmusicscraper.models.response.GetQueueResponse
 import com.maxrave.kotlinytmusicscraper.models.response.GetSearchSuggestionsResponse
@@ -47,7 +49,8 @@ import com.maxrave.kotlinytmusicscraper.models.response.PlayerResponse
 import com.maxrave.kotlinytmusicscraper.models.response.SearchResponse
 import com.maxrave.kotlinytmusicscraper.models.response.SimpMusicChartResponse
 import com.maxrave.kotlinytmusicscraper.models.response.TidalSearchResponse
-import com.maxrave.kotlinytmusicscraper.models.response.TidalStreamResponse
+import com.maxrave.kotlinytmusicscraper.models.response.TidalOAuthResponse
+import com.maxrave.kotlinytmusicscraper.models.response.RemoteConfig
 import com.maxrave.kotlinytmusicscraper.models.response.toLikeStatus
 import com.maxrave.kotlinytmusicscraper.models.response.toListAccountInfo
 import com.maxrave.kotlinytmusicscraper.models.simpmusic.FdroidResponse
@@ -79,7 +82,6 @@ import com.maxrave.kotlinytmusicscraper.parser.getPlaylistContinuation
 import com.maxrave.kotlinytmusicscraper.parser.getReloadParams
 import com.maxrave.kotlinytmusicscraper.parser.getSuggestionSongItems
 import com.maxrave.kotlinytmusicscraper.parser.hasReloadParams
-import com.maxrave.kotlinytmusicscraper.utils.decodeTidalManifest
 import com.maxrave.logger.Logger
 import com.mohamedrejeb.ksoup.html.parser.KsoupHtmlHandler
 import com.mohamedrejeb.ksoup.html.parser.KsoupHtmlParser
@@ -97,6 +99,8 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.daysUntil
 import kotlinx.datetime.toLocalDateTime
@@ -124,8 +128,13 @@ private const val TAG = "YouTubeScraper"
  * Using YouTube Internal API
  * @author maxrave-dev
  */
+
 class YouTube {
     private val ytMusic = Ytmusic()
+
+    private val tidalTokenMutex = Mutex()
+    private var tidalAccessToken: String? = null
+    private var tidalTokenExpiresAt: Long = 0L
 
     var cookiePath: Path?
         get() = ytMusic.cookiePath
@@ -170,6 +179,21 @@ class YouTube {
         get() = ytMusic.pageId
         set(value) {
             ytMusic.pageId = value
+        }
+
+    /**
+     * TIDAL credentials, backed by [Ytmusic]. Set by the data layer from cached remote config.
+     */
+    var tidalClientId: String
+        get() = ytMusic.tidalClientId
+        set(value) {
+            ytMusic.tidalClientId = value
+        }
+
+    var tidalClientSecret: String
+        get() = ytMusic.tidalClientSecret
+        set(value) {
+            ytMusic.tidalClientSecret = value
         }
 
     /**
@@ -870,13 +894,13 @@ class YouTube {
                         ?.sectionListRenderer
                         ?.contents
                         ?.firstOrNull()
-                        ?.gridRenderer
-                        ?.items
+                        ?.musicCarouselShelfRenderer
+                        ?.contents
                         ?.mapNotNull { it.musicTwoRowItemRenderer }
                         ?.mapNotNull(RelatedPage::fromMusicTwoRowItemRenderer)
                         .orEmpty()
                         .mapNotNull {
-                            if (it.type == YTItemType.PLAYLIST) it as? PlaylistItem else null
+                            if (it.type == YTItemType.ALBUM) it as? AlbumItem else null
                         },
                 musicVideo =
                     response.contents
@@ -1550,7 +1574,7 @@ class YouTube {
                                 title = playlistPanelRenderer.title,
                                 items =
                                     playlistPanelRenderer.contents.mapNotNull {
-                                        it.playlistPanelVideoRenderer?.let { renderer ->
+                                        it.track?.let { renderer ->
                                             NextPage.fromPlaylistPanelVideoRenderer(renderer)
                                         }
                                     } + result.items,
@@ -1593,7 +1617,7 @@ class YouTube {
                     title = playlistPanelRenderer.title,
                     items =
                         playlistPanelRenderer.contents.mapNotNull {
-                            it.playlistPanelVideoRenderer?.let(NextPage::fromPlaylistPanelVideoRenderer)
+                            it.track?.let(NextPage::fromPlaylistPanelVideoRenderer)
                         },
                     currentIndex = playlistPanelRenderer.currentIndex,
                     lyricsEndpoint =
@@ -1828,11 +1852,58 @@ class YouTube {
         ytMusic.addItemYouTubePlaylist(playlistId, videoId).body<AddItemYouTubePlaylistResponse>()
     }
 
+    /**
+     * Move a playlist item before another item in a YouTube playlist.
+     * @param playlistId The YouTube playlist ID
+     * @param setVideoId The setVideoId of the item to move
+     * @param movedSetVideoIdSuccessor The setVideoId of the item that should come AFTER the moved item.
+     *        If null, the item is moved to the end of the playlist.
+     * @return Result<Int> HTTP status code
+     */
+    suspend fun movePlaylistItem(
+        playlistId: String,
+        setVideoId: String,
+        movedSetVideoIdSuccessor: String? = null,
+    ) = runCatching {
+        ytMusic.moveItemYouTubePlaylist(playlistId, setVideoId, movedSetVideoIdSuccessor).status.value
+    }
+
     suspend fun editPlaylist(
         playlistId: String,
         title: String,
     ) = runCatching {
         ytMusic.editYouTubePlaylist(playlistId, title).status.value
+    }
+
+    /**
+     * Puts a custom cover on a YouTube Music playlist.
+     *
+     * Three legs, because that is what the web client does: reserve a resumable upload slot, send
+     * the bytes, then attach the returned blob to the playlist. The upload id comes back as a
+     * response HEADER (`x-guploader-uploadid`) with an empty body, which is easy to miss.
+     *
+     * Returns the HTTP status of the final attach, the same way [editPlaylist] does — the response
+     * body is a fresh playlist header, and nothing here needs to read it back.
+     */
+    suspend fun setPlaylistCustomThumbnail(
+        playlistId: String,
+        image: ByteArray,
+    ) = runCatching {
+        val uploadId =
+            ytMusic
+                .getPlaylistThumbnailUploadSlot(image.size)
+                .headers["x-guploader-uploadid"]
+                ?: throw IllegalStateException("No upload id returned for playlist thumbnail")
+        // bodyAsText + manual decode, NOT body<T>(): this endpoint answers with JSON but does not
+        // label it as such — the response carries an html content type — so ContentNegotiation
+        // never engages and body<T>() fails with "expected ImageUploadResponse but was
+        // SourceByteReadChannel" on an otherwise perfectly good 200.
+        val blobId =
+            Json { ignoreUnknownKeys = true }
+                .decodeFromString<ImageUploadResponse>(
+                    ytMusic.uploadPlaylistThumbnail(uploadId, image).bodyAsText(),
+                ).encryptedBlobId
+        ytMusic.setYouTubePlaylistCustomThumbnail(playlistId, blobId).status.value
     }
 
     suspend fun createPlaylist(
@@ -1841,6 +1912,22 @@ class YouTube {
     ) = runCatching {
         ytMusic.createYouTubePlaylist(title, listVideoId).body<CreatePlaylistResponse>()
     }
+
+    /**
+     * Subscribes the signed-in account to a channel.
+     *
+     * Returns the HTTP status rather than a parsed body, the same way the like endpoints do —
+     * these calls answer with an empty payload, so the status is the whole result.
+     */
+    suspend fun subscribeChannel(channelId: String) =
+        runCatching {
+            ytMusic.subscribeChannel(channelId).status.value
+        }
+
+    suspend fun unsubscribeChannel(channelId: String) =
+        runCatching {
+            ytMusic.unsubscribeChannel(channelId).status.value
+        }
 
     suspend fun addToLiked(mediaId: String) =
         runCatching {
@@ -1857,54 +1944,68 @@ class YouTube {
             ytMusic.getSimpMusicChart().body<SimpMusicChartResponse>()
         }
 
-    suspend fun getTidalStream(
-        url: String,
+    /**
+     * Fetch the remote app config (TIDAL credentials) from GitHub raw.
+     * Returns a [Result] so callers can fall back silently when the fetch/parse fails.
+     */
+    suspend fun getTidalRemoteConfig(): Result<RemoteConfig> =
+        runCatching {
+            ytMusic.getTidalRemoteConfig()
+        }
+
+    /**
+     * Ensure a valid Tidal OAuth token is available, refreshing if expired.
+     * In-memory only — token is re-fetched on each app launch (follows Spotify auth pattern).
+     */
+    private suspend fun ensureTidalToken(): String =
+        tidalTokenMutex.withLock {
+            val now = Clock.System.now().toEpochMilliseconds()
+            val cached = tidalAccessToken
+            if (cached != null && now < tidalTokenExpiresAt) return@withLock cached
+
+            val response = ytMusic.getTidalOAuthToken().body<TidalOAuthResponse>()
+            tidalAccessToken = response.accessToken
+            tidalTokenExpiresAt = now + (response.expiresIn * 1000L) - 60_000L
+            Logger.d("Stream", "Tidal OAuth token refreshed, expires in ${response.expiresIn}s")
+            response.accessToken
+        }
+
+    /**
+     * Search Tidal official API for metadata (bpm, key, keyScale).
+     * Token is managed in-memory and auto-refreshed when expired.
+     */
+    suspend fun searchTidalMetadata(
         query: String,
         durationSeconds: Int,
     ) = runCatching {
-        val searchRes = ytMusic.searchTidalId(url, query).body<TidalSearchResponse>()
-        val firstRes = searchRes.data?.items?.firstOrNull { it?.duration?.let { dur -> abs(dur - durationSeconds) <= 1 } ?: false }
+        val token = ensureTidalToken()
+        val searchRes = ytMusic.searchTidalId(token, query).body<TidalSearchResponse>()
         val matchedItem =
-            firstRes ?: searchRes.data
+            searchRes.tracks
                 ?.items
-                ?.filter { it?.duration?.let { dur -> abs(dur - durationSeconds) <= 1 } ?: false }
-                ?.minByOrNull { abs((it?.duration ?: 0) - durationSeconds) }
-        val trackId = matchedItem?.id ?: throw Exception("No matching track found")
-        val streamRes = ytMusic.getTidalStream(url, "$trackId").body<TidalStreamResponse>()
-        TidalStreamResult(
-            stream = streamRes,
-            bpm = matchedItem.bpm,
-            musicKey = matchedItem.key,
-            keyScale = matchedItem.keyScale,
+                ?.filterNotNull()
+                ?.filter { it.duration?.let { dur -> abs(dur - durationSeconds) <= 1 } ?: false }
+                ?.minByOrNull { abs((it.duration ?: 0) - durationSeconds) }
+                ?: throw Exception("No matching track found")
+        val attrs = matchedItem.audioAnalysisAttributes
+        TidalMetadataResult(
+            bpm = attrs?.bpm?.toDoubleOrNull()?.toInt(),
+            musicKey = attrs?.key,
+            keyScale = attrs?.keyScale,
         )
     }
 
+    // Any format carrying a signatureCipher would do; medium Opus is the one YouTube returns for
+    // every video, logged in or not, which is why the lookup pins that itag rather than scanning.
     /**
-     * Search Tidal for metadata only (bpm, key, keyScale) without fetching the stream.
+     * Which extractor and cipher decoder produced this video's URLs in THIS run of the app, or null
+     * if it has not been extracted yet. Diagnostic only — see [com.maxrave.kotlinytmusicscraper.extractor.ExtractSource].
      */
-    suspend fun searchTidalMetadata(
-        url: String,
-        query: String,
-        durationSeconds: Int,
-    ) = runCatching {
-        val searchRes = ytMusic.searchTidalId(url, query).body<TidalSearchResponse>()
-        val firstRes = searchRes.data?.items?.firstOrNull { it?.duration?.let { dur -> abs(dur - durationSeconds) <= 1 } ?: false }
-        val matchedItem =
-            firstRes ?: searchRes.data
-                ?.items
-                ?.filter { it?.duration?.let { dur -> abs(dur - durationSeconds) <= 1 } ?: false }
-                ?.minByOrNull { abs((it?.duration ?: 0) - durationSeconds) }
-                ?: throw Exception("No matching track found")
-        TidalMetadataResult(
-            bpm = matchedItem.bpm,
-            musicKey = matchedItem.key,
-            keyScale = matchedItem.keyScale,
-        )
-    }
+    fun getExtractSource(videoId: String): String? = ExtractSource.of(videoId)
 
     private fun getNParam(listFormat: List<PlayerResponse.StreamingData.Format>): String? =
         listFormat
-            .firstOrNull { it.itag == 251 }
+            .firstOrNull { it.itag == ITAG.AUDIO_OPUS_MEDIUM }
             ?.let { format ->
                 val sc = format.signatureCipher ?: format.url ?: return null
                 val params = parseQueryString(sc)
@@ -1921,7 +2022,6 @@ class YouTube {
         track: SongItem,
         filePath: String,
         videoId: String,
-        should320kbps: Pair<Boolean, String>,
         isVideo: Boolean = false,
     ): Flow<DownloadProgress> =
         channelFlow {
@@ -1953,54 +2053,8 @@ class YouTube {
                         ).maxByOrNull { it?.bitrate ?: 0 }
                     Logger.d(TAG, "Audio Format $audioFormat")
                     Logger.d(TAG, "Video Format $videoFormat")
-                    val durationSecond =
-                        playerResponse.second.videoDetails
-                            ?.lengthSeconds
-                            ?.toIntOrNull()
                     val audioUrl =
-                        if (should320kbps.first && !isVideo && durationSecond != null) {
-                            val your320kbpsUrl = should320kbps.second
-                            Logger.d("Stream", "Prefer 320kbps enabled ${playerResponse.second.videoDetails}")
-                            val title = playerResponse.second.videoDetails?.title ?: ""
-                            val author = playerResponse.second.videoDetails?.author ?: ""
-                            val q =
-                                "$title $author"
-                                    .replace(
-                                        Regex("\\((feat\\.|ft.|cùng với|con|mukana|com|avec|合作音乐人: ) "),
-                                        " ",
-                                    ).replace(
-                                        Regex("( và | & | и | e | und |, |和| dan)"),
-                                        " ",
-                                    ).replace("  ", " ")
-                                    .replace(Regex("([()])"), "")
-                                    .replace(".", " ")
-                                    .replace("  ", " ")
-                            Logger.d("Stream", "Search query for 320kbps: $q")
-                            val res =
-                                getTidalStream(your320kbpsUrl, q, durationSecond)
-                                    .apply {
-                                        onSuccess {
-                                            Logger.w("Stream", "Tidal response: $this")
-                                        }.onFailure {
-                                            Logger.e("Stream", "Tidal error: ${it.message}", it)
-                                        }
-                                    }.getOrNull()
-                            val audioData =
-                                res
-                                    ?.stream
-                                    ?.data
-                                    ?.manifest
-                                    ?.decodeTidalManifest()
-                            if (audioData != null) {
-                                Logger.d("Stream", "Found potential 320kbps stream from Tidal: $res")
-                                audioData.urls.firstOrNull() ?: audioFormat?.url
-                            } else {
-                                Logger.d("Stream", "Found potential 320kbps stream from Tidal manifest DASH: ${res?.stream?.data?.manifest}")
-                                audioFormat?.url
-                            }
-                        } else {
-                            audioFormat?.url
-                        } ?: run {
+                        audioFormat?.url ?: run {
                             trySend(DownloadProgress.failed("Audio format url is null"))
                             return@channelFlow
                         }
@@ -2076,5 +2130,6 @@ class YouTube {
         private const val VISITOR_DATA_PREFIX = "Cgt"
 
         const val DEFAULT_VISITOR_DATA = "CgtsZG1ySnZiQWtSbyiMjuGSBg%3D%3D"
+
     }
 }

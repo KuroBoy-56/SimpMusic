@@ -60,6 +60,7 @@
     <string name="playlist_name_cannot_be_empty">再生リスト名は空にできません。</string>
     <string name="this_app_needs_to_access_your_notification">このアプリは、通知へのアクセスを必要とします</string>
     <string name="shared">共有</string>
+    <string name="rich_synced">単語ごと</string>
     <string name="line_synced">行を同期中</string>
     <string name="unsynced">同期なし</string>
     <string name="playlist_is_empty">再生リストに登録なし</string>
@@ -73,6 +74,7 @@
     <string name="change">変更</string>
     <string name="quality">音質</string>
     <string name="prefer_320kbps_stream">320kbpsのストリームを優先</string>
+    <string name="prefer_320kbps_stream_description">利用可能な場合は 320kbps の音声を自動で検索します。見つからない場合は標準の音質を使用します。</string>
     <string name="download_quality">ダウンロード品質</string>
     <string name="video_download_quality">動画ダウンロード品質</string>
     <string name="clear_downloaded_cache">ダウンロードしたキャッシュを消去</string>
@@ -119,10 +121,14 @@
     <string name="about_us">開発者について</string>
     <string name="version">バージョン</string>
     <string name="github">Github</string>
-    <string name="maxrave_dev">garevyn-dev</string>
+    <string name="maxrave_dev">maxrave-dev</string>
     <string name="buy_me_a_coffee">コーヒーを奢る</string>
+    <string name="developer_blog">開発者ブログ</string>
+    <string name="blog_promo_title">開発者からの新着情報</string>
+    <string name="visit_blog">ブログを見る</string>
     <string name="paypal">PayPal</string>
     <string name="title">題名</string>
+    <string name="custom_order">カスタム順</string>
     <string name="album">アルバム</string>
     <string name="youtube_url">YouTube URL</string>
     <string name="download_url">ダウンロードURL</string>
@@ -137,7 +143,7 @@
     <string name="albums_inArtist">アルバム</string>
     <string name="singles_inArtist">シングル</string>
     <string name="fans_might_also_like_inArtist">他の人はこんな音楽も聞いています</string>
-    <string name="crash_log">KuroMusic がクラッシュしました。申し訳ありません。\n開発者にクラッシュログを送信してください。</string>
+    <string name="crash_log">SimpMusic がクラッシュしました。申し訳ありません。\n開発者にクラッシュログを送信してください。</string>
     <string name="crash">クラッシュ</string>
     <string name="send">送信</string>
     <string name="mail_subject">クラッシュを報告</string>
@@ -155,9 +161,6 @@
     <string name="balance_media_loudness">メディアの音の大きさの均衡をとる</string>
     <string name="normalize_volume">音量を均一化</string>
     <string name="audio">音声</string>
-    <string name="no_equalizer">端末にイコライザがありません</string>
-    <string name="open_system_equalizer">システムのイコライザを開く</string>
-    <string name="use_your_system_equalizer">システムのイコライザを使う</string>
     <string name="streaming_data_provider_piped">ストリーミングデータの提供元 (Piped)</string>
     <string name="itag">iタグ</string>
     <string name="mime_type">MIME 種別</string>
@@ -196,12 +199,12 @@
     <string name="what_segments_will_be_skipped">スキップしたいシーンを選択</string>
     <string name="save">保存</string>
     <string name="saved">保存しました</string>
-    <string name="sponsor_block_intro">SponsorBlock は、YouTube 動画の余分なシーンをスキップするための、クラウドソースのシステムです。\n詳細: https://sponsor.ajay.app/\nKuroMusic では、SponsorBlock は端末がネットに接続中の場合にのみ利用できます。</string>
+    <string name="sponsor_block_intro">SponsorBlock は、YouTube 動画の余分なシーンをスキップするための、クラウドソースのシステムです。\n詳細: https://sponsor.ajay.app/\nSimpMusic では、SponsorBlock は端末がネットに接続中の場合にのみ利用できます。</string>
     <string name="skip_sponsor_part_of_video">動画の協賛シーンなどをスキップします</string>
     <string name="customactivityoncrash_error_activity_error_occurred_explanation">予期しないエラーが発生しました。ご迷惑をおかけして申し訳ありません。</string>
     <string name="customactivityoncrash_error_activity_restart_app">アプリを再起動</string>
-    <string name="help_build_lyrics_database">KuroMusicの歌詞データベースの構築を手伝う</string>
-    <string name="help_build_lyrics_database_description">保存した歌詞をKuroMusicの歌詞データベースに送信します</string>
+    <string name="help_build_lyrics_database">SimpMusicの歌詞データベースの構築を手伝う</string>
+    <string name="help_build_lyrics_database_description">保存した歌詞をSimpMusicの歌詞データベースに送信します</string>
     <string name="customactivityoncrash_error_activity_close_app">アプリを終了</string>
     <string name="customactivityoncrash_error_activity_error_details">エラーの詳細</string>
     <string name="customactivityoncrash_error_activity_error_details_title">エラーの詳細</string>
@@ -236,7 +239,7 @@
     <string name="saved_to_local_playlist">端末内の再生リストに保存しました</string>
     <string name="if_you_want_to_unsync_this_playlist_please_go_to_local_playlist">この再生リストの同期を解除したい場合、端末内の再生リストに移動してください</string>
     <string name="log_in_to_get_YouTube_playlist">ログインしてYouTubeの再生リストを取得</string>
-    <string name="sync_playlist_warning">KuroMusic は YouTube ミュージックの再生リストを自動で作成します。よろしいですか？</string>
+    <string name="sync_playlist_warning">SimpMusic は YouTube ミュージックの再生リストを自動で作成します。よろしいですか？</string>
     <string name="syncing">同期中</string>
     <string name="unsync_playlist_warning">"この再生リストの同期を解除しますか？この再生リストはYouTubeミュージックから削除されません "</string>
     <string name="unsyncing">同期を解除中</string>
@@ -253,7 +256,7 @@
     <string name="email">メールアドレス</string>
     <string name="password">パスワード</string>
     <string name="please_enter_your_email_and_password">メールアドレスとパスワードを入力してください。</string>
-    <string name="translation_language_message">言語コードを入力してください (2文字、例: en)。KuroMusic の言語と同じに設定にするには、編集欄を空にしてください。</string>
+    <string name="translation_language_message">言語コードを入力してください (2文字、例: en)。SimpMusic の言語と同じに設定にするには、編集欄を空にしてください。</string>
     <string name="invalid_language_code">無効な言語コードです</string>
     <string name="lyrics_provider_youtube">歌詞の提供元 YouTube</string>
     <string name="limit_player_cache">プレイヤーのキャッシュを制限</string>
@@ -271,7 +274,7 @@
     <string name="older_first">古い順</string>
     <string name="newer_first">新しい順</string>
     <string name="added_date">追加日</string>
-    <string name="credit_app">バックエンドに YouTube ミュージックを使用するシンプルな音楽アプリ \n\nKuroMusic は、広告や追跡なしで YouTube や YouTube ミュージックから音楽をストリーミングするオープンソースのプロジェクトです。KuroMusic の豊富な機能:\n\n - 音楽のストリーミング \n - 歌詞の同期\n - あなたに最適化されたデータ\n - など... \n\nKuroMusic は常に無料、そして広告もなしです。\n\nTuan Minh Nguyen Duc (maxrave) が❤️を込めて開発しました</string>
+    <string name="credit_app">バックエンドに YouTube ミュージックを使用するシンプルな音楽アプリ \n\nSimpMusic は、広告や追跡なしで YouTube や YouTube ミュージックから音楽をストリーミングするオープンソースのプロジェクトです。SimpMusic の豊富な機能:\n\n - 音楽のストリーミング \n - 歌詞の同期\n - あなたに最適化されたデータ\n - など... \n\nSimpMusic は常に無料、そして広告もなしです。\n\nTuan Minh Nguyen Duc (maxrave) が❤️を込めて開発しました</string>
     <string name="issue_tracker">既知の問題一覧</string>
     <string name="featured_playlists">注目の再生リスト</string>
     <string name="featured_inArtist">おすすめ</string>
@@ -309,7 +312,7 @@
     <string name="enable_spotify_lyrics">Spotifyの歌詞を有効化</string>
     <string name="spotify_lyrícs_info">翻訳機能なしで歌詞を表示</string>
     <string name="enable_canvas">キャンバスを有効にする</string>
-    <string name="canvas_info">SpotifyのキャンバスをKuroMusicで表示</string>
+    <string name="canvas_info">SpotifyのキャンバスをSimpMusicで表示</string>
     <string name="spotify_lyrics_provider">歌詞の提供元 Spotify</string>
     <string name="offline_mode">オフラインモード</string>
     <string name="added_to_youtube_liked">YouTubeの高評価に追加しました</string>
@@ -358,7 +361,7 @@
     <string name="loading">読み込み中</string>
     <string name="updating">更新中</string>
     <string name="go_to_log_in_page">ログインページに移動</string>
-    <string name="log_in_warning">YouTube Music は現在、音楽をストリーミングするためにログインが必要です。また、Pipedインスタンスは頻繁に動作しないことがあります。KuroMusicをより良い体験にするために、YouTubeにログインすることをお勧めします。</string>
+    <string name="log_in_warning">YouTube Music は現在、音楽をストリーミングするためにログインが必要です。また、Pipedインスタンスは頻繁に動作しないことがあります。SimpMusicをより良い体験にするために、YouTubeにログインすることをお勧めします。</string>
     <string name="spotify_canvas_cache">Spotify Canvas キャッシュ</string>
     <string name="clear_canvas_cache">Canvas のキャッシュを消去</string>
     <string name="proxy">プロキシ</string>
@@ -379,13 +382,9 @@
     <string name="do_not_show_again">再び表示しない</string>
     <string name="auto_check_for_update">最新版を自動で確認</string>
     <string name="auto_check_for_update_description">アプリを開いた時に更新を確認します</string>
-    <string name="blur_fullscreen_lyrics">全画面の歌詞でぼかす効果</string>
-    <string name="blur_fullscreen_lyrics_description">全画面の歌詞画面の背景をぼかす</string>
     <string name="playback_speed_pitch"><![CDATA[再生速度とピッチ]]></string>
     <string name="playback_speed">再生速度</string>
     <string name="pitch">ピッチ</string>
-    <string name="blur_player_background">プレーヤーの背景をぼかす</string>
-    <string name="blur_player_background_description">再生中の画面の背景をぼかす</string>
     <string name="merging_audio_and_video">音声と動画を統合中</string>
     <string name="error_occurred">エラーが発生しました</string>
     <string name="downloading_audio">音声をダウンロード中: %1$s </string>
@@ -397,8 +396,8 @@
     <string name="other_version">他のバージョン</string>
     <string name="later">また今度</string>
     <string name="give_a_star">星マークを押す</string>
-    <string name="enjoying_KuroMusic">KuroMusicを楽しんでください</string>
-    <string name="if_you_enjoy_using_KuroMusic_star_KuroMusic_on_github_or_leave_a_review_on">KuroMusicで楽しんでいたら、GitHubで星マークを押すか、ここにレビューを投稿してください:</string>
+    <string name="enjoying_simpmusic">SimpMusicを楽しんでください</string>
+    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">SimpMusicで楽しんでいたら、GitHubで星マークを押すか、ここにレビューを投稿してください:</string>
     <string name="if_you_love_my_work_consider">"私のアプリを気に入ったら、"</string>
     <string name="buying_me_a_coffee">コーヒーを一杯ご馳走してください。</string>
     <string name="fade_audio_effect">フェードの音声エフェクト</string>
@@ -447,14 +446,14 @@
     <string name="contributor_name">貢献者名</string>
     <string name="contributor_email">貢献者のメールアドレス</string>
     <string name="anonymous">匿名</string>
-    <string name="KuroMusic_lyrics">KuroMusic Lyrics</string>
-    <string name="lyrics_provider_KuroMusic">KuroMusic Lyricsが提供する歌詞</string>
+    <string name="simpmusic_lyrics">SimpMusic Lyrics</string>
+    <string name="lyrics_provider_simpmusic">SimpMusic Lyricsが提供する歌詞</string>
     <string name="backup_in_progress">バックアップ中</string>
     <string name="restore_in_progress">復元中</string>
     <string name="backup_downloaded">ダウンロードしたデータをバックアップする</string>
     <string name="backup_downloaded_description">ダウンロードしたすべての曲のデータをバックアップします</string>
     <string name="auto_backup">自動バックアップ</string>
-    <string name="auto_backup_description">Downloads/KuroMusic フォルダにデータを自動的にバックアップします</string>
+    <string name="auto_backup_description">Downloads/SimpMusic フォルダにデータを自動的にバックアップします</string>
     <string name="no_playlist_found">ローカルプレイリストが見つかりませんでした。最初に作成してください</string>
     <string name="list_all_cookies_of_this_page">このページのすべてのクッキーを一覧表示</string>
     <string name="copied_to_clipboard">クリップボードにコピーしました</string>
@@ -482,6 +481,7 @@
     <string name="combine_local_and_youtube_liked_songs_description">YouTubeの高評価のみを使用する (オフライン時はサポートしていません)</string>
     <string name="local_tracking_title">再生履歴をローカルに保存</string>
     <string name="local_tracking_description">再生履歴をローカルデータベースに記録しま す</string>
-    <string name="KuroMusic_charts">KuroMusic チャート</string>
+    <string name="simpmusic_charts">SimpMusic チャート</string>
     <string name="crossfading">クロスフェード</string>
+    <!-- Listen Together -->
 </resources>

@@ -11,6 +11,8 @@
  */
 package com.my.kizzy.remote
 
+import com.maxrave.ktorext.curl.CurlLogger
+import com.maxrave.logger.Logger
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -36,6 +38,9 @@ class ApiService {
                 ignoreUnknownKeys = true
                 encodeDefaults = true
             })
+        }
+        install(CurlLogger) {
+            logger = { Logger.d("KizzyApi", it) }
         }
         install(HttpTimeout) {
             connectTimeoutMillis = 30_000

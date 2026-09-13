@@ -4,23 +4,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import org.jetbrains.compose.resources.DrawableResource
-import org.jetbrains.compose.resources.painterResource
-import simpmusic.composeapp.generated.resources.Res
-import simpmusic.composeapp.generated.resources.baseline_pause_24
-import simpmusic.composeapp.generated.resources.baseline_play_arrow_24
+import com.maxrave.simpmusic.ui.icon.Pause
+import com.maxrave.simpmusic.ui.icon.PlayArrow
+import com.maxrave.simpmusic.ui.icon.SimpIcons
 
 @Composable
 fun RippleIconButton(
-    resId: DrawableResource,
+    imageVector: ImageVector,
     modifier: Modifier = Modifier,
     fillMaxSize: Boolean = false,
-    tint: Color = LocalContentColor.current,
+    tint: Color = Color.White,
     onClick: () -> Unit,
 ) {
     IconButton(
@@ -28,7 +26,7 @@ fun RippleIconButton(
         modifier = modifier,
     ) {
         Icon(
-            painterResource(resId),
+            imageVector,
             null,
             tint = tint,
             modifier = if (fillMaxSize) Modifier.fillMaxSize().padding(4.dp) else Modifier,
@@ -45,9 +43,9 @@ fun PlayPauseButton(
 ) {
     RippleIconButton(
         if (!isPlaying) {
-            Res.drawable.baseline_play_arrow_24
+            SimpIcons.PlayArrow
         } else {
-            Res.drawable.baseline_pause_24
+            SimpIcons.Pause
         },
         modifier = modifier,
         tint = tint,

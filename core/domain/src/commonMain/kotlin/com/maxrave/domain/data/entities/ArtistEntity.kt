@@ -16,6 +16,8 @@ data class ArtistEntity(
     val followed: Boolean = false,
     val followedAt: LocalDateTime? = now(),
     val inLibrary: LocalDateTime = now(),
+    // Cached artist name-logo image (hidden catalog) + its dominant color (hex). Nullable so the
+    // Room AutoMigration can add the columns without a manual migration.
     val nameLogoUrl: String? = null,
     val nameLogoColor: String? = null,
 ) : RecentlyType,

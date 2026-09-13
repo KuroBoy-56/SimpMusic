@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -56,6 +57,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.compose.PlayerSurface
 import androidx.media3.ui.compose.SURFACE_TYPE_SURFACE_VIEW
+import androidx.media3.ui.compose.modifiers.resizeWithContentScale
 import androidx.media3.ui.compose.state.rememberPresentationState
 import coil3.compose.AsyncImage
 import coil3.request.CachePolicy
@@ -65,6 +67,7 @@ import com.maxrave.common.Config
 import com.maxrave.domain.data.model.metadata.Lyrics
 import com.maxrave.domain.data.model.streams.TimeLine
 import com.maxrave.domain.data.model.ui.ScreenSizeInfo
+import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.logger.Logger
 import com.maxrave.media3.ui.extension.KeepScreenOn
 import org.koin.compose.koinInject
@@ -142,7 +145,7 @@ fun MediaPlayerView(
                 ).build()
                 .apply {
                     addListener(playerListener)
-                    videoScalingMode = if (cropToBounds) C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING else C.VIDEO_SCALING_MODE_DEFAULT
+                    videoScalingMode = C.VIDEO_SCALING_MODE_DEFAULT
                 }
         }
 
@@ -151,11 +154,6 @@ fun MediaPlayerView(
         remember(url) {
             MediaItem.fromUri(url)
         }
-
-    LaunchedEffect(cropToBounds) {
-        exoPlayer.videoScalingMode =
-            if (cropToBounds) C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING else C.VIDEO_SCALING_MODE_DEFAULT
-    }
 
     // Set MediaSource to ExoPlayer
     LaunchedEffect(mediaSource) {
@@ -178,23 +176,44 @@ fun MediaPlayerView(
     }
 
     val presentationState = rememberPresentationState(exoPlayer)
-    Box(modifier = modifier.graphicsLayer { clip = true }) {
-        PlayerSurface(
-            player = exoPlayer,
-            surfaceType = SURFACE_TYPE_SURFACE_VIEW,
-            modifier =
-                if (cropToBounds) {
-                    Modifier.fillMaxSize()
-                } else {
+    if (cropToBounds) {
+        // Center scale-to-cover (ContentScale.Crop) into whatever frame the caller gives us.
+        // resizeWithContentScale keeps the true video aspect ratio (no stretch), scales it
+        // to fully cover the frame using the real videoSizeDp, then clips the overflow.
+        Box(modifier = modifier.graphicsLayer { clip = true }) {
+            PlayerSurface(
+                player = exoPlayer,
+                surfaceType = SURFACE_TYPE_SURFACE_VIEW,
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .resizeWithContentScale(
+                            contentScale = ContentScale.Crop,
+                            sourceSizeDp = presentationState.videoSizeDp,
+                        ),
+            )
+
+            if (presentationState.coverSurface) {
+                // Cover the surface that is being prepared with a shutter
+                Box(Modifier.matchParentSize().background(Color.Black))
+            }
+        }
+    } else {
+        Box(modifier = modifier.graphicsLayer { clip = true }) {
+            PlayerSurface(
+                player = exoPlayer,
+                surfaceType = SURFACE_TYPE_SURFACE_VIEW,
+                modifier =
                     Modifier
                         .fillMaxHeight()
                         .width(with(density) { widthPx.toDp() })
-                }.align(Alignment.Center),
-        )
+                        .align(Alignment.Center),
+            )
 
-        if (presentationState.coverSurface) {
-            // Cover the surface that is being prepared with a shutter
-            Box(Modifier.background(Color.Black))
+            if (presentationState.coverSurface) {
+                // Cover the surface that is being prepared with a shutter
+                Box(Modifier.background(Color.Black))
+            }
         }
     }
 }
@@ -217,6 +236,12 @@ fun MediaPlayerViewWithSubtitle(
     translatedTextStyle: TextStyle,
 ) {
     val player: Player = koinInject(named(playerName))
+
+    // Subtitles over the video are lyrics like any other, so they take the same audio-delay
+    // correction the lyrics sheet does. timelineState is used for nothing else in this composable,
+    // but it is subtracted at each read rather than up front so the parameter keeps meaning "where
+    // the player is".
+    val lyricsOffsetMs by koinInject<DataStoreManager>().lyricsOffsetMs.collectAsState(0)
 
     var shouldEnterPipMode by rememberSaveable {
         mutableStateOf(false)
@@ -241,10 +266,12 @@ fun MediaPlayerViewWithSubtitle(
         mutableIntStateOf(-1)
     }
 
-    LaunchedEffect(key1 = timelineState) {
+    LaunchedEffect(key1 = timelineState, key2 = lyricsOffsetMs) {
         val lines = lyricsData?.lines ?: return@LaunchedEffect
         val translatedLines = translatedLyricsData?.lines
-        if (timelineState.current > 0L) {
+        // What the ear is hearing right now, rather than where the player is.
+        val nowMs = timelineState.current - lyricsOffsetMs
+        if (nowMs > 0L) {
             lines.indices.forEach { i ->
                 val sentence = lines[i]
                 val startTimeMs = sentence.startTimeMs.toLong()
@@ -257,7 +284,7 @@ fun MediaPlayerViewWithSubtitle(
                         // if this is the last sentence, set the end time to be some default value (e.g., 1 minute after the start time)
                         startTimeMs + 60000
                     }
-                if (timelineState.current in startTimeMs..endTimeMs) {
+                if (nowMs in startTimeMs..endTimeMs) {
                     currentLineIndex = i
                 }
             }
@@ -273,13 +300,13 @@ fun MediaPlayerViewWithSubtitle(
                         // if this is the last sentence, set the end time to be some default value (e.g., 1 minute after the start time)
                         startTimeMs + 60000
                     }
-                if (timelineState.current in startTimeMs..endTimeMs) {
+                if (nowMs in startTimeMs..endTimeMs) {
                     currentTranslatedLineIndex = i
                 }
             }
             if (lines.isNotEmpty() &&
                 (
-                    timelineState.current in (
+                    nowMs in (
                         0..(
                             lines.getOrNull(0)?.startTimeMs
                                 ?: "0"

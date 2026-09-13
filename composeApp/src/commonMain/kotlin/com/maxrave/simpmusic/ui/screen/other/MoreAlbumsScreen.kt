@@ -2,7 +2,6 @@ package com.maxrave.simpmusic.ui.screen.other
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.MarqueeAnimationMode
-import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,7 +18,6 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -37,6 +35,8 @@ import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.HomeItemContentPlaylist
 import com.maxrave.simpmusic.ui.component.RippleIconButton
+import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
+import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.MoreAlbumsDestination
 import com.maxrave.simpmusic.ui.theme.typo
@@ -49,7 +49,6 @@ import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.rememberHazeState
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
-import simpmusic.composeapp.generated.resources.baseline_arrow_back_ios_new_24
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -89,7 +88,6 @@ fun MoreAlbumsScreen(
                     modifier =
                         Modifier
                             .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.background)
                             .hazeSource(state = hazeState),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -133,7 +131,6 @@ fun MoreAlbumsScreen(
                         Text(
                             text = state.title,
                             style = typo().titleMedium,
-                            color = MaterialTheme.colorScheme.onBackground,
                             maxLines = 1,
                             modifier =
                                 Modifier
@@ -149,11 +146,10 @@ fun MoreAlbumsScreen(
                     navigationIcon = {
                         Box(Modifier.padding(horizontal = 5.dp)) {
                             RippleIconButton(
-                                Res.drawable.baseline_arrow_back_ios_new_24,
+                                SimpIcons.ArrowBackIosNew,
                                 Modifier
                                     .size(32.dp),
                                 true,
-                                tint = MaterialTheme.colorScheme.onBackground
                             ) {
                                 navController.navigateUp()
                             }
@@ -175,14 +171,12 @@ fun MoreAlbumsScreen(
             }
 
             MoreAlbumsUIState.Loading -> {
-                Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                    CenterLoadingBox(
-                        modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .padding(15.dp),
-                    )
-                }
+                CenterLoadingBox(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(15.dp),
+                )
             }
         }
     }

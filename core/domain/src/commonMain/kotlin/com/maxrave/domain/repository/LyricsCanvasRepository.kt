@@ -3,6 +3,7 @@ package com.maxrave.domain.repository
 import com.maxrave.domain.data.entities.LyricsEntity
 import com.maxrave.domain.data.entities.TranslatedLyricsEntity
 import com.maxrave.domain.data.model.browse.album.Track
+import com.maxrave.domain.data.model.browse.artist.ArtistLogo
 import com.maxrave.domain.data.model.canvas.CanvasResult
 import com.maxrave.domain.data.model.metadata.Lyrics
 import com.maxrave.domain.manager.DataStoreManager
@@ -37,6 +38,12 @@ interface LyricsCanvasRepository {
         duration: Int,
     ): Flow<Resource<CanvasResult>>
 
+    /**
+     * Animated album artwork from the hidden AM catalog, returned as the same [CanvasResult] a
+     * Spotify canvas produces and stored in the same columns. Needs no login.
+     */
+    fun getAMAnimatedArtwork(videoId: String): Flow<Resource<CanvasResult>>
+
     suspend fun updateCanvasUrl(
         videoId: String,
         canvasUrl: String,
@@ -65,6 +72,9 @@ interface LyricsCanvasRepository {
         duration: Int?,
     ): Flow<Resource<Lyrics>>
 
+    /** Fetch the artist's name-logo image + dominant color from the hidden catalog. */
+    fun getArtistLogo(artistName: String): Flow<Resource<ArtistLogo>>
+
     fun getAITranslationLyrics(
         lyrics: Lyrics,
         targetLanguage: String,
@@ -76,8 +86,6 @@ interface LyricsCanvasRepository {
         videoId: String,
         language: String,
     ): Flow<Resource<Lyrics>>
-
-    fun getArtistLogo(artistName: String): Flow<Resource<com.maxrave.domain.data.model.browse.artist.ArtistLogo>>
 
     fun voteSimpMusicLyrics(
         lyricsId: String,

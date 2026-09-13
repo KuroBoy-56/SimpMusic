@@ -11,6 +11,7 @@ import com.maxrave.common.SELECTED_LANGUAGE
 import com.maxrave.common.SUPPORTED_LANGUAGE
 import com.maxrave.common.SponsorBlockType
 import com.maxrave.domain.data.model.network.ProxyConfiguration
+import com.maxrave.domain.data.player.ReverbPreset
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.manager.DataStoreManager.Values.AI_PROVIDER_GEMINI
 import com.maxrave.domain.manager.DataStoreManager.Values.FALSE
@@ -87,6 +88,32 @@ internal class DataStoreManagerImpl(
         withContext(Dispatchers.IO) {
             settingsDataStore.edit { settings ->
                 settings[LOCATION] = location
+            }
+        }
+    }
+
+    override val moodAndGenresCache: Flow<String?> =
+        settingsDataStore.data.map { preferences ->
+            preferences[MOOD_AND_GENRES_CACHE]
+        }
+
+    override suspend fun setMoodAndGenresCache(json: String) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[MOOD_AND_GENRES_CACHE] = json
+            }
+        }
+    }
+
+    override val moodArtworkCache: Flow<String?> =
+        settingsDataStore.data.map { preferences ->
+            preferences[MOOD_ARTWORK_CACHE]
+        }
+
+    override suspend fun setMoodArtworkCache(json: String) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[MOOD_ARTWORK_CACHE] = json
             }
         }
     }
@@ -385,14 +412,19 @@ internal class DataStoreManagerImpl(
     override suspend fun setSponsorBlockCategories(categories: ArrayList<String>) {
         withContext(Dispatchers.IO) {
             Logger.w("setSponsorBlockCategories", categories.toString())
-            for (category in categories) {
-                settingsDataStore.edit { settings ->
-                    settings[stringPreferencesKey(category)] = TRUE
-                }
-            }
-            SponsorBlockType.toList().filter { !categories.contains(it.value) }.forEach { category ->
-                settingsDataStore.edit { settings ->
-                    settings[stringPreferencesKey(category.toString())] = FALSE
+            // Every category is written in ONE edit, keyed by `value` on both branches.
+            //
+            // The clearing branch used to key on `category.toString()`. SponsorBlockType is a sealed
+            // class of data objects, so that is the object's NAME — "SPONSOR" — while the enabled
+            // branch and [getSponsorBlockCategories] both use `value`, "sponsor". Unticking a
+            // category therefore wrote FALSE to a key nobody reads and left the real one at TRUE:
+            // the choice came back unchanged every time the dialog was reopened, and all nine
+            // categories stayed on forever. Confirmed against a real settings store where every one
+            // of the nine read TRUE.
+            settingsDataStore.edit { settings ->
+                SponsorBlockType.toList().forEach { category ->
+                    settings[stringPreferencesKey(category.value)] =
+                        if (categories.contains(category.value)) TRUE else FALSE
                 }
             }
         }
@@ -481,6 +513,19 @@ internal class DataStoreManagerImpl(
         }
     }
 
+    override val radioAudioOnly =
+        settingsDataStore.data.map { preferences ->
+            preferences[RADIO_AUDIO_ONLY] ?: FALSE
+        }
+
+    override suspend fun setRadioAudioOnly(audioOnly: Boolean) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[RADIO_AUDIO_ONLY] = if (audioOnly) TRUE else FALSE
+            }
+        }
+    }
+
     override val playerVolume: Flow<Float> =
         settingsDataStore.data.map { preferences ->
             preferences[PLAYER_VOLUME] ?: 1.0f
@@ -516,6 +561,174 @@ internal class DataStoreManagerImpl(
         withContext(Dispatchers.IO) {
             settingsDataStore.edit { settings ->
                 settings[SPDC] = spdc
+            }
+        }
+    }
+
+    override val equalizerEnabled: Flow<String> =
+        settingsDataStore.data.map { preferences ->
+            preferences[EQUALIZER_ENABLED] ?: FALSE
+        }
+
+    override suspend fun setEqualizerEnabled(enabled: Boolean) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[EQUALIZER_ENABLED] = if (enabled) TRUE else FALSE
+            }
+        }
+    }
+
+    override val equalizerBands: Flow<String> =
+        settingsDataStore.data.map { preferences ->
+            preferences[EQUALIZER_BANDS] ?: ""
+        }
+
+    override suspend fun setEqualizerBands(bandsDb: List<Float>) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                // Blank when flat, so "no equalizer" and "an equalizer set to zero" are the same
+                // stored state and neither installs a filter chain.
+                settings[EQUALIZER_BANDS] =
+                    if (bandsDb.all { it == 0f }) "" else bandsDb.joinToString(",")
+            }
+        }
+    }
+
+    override val equalizerPreamp: Flow<Float> =
+        settingsDataStore.data.map { preferences ->
+            preferences[EQUALIZER_PREAMP]?.toFloatOrNull() ?: 0f
+        }
+
+    override suspend fun setEqualizerPreamp(preampDb: Float) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[EQUALIZER_PREAMP] = preampDb.toString()
+            }
+        }
+    }
+
+    override val equalizerAutoEqProfile: Flow<String> =
+        settingsDataStore.data.map { preferences ->
+            preferences[EQUALIZER_AUTOEQ_PROFILE] ?: ""
+        }
+
+    override suspend fun setEqualizerAutoEqProfile(
+        label: String,
+        bandsDb: List<Float>,
+    ) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[EQUALIZER_AUTOEQ_PROFILE] =
+                    if (label.isBlank()) "" else label + "\n" + bandsDb.joinToString(",")
+            }
+        }
+    }
+
+    override val delayEnabled: Flow<String> =
+        settingsDataStore.data.map { preferences ->
+            preferences[DELAY_ENABLED] ?: FALSE
+        }
+
+    override suspend fun setDelayEnabled(enabled: Boolean) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[DELAY_ENABLED] = if (enabled) TRUE else FALSE
+            }
+        }
+    }
+
+    override val delayTimeMs: Flow<Int> =
+        settingsDataStore.data.map { preferences ->
+            // Written as text like the preamp is, so a value that cannot be read back — hand
+            // edited, or written by a build that stored something else here — falls to the
+            // default instead of failing the whole preferences read on a typed key.
+            preferences[DELAY_TIME_MS]?.toIntOrNull() ?: 400
+        }
+
+    override suspend fun setDelayTimeMs(timeMs: Int) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[DELAY_TIME_MS] = timeMs.toString()
+            }
+        }
+    }
+
+    override val delayFeedback: Flow<Float> =
+        settingsDataStore.data.map { preferences ->
+            preferences[DELAY_FEEDBACK]?.toFloatOrNull() ?: 0.45f
+        }
+
+    override suspend fun setDelayFeedback(feedback: Float) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[DELAY_FEEDBACK] = feedback.toString()
+            }
+        }
+    }
+
+    override val delayMix: Flow<Float> =
+        settingsDataStore.data.map { preferences ->
+            preferences[DELAY_MIX]?.toFloatOrNull() ?: 0.3f
+        }
+
+    override suspend fun setDelayMix(mix: Float) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[DELAY_MIX] = mix.toString()
+            }
+        }
+    }
+
+    override val reverbEnabled: Flow<String> =
+        settingsDataStore.data.map { preferences ->
+            preferences[REVERB_ENABLED] ?: FALSE
+        }
+
+    override suspend fun setReverbEnabled(enabled: Boolean) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[REVERB_ENABLED] = if (enabled) TRUE else FALSE
+            }
+        }
+    }
+
+    override val reverbPreset: Flow<String> =
+        settingsDataStore.data.map { preferences ->
+            // Handed back as the raw name: this layer has no business deciding what an unknown
+            // room means, and the readers that build a filter out of it already have a default.
+            preferences[REVERB_PRESET] ?: ReverbPreset.HALL.name
+        }
+
+    override suspend fun setReverbPreset(preset: ReverbPreset) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[REVERB_PRESET] = preset.name
+            }
+        }
+    }
+
+    override val reverbMix: Flow<Float> =
+        settingsDataStore.data.map { preferences ->
+            preferences[REVERB_MIX]?.toFloatOrNull() ?: 0.35f
+        }
+
+    override suspend fun setReverbMix(mix: Float) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[REVERB_MIX] = mix.toString()
+            }
+        }
+    }
+
+    override val syncFollowToYouTube: Flow<String> =
+        settingsDataStore.data.map { preferences ->
+            preferences[SYNC_FOLLOW_TO_YOUTUBE] ?: FALSE
+        }
+
+    override suspend fun setSyncFollowToYouTube(enabled: Boolean) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[SYNC_FOLLOW_TO_YOUTUBE] = if (enabled) TRUE else FALSE
             }
         }
     }
@@ -558,6 +771,19 @@ internal class DataStoreManagerImpl(
         }
     }
 
+    override val amAnimatedArtwork: Flow<String> =
+        settingsDataStore.data.map { preferences ->
+            preferences[AM_ANIMATED_ARTWORK] ?: FALSE
+        }
+
+    override suspend fun setAMAnimatedArtwork(enabled: Boolean) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[AM_ANIMATED_ARTWORK] = if (enabled) TRUE else FALSE
+            }
+        }
+    }
+
     override val spotifyClientToken: Flow<String> =
         settingsDataStore.data.map { preferences ->
             preferences[SPOTIFY_CLIENT_TOKEN] ?: ""
@@ -580,6 +806,35 @@ internal class DataStoreManagerImpl(
         withContext(Dispatchers.IO) {
             settingsDataStore.edit { settings ->
                 settings[SPOTIFY_CLIENT_TOKEN_EXPIRES] = expires
+            }
+        }
+    }
+
+    // Fallback "" (blank) on purpose: credentials are not hard-coded in source — they come
+    // only from the remote config. CommonRepositoryImpl pushes a value into YouTube only when
+    // non-blank, so an empty cache simply leaves TIDAL disabled until the first fetch.
+    override val tidalClientId: Flow<String> =
+        settingsDataStore.data.map { preferences ->
+            preferences[TIDAL_CLIENT_ID] ?: ""
+        }
+
+    override suspend fun setTidalClientId(value: String) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[TIDAL_CLIENT_ID] = value
+            }
+        }
+    }
+
+    override val tidalClientSecret: Flow<String> =
+        settingsDataStore.data.map { preferences ->
+            preferences[TIDAL_CLIENT_SECRET] ?: ""
+        }
+
+    override suspend fun setTidalClientSecret(value: String) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[TIDAL_CLIENT_SECRET] = value
             }
         }
     }
@@ -651,6 +906,97 @@ internal class DataStoreManagerImpl(
                 settingsDataStore.edit { settings ->
                     settings[TRANSLUCENT_BOTTOM_BAR] = FALSE
                 }
+            }
+        }
+    }
+
+    override val themeMode =
+        settingsDataStore.data.map { preferences ->
+            preferences[THEME_MODE] ?: DataStoreManager.THEME_MODE_DARK
+        }
+
+    override suspend fun setThemeMode(mode: String) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[THEME_MODE] = mode
+            }
+        }
+    }
+
+    override val themeColorSource =
+        settingsDataStore.data.map { preferences ->
+            preferences[THEME_COLOR_SOURCE] ?: DataStoreManager.THEME_COLOR_DEFAULT
+        }
+
+    override suspend fun setThemeColorSource(source: String) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[THEME_COLOR_SOURCE] = source
+            }
+        }
+    }
+
+    override val customThemeColor =
+        settingsDataStore.data.map { preferences ->
+            preferences[CUSTOM_THEME_COLOR] ?: DataStoreManager.DEFAULT_THEME_COLOR_HEX
+        }
+
+    override suspend fun setCustomThemeColor(argbHex: String) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[CUSTOM_THEME_COLOR] = argbHex
+            }
+        }
+    }
+
+    override val nowPlayingStyle =
+        settingsDataStore.data.map { preferences ->
+            preferences[NOW_PLAYING_STYLE] ?: DataStoreManager.NOW_PLAYING_STYLE_SPOTIFY
+        }
+
+    override suspend fun setNowPlayingStyle(style: String) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[NOW_PLAYING_STYLE] = style
+            }
+        }
+    }
+
+    override val lyricsStyle =
+        settingsDataStore.data.map { preferences ->
+            preferences[LYRICS_STYLE] ?: DataStoreManager.LYRICS_STYLE_CLASSIC
+        }
+
+    override suspend fun setLyricsStyle(style: String) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[LYRICS_STYLE] = style
+            }
+        }
+    }
+
+    override val romanizationLanguages =
+        settingsDataStore.data.map { preferences ->
+            preferences[ROMANIZATION_LANGUAGES] ?: ""
+        }
+
+    override suspend fun setRomanizationLanguages(languages: String) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[ROMANIZATION_LANGUAGES] = languages
+            }
+        }
+    }
+
+    override val lyricsOffsetMs =
+        settingsDataStore.data.map { preferences ->
+            preferences[LYRICS_OFFSET_MS] ?: 0
+        }
+
+    override suspend fun setLyricsOffsetMs(offsetMs: Int) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[LYRICS_OFFSET_MS] = offsetMs
             }
         }
     }
@@ -883,44 +1229,6 @@ internal class DataStoreManagerImpl(
         }
     }
 
-    override val blurFullscreenLyrics =
-        settingsDataStore.data.map { preferences ->
-            preferences[BLUR_FULLSCREEN_LYRICS] ?: FALSE
-        }
-
-    override suspend fun setBlurFullscreenLyrics(blur: Boolean) {
-        withContext(Dispatchers.IO) {
-            if (blur) {
-                settingsDataStore.edit { settings ->
-                    settings[BLUR_FULLSCREEN_LYRICS] = TRUE
-                }
-            } else {
-                settingsDataStore.edit { settings ->
-                    settings[BLUR_FULLSCREEN_LYRICS] = FALSE
-                }
-            }
-        }
-    }
-
-    override val blurPlayerBackground =
-        settingsDataStore.data.map { preferences ->
-            preferences[BLUR_PLAYER_BACKGROUND] ?: FALSE
-        }
-
-    override suspend fun setBlurPlayerBackground(blur: Boolean) {
-        withContext(Dispatchers.IO) {
-            if (blur) {
-                settingsDataStore.edit { settings ->
-                    settings[BLUR_PLAYER_BACKGROUND] = TRUE
-                }
-            } else {
-                settingsDataStore.edit { settings ->
-                    settings[BLUR_PLAYER_BACKGROUND] = FALSE
-                }
-            }
-        }
-    }
-
     override val playbackSpeed =
         settingsDataStore.data.map { preferences ->
             preferences[PLAYBACK_SPEED] ?: 1.0f
@@ -1091,7 +1399,7 @@ internal class DataStoreManagerImpl(
 
     override val keepServiceAlive: Flow<String> =
         settingsDataStore.data.map { preferences ->
-            preferences[KEEP_SERVICE_ALIVE] ?: FALSE
+            preferences[KEEP_SERVICE_ALIVE] ?: TRUE
         }
 
     override suspend fun setKeepServiceAlive(keep: Boolean) {
@@ -1153,28 +1461,31 @@ internal class DataStoreManagerImpl(
         }
     }
 
-    override val prefer320kbpsStream: Flow<String> =
+    // Defaults to FALSE: anyone already running crossfade would otherwise find it silently absent
+    // on albums after updating.
+    override val crossfadeSkipAlbum: Flow<String> =
         settingsDataStore.data.map { preferences ->
-            preferences[PREFER_320KBPS_STREAM] ?: FALSE
+            preferences[CROSSFADE_SKIP_ALBUM] ?: FALSE
         }
 
-    override suspend fun setPrefer320kbpsStream(enabled: Boolean) {
+    override suspend fun setCrossfadeSkipAlbum(enabled: Boolean) {
         withContext(Dispatchers.IO) {
             settingsDataStore.edit { settings ->
-                settings[PREFER_320KBPS_STREAM] = if (enabled) TRUE else FALSE
+                settings[CROSSFADE_SKIP_ALBUM] = if (enabled) TRUE else FALSE
             }
         }
     }
 
-    override val your320kbpsUrl: Flow<String> =
+    // Defaults to FALSE: it spends storage and mobile data on the user's behalf.
+    override val autoDownloadLikedSongs: Flow<String> =
         settingsDataStore.data.map { preferences ->
-            preferences[YOUR_320KBPS_URL] ?: "https://api.monochrome.tf"
+            preferences[AUTO_DOWNLOAD_LIKED_SONGS] ?: FALSE
         }
 
-    override suspend fun setYour320kbpsUrl(url: String) {
+    override suspend fun setAutoDownloadLikedSongs(enabled: Boolean) {
         withContext(Dispatchers.IO) {
             settingsDataStore.edit { settings ->
-                settings[YOUR_320KBPS_URL] = url
+                settings[AUTO_DOWNLOAD_LIKED_SONGS] = if (enabled) TRUE else FALSE
             }
         }
     }
@@ -1327,6 +1638,48 @@ internal class DataStoreManagerImpl(
         }
     }
 
+    override val lastfmSessionKey: Flow<String> =
+        settingsDataStore.data.map { preferences ->
+            preferences[LASTFM_SESSION_KEY] ?: ""
+        }
+
+    override val lastfmUsername: Flow<String> =
+        settingsDataStore.data.map { preferences ->
+            preferences[LASTFM_USERNAME] ?: ""
+        }
+
+    /**
+     * Key and username are written together, and an empty key clears both.
+     *
+     * They only mean anything as a pair: a username with no key cannot scrobble, and a key with no
+     * username leaves settings unable to say whose account is connected. One edit also means
+     * logging out cannot leave half the pair behind if the process dies mid-way.
+     */
+    override suspend fun setLastfmSession(
+        sessionKey: String,
+        username: String,
+    ) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[LASTFM_SESSION_KEY] = sessionKey
+                settings[LASTFM_USERNAME] = if (sessionKey.isEmpty()) "" else username
+            }
+        }
+    }
+
+    override val lastfmScrobbleEnabled: Flow<String> =
+        settingsDataStore.data.map { preferences ->
+            preferences[LASTFM_SCROBBLE_ENABLED] ?: TRUE
+        }
+
+    override suspend fun setLastfmScrobbleEnabled(enabled: Boolean) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[LASTFM_SCROBBLE_ENABLED] = if (enabled) TRUE else FALSE
+            }
+        }
+    }
+
     override val localTrackingEnabled: Flow<String> =
         settingsDataStore.data.map { preferences ->
             preferences[LOCAL_TRACKING_ENABLED] ?: FALSE
@@ -1413,6 +1766,8 @@ internal class DataStoreManagerImpl(
         val PAGE_ID = stringPreferencesKey("page_id")
         val LOGGED_IN = stringPreferencesKey("logged_in")
         val LOCATION = stringPreferencesKey("location")
+        val MOOD_AND_GENRES_CACHE = stringPreferencesKey("mood_and_genres_cache")
+        val MOOD_ARTWORK_CACHE = stringPreferencesKey("mood_artwork_cache")
         val QUALITY = stringPreferencesKey("quality")
         val DOWNLOAD_QUALITY = stringPreferencesKey("download_quality")
         val VIDEO_DOWNLOAD_QUALITY = stringPreferencesKey("video_download_quality")
@@ -1432,8 +1787,8 @@ internal class DataStoreManagerImpl(
         val CROSSFADE_ENABLED = stringPreferencesKey("crossfade_enabled")
         val CROSSFADE_DURATION = intPreferencesKey("crossfade_duration")
         val CROSSFADE_DJ_MODE = stringPreferencesKey("crossfade_dj_mode")
-        val PREFER_320KBPS_STREAM = stringPreferencesKey("prefer_320kbps_stream")
-        val YOUR_320KBPS_URL = stringPreferencesKey("your_320kbps_url")
+        val CROSSFADE_SKIP_ALBUM = stringPreferencesKey("crossfade_skip_album")
+        val AUTO_DOWNLOAD_LIKED_SONGS = stringPreferencesKey("auto_download_liked_songs")
         val LYRICS_PROVIDER = stringPreferencesKey("lyrics_provider")
         val TRANSLATION_LANGUAGE = stringPreferencesKey("translation_language")
         val USE_TRANSLATION_LANGUAGE = stringPreferencesKey("use_translation_language")
@@ -1442,18 +1797,41 @@ internal class DataStoreManagerImpl(
         val MAX_SONG_CACHE_SIZE = intPreferencesKey("maxSongCacheSize")
         val WATCH_VIDEO_INSTEAD_OF_PLAYING_AUDIO =
             stringPreferencesKey("watch_video_instead_of_playing_audio")
+        val RADIO_AUDIO_ONLY = stringPreferencesKey("radio_audio_only")
         val VIDEO_QUALITY = stringPreferencesKey("video_quality")
         val PLAYER_VOLUME = floatPreferencesKey("player_volume")
         val SPDC = stringPreferencesKey("sp_dc")
         val SPOTIFY_LYRICS = stringPreferencesKey("spotify_lyrics")
+        val SYNC_FOLLOW_TO_YOUTUBE = stringPreferencesKey("sync_follow_to_youtube")
+        val EQUALIZER_AUTOEQ_PROFILE = stringPreferencesKey("equalizer_autoeq_profile")
+        val EQUALIZER_BANDS = stringPreferencesKey("equalizer_bands")
+        val EQUALIZER_ENABLED = stringPreferencesKey("equalizer_enabled")
+        val EQUALIZER_PREAMP = stringPreferencesKey("equalizer_preamp")
+        val DELAY_ENABLED = stringPreferencesKey("delay_enabled")
+        val DELAY_TIME_MS = stringPreferencesKey("delay_time_ms")
+        val DELAY_FEEDBACK = stringPreferencesKey("delay_feedback")
+        val DELAY_MIX = stringPreferencesKey("delay_mix")
+        val REVERB_ENABLED = stringPreferencesKey("reverb_enabled")
+        val REVERB_PRESET = stringPreferencesKey("reverb_preset")
+        val REVERB_MIX = stringPreferencesKey("reverb_mix")
         val SPOTIFY_CANVAS = stringPreferencesKey("spotify_canvas")
+        val AM_ANIMATED_ARTWORK = stringPreferencesKey("am_animated_artwork")
         val SPOTIFY_CLIENT_TOKEN = stringPreferencesKey("spotify_client_token")
         val SPOTIFY_CLIENT_TOKEN_EXPIRES = longPreferencesKey("spotify_client_token_expires")
         val SPOTIFY_PERSONAL_TOKEN = stringPreferencesKey("spotify_personal_token")
         val SPOTIFY_PERSONAL_TOKEN_EXPIRES = longPreferencesKey("spotify_personal_token_expires")
+        val TIDAL_CLIENT_ID = stringPreferencesKey("tidal_client_id")
+        val TIDAL_CLIENT_SECRET = stringPreferencesKey("tidal_client_secret")
         val HOME_LIMIT = intPreferencesKey("home_limit")
         val CHART_KEY = stringPreferencesKey("chart_key")
         val TRANSLUCENT_BOTTOM_BAR = stringPreferencesKey("translucent_bottom_bar")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
+        val THEME_COLOR_SOURCE = stringPreferencesKey("theme_color_source")
+        val CUSTOM_THEME_COLOR = stringPreferencesKey("custom_theme_color")
+        val NOW_PLAYING_STYLE = stringPreferencesKey("now_playing_style")
+        val LYRICS_STYLE = stringPreferencesKey("lyrics_style")
+        val ROMANIZATION_LANGUAGES = stringPreferencesKey("romanization_languages")
+        val LYRICS_OFFSET_MS = intPreferencesKey("lyrics_offset_ms")
         val USING_PROXY = stringPreferencesKey("using_proxy")
         val PROXY_TYPE = stringPreferencesKey("proxy_type")
         val PROXY_HOST = stringPreferencesKey("proxy_host")
@@ -1466,8 +1844,6 @@ internal class DataStoreManagerImpl(
         val SHOULD_SHOW_LOG_IN_REQUIRED_ALERT = stringPreferencesKey("should_show_log_in_required_alert")
         val AUTO_CHECK_FOR_UPDATES = stringPreferencesKey("auto_check_for_updates")
         val UPDATE_CHANNEL = stringPreferencesKey("update_channel")
-        val BLUR_FULLSCREEN_LYRICS = stringPreferencesKey("blur_fullscreen_lyrics")
-        val BLUR_PLAYER_BACKGROUND = stringPreferencesKey("blur_player_background")
         val PLAYBACK_SPEED = floatPreferencesKey("playback_speed")
         val PITCH = intPreferencesKey("pitch")
         val OPEN_APP_TIME = intPreferencesKey("open_app_time")
@@ -1497,7 +1873,12 @@ internal class DataStoreManagerImpl(
         val DISCORD_TOKEN = stringPreferencesKey("discord_token")
         val RICH_PRESENCE = stringPreferencesKey("rich_presence")
 
+        val LASTFM_SESSION_KEY = stringPreferencesKey("lastfm_session_key")
+        val LASTFM_USERNAME = stringPreferencesKey("lastfm_username")
+        val LASTFM_SCROBBLE_ENABLED = stringPreferencesKey("lastfm_scrobble_enabled")
+
         val LOCAL_TRACKING_ENABLED = stringPreferencesKey("local_tracking_enabled")
+
         val BLOG_NOTIFICATION_ENABLED = stringPreferencesKey("blog_notification_enabled")
 
         // Auto Backup

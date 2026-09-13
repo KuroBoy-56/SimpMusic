@@ -17,7 +17,7 @@ kotlin {
     // Target declarations - add or remove as needed below. These define
     // which platforms this KMP module supports.
     // See: https://kotlinlang.org/docs/multiplatform-discover-project.html#targets
-    androidLibrary {
+    android {
         namespace = "com.maxrave.kotlinytmusicscraper"
         compileSdk = 37
         minSdk = 26
@@ -78,6 +78,7 @@ kotlin {
 
                 implementation(libs.ksoup.html)
                 implementation(libs.ksoup.entities)
+                implementation(libs.quickjs)
             }
         }
 
@@ -96,6 +97,7 @@ kotlin {
                 implementation(libs.ffmpeg.kit.audio)
                 implementation(libs.gson)
 
+                implementation(libs.pipepipe.extractor)
                 implementation(libs.brave.extractor)
                 implementation(libs.okhttp3.okhttp)
             }
@@ -113,11 +115,20 @@ kotlin {
 
         jvmMain {
             dependencies {
+                implementation(libs.pipepipe.extractor)
                 implementation(libs.brave.extractor)
                 implementation(libs.okhttp3.okhttp)
             }
         }
     }
+}
+
+// PipePipe brings com.google.protobuf:protobuf-java (full) while Brave brings
+// com.google.protobuf:protobuf-javalite. Both occupy the com.google.protobuf.* namespace and
+// trigger DEX duplicate-class failures. Drop the full variant globally so Brave's javalite wins.
+// nanojson force is in the root build.gradle.kts so it propagates to the final APK classpath.
+configurations.all {
+    exclude(group = "com.google.protobuf", module = "protobuf-java")
 }
 
 tasks.withType<CompileArtProfileTask> {

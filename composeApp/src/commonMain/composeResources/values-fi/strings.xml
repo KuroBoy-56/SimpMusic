@@ -116,7 +116,7 @@
     <string name="about_us">Tietoa meistä</string>
     <string name="version">Versio</string>
     <string name="github">GitHub</string>
-    <string name="maxrave_dev">garevyn-dev</string>
+    <string name="maxrave_dev">maxrave-dev</string>
     <string name="buy_me_a_coffee">Osta minulle kahvi</string>
     <string name="paypal">PayPal</string>
     <string name="title">Otsikko</string>
@@ -134,7 +134,7 @@
     <string name="albums_inArtist">Albumit</string>
     <string name="singles_inArtist">Singlet</string>
     <string name="fans_might_also_like_inArtist">Fanit saattavat pitää myös näistä</string>
-    <string name="crash_log">KuroMusic kaatui. Anteeksi tästä ongelmasta.\nLähetä kaatumisloki kehittäjälle</string>
+    <string name="crash_log">SimpMusic kaatui. Anteeksi tästä ongelmasta.\nLähetä kaatumisloki kehittäjälle</string>
     <string name="crash">Kaatuminen</string>
     <string name="send">Lähetä</string>
     <string name="mail_subject">Ilmoita ohjelman kaatumisesta</string>
@@ -151,9 +151,6 @@
     <string name="balance_media_loudness">Tasapainota äänenvoimakkuus</string>
     <string name="normalize_volume">Normalisoi äänenvoimakkuus</string>
     <string name="audio">Ääni</string>
-    <string name="no_equalizer">Laitteessasi ei ole taajuuskorjainta</string>
-    <string name="open_system_equalizer">Avaa järjestelmän taajuuskorjain</string>
-    <string name="use_your_system_equalizer">Käytä järjestelmän taajuuskorjainta</string>
     <string name="streaming_data_provider_piped">Suoratoiston tarjoaja (Piped)</string>
     <string name="itag">Itag</string>
     <string name="mime_type">Mime-tyyppi</string>
@@ -189,7 +186,7 @@
     <string name="what_segments_will_be_skipped">Valise ohitettavat segmentit</string>
     <string name="save">Tallenna</string>
     <string name="saved">Tallennettu</string>
-    <string name="sponsor_block_intro">SponsorBlock on joukkoistettu järjestelmä YouTube-videoiden ärsyttävien osien ohittamiseen.\nLisätietoja: https://sponsor.ajay.app/\nKuroMusicissa SponsorBlock on käytettävissä vain, kun laite on online-tilassa</string>
+    <string name="sponsor_block_intro">SponsorBlock on joukkoistettu järjestelmä YouTube-videoiden ärsyttävien osien ohittamiseen.\nLisätietoja: https://sponsor.ajay.app/\nSimpMusicissa SponsorBlock on käytettävissä vain, kun laite on online-tilassa</string>
     <string name="skip_sponsor_part_of_video">Ohita videon sponsoriosa</string>
     <string name="customactivityoncrash_error_activity_error_occurred_explanation">Tapahtui odottamaton virhe. Pahoittelemme.</string>
     <string name="customactivityoncrash_error_activity_restart_app">Käynnistä sovellus uudelleen</string>
@@ -227,7 +224,7 @@
     <string name="saved_to_local_playlist">Tallennettu paikalliseen soittolistaan</string>
     <string name="if_you_want_to_unsync_this_playlist_please_go_to_local_playlist">jos haluat poistaa tämän soittolistan synkronoinnin, avaa paikallinen soittolista</string>
     <string name="log_in_to_get_YouTube_playlist">Kirjaudu sisään saadaksesi YouTube-soittolistan</string>
-    <string name="sync_playlist_warning">KuroMusic luo YouTube Musiciin soittolistan automaattisesti. Haluatko jatkaa?</string>
+    <string name="sync_playlist_warning">SimpMusic luo YouTube Musiciin soittolistan automaattisesti. Haluatko jatkaa?</string>
     <string name="syncing">Synkronoidaan</string>
     <string name="unsync_playlist_warning">"Poistetaanko soittolistan synkronointi käytöstä? Tätä soittolistaa ei poisteta YouTube Musicista "</string>
     <string name="unsyncing">Synkronointia poistetaan</string>
@@ -242,7 +239,7 @@
     <string name="email">Sähköposti</string>
     <string name="password">Salasana</string>
     <string name="please_enter_your_email_and_password">Syötä sähköpostiosoitteesi ja salasanasi</string>
-    <string name="translation_language_message">Kirjoita kielikoodi (esim: en) (2 kirjainta). Jos haluat asettaa kielen samaksi kuin KuroMusicissa, jätä kenttä tyhjäksi.</string>
+    <string name="translation_language_message">Kirjoita kielikoodi (esim: en) (2 kirjainta). Jos haluat asettaa kielen samaksi kuin SimpMusicissa, jätä kenttä tyhjäksi.</string>
     <string name="invalid_language_code">Virheellinen kielikoodi</string>
     <string name="lyrics_provider_youtube">YouTuben tarjoamat sanoitukset</string>
     <string name="limit_player_cache">Rajoita soittimen välimuistia</string>
@@ -257,7 +254,7 @@
     <string name="reload">Lataa uudelleen</string>
     <string name="newer_first">Uusimmat ensin</string>
     <string name="added_date">Lisäyspäivämäärä</string>
-    <string name="credit_app">Yksinkertainen musiikkisovellus, joka käyttää YouTube Musicin taustajärjestelmää \n\nKuroMusic on avoimen lähdekoodin projekti musiikin suoratoistoon YouTubesta ja YouTube Musicista ilman mainoksia ja seurantaa. KuroMusic tarjoaa monia ominaisuuksia:\n\n - Musiikin suoratoisto \n - Synkronoidut sanoitukset\n - Tietojen mukauttaminen\n - jne… \n\nKuroMusic on aina ilmainen ja vailla mainoksia\n\nTehty ❤️:llä, Tuan Minh Nguyen Duc (garevyn-dev)</string>
+    <string name="credit_app">Yksinkertainen musiikkisovellus, joka käyttää YouTube Musicin taustajärjestelmää \n\nSimpMusic on avoimen lähdekoodin projekti musiikin suoratoistoon YouTubesta ja YouTube Musicista ilman mainoksia ja seurantaa. SimpMusic tarjoaa monia ominaisuuksia:\n\n - Musiikin suoratoisto \n - Synkronoidut sanoitukset\n - Tietojen mukauttaminen\n - jne… \n\nSimpMusic on aina ilmainen ja vailla mainoksia\n\nTehty ❤️:llä, Tuan Minh Nguyen Duc (maxrave-dev)</string>
     <string name="issue_tracker">Tikettijärjestelmä</string>
     <string name="featured_playlists">Suositellut soittolistat</string>
     <string name="featured_inArtist">Mukana näissä</string>
@@ -287,4 +284,5 @@
     <string name="log_out_warning">Kirjaudu ulos kaikista tileistä?</string>
     <string name="play_next">Toista seuraavaksi</string>
     <string name="log_in_to_spotify">Kirjaudu sisään Spotifyhin</string>
+    <!-- Listen Together -->
 </resources>

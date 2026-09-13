@@ -11,7 +11,7 @@ plugins {
 
 kotlin {
     jvmToolchain(21)
-    androidLibrary {
+    android {
         namespace = "com.maxrave.domain"
         compileSdk = 37
         minSdk = 26

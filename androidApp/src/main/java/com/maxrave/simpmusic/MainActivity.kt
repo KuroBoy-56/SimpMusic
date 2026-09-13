@@ -396,51 +396,69 @@ class MainActivity : AppCompatActivity() {
             val dialog = Dialog(this)
             dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
 
-            val layout = LinearLayout(this).apply {
+            val rootLayout = LinearLayout(this).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                gravity = Gravity.CENTER
+                setBackgroundColor(android.graphics.Color.parseColor("#E6000000"))
+                isClickable = true
+                isFocusable = true
+            }
+
+            val cardLayout = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setPadding(60, 80, 60, 80)
+                setPadding(70, 90, 70, 90)
                 background = GradientDrawable().apply {
-                    setColor(android.graphics.Color.parseColor("#191C24"))
-                    cornerRadius = 60f
-                    setStroke(5, android.graphics.Color.parseColor("#ff3e3e"))
+                    colors = intArrayOf(
+                        android.graphics.Color.parseColor("#1C1C1C"),
+                        android.graphics.Color.parseColor("#0A0A0A")
+                    )
+                    orientation = GradientDrawable.Orientation.TOP_BOTTOM
+                    cornerRadius = 50f
+                    setStroke(3, android.graphics.Color.parseColor("#E50914"))
                 }
+                layoutParams = LinearLayout.LayoutParams(
+                    (resources.displayMetrics.widthPixels * 0.85).toInt(),
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
             }
 
             val iconView = ImageView(this).apply {
-                setImageResource(android.R.drawable.ic_dialog_alert)
-                setColorFilter(android.graphics.Color.parseColor("#ff3e3e"))
-                layoutParams = LinearLayout.LayoutParams(160, 160).apply {
+                setImageResource(R.drawable.mono)
+                layoutParams = LinearLayout.LayoutParams(220, 220).apply {
                     gravity = Gravity.CENTER_HORIZONTAL
-                    bottomMargin = 50
+                    bottomMargin = 40
                 }
             }
 
             val titleView = TextView(this).apply {
-                text = titulo
-                textSize = 20f
+                text = titulo.uppercase()
+                textSize = 21f
                 setTypeface(null, Typeface.BOLD)
-                setTextColor(android.graphics.Color.WHITE)
+                setTextColor(android.graphics.Color.parseColor("#E50914"))
                 gravity = Gravity.CENTER
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply {
-                    bottomMargin = 30
+                    bottomMargin = 25
                 }
             }
 
             val messageView = TextView(this).apply {
                 text = mensaje
                 textSize = 15f
-                setTextColor(android.graphics.Color.parseColor("#E0E0E0"))
+                setTextColor(android.graphics.Color.parseColor("#CCCCCC"))
                 gravity = Gravity.CENTER
-                setLineSpacing(0f, 1.3f)
+                setLineSpacing(0f, 1.4f)
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply {
-                    bottomMargin = 60
+                    bottomMargin = 70
                 }
             }
 
@@ -450,11 +468,15 @@ class MainActivity : AppCompatActivity() {
                 textSize = 15f
                 setTypeface(null, Typeface.BOLD)
                 background = GradientDrawable().apply {
-                    setColor(android.graphics.Color.parseColor("#ff3e3e"))
+                    colors = intArrayOf(
+                        android.graphics.Color.parseColor("#E50914"),
+                        android.graphics.Color.parseColor("#990000")
+                    )
+                    orientation = GradientDrawable.Orientation.BL_TR
                     cornerRadius = 25f
                 }
                 layoutParams = LinearLayout.LayoutParams(
-                    (resources.displayMetrics.widthPixels * 0.6).toInt(),
+                    (resources.displayMetrics.widthPixels * 0.65).toInt(),
                     130
                 ).apply {
                     gravity = Gravity.CENTER_HORIZONTAL
@@ -464,22 +486,21 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            layout.addView(iconView)
-            layout.addView(titleView)
-            layout.addView(messageView)
-            layout.addView(button)
-
-            dialog.setContentView(layout)
+            cardLayout.addView(iconView)
+            cardLayout.addView(titleView)
+            cardLayout.addView(messageView)
+            cardLayout.addView(button)
+            rootLayout.addView(cardLayout)
+            dialog.setContentView(rootLayout)
 
             dialog.window?.apply {
                 setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
                 setLayout(
-                    (context.resources.displayMetrics.widthPixels * 0.85).toInt(),
-                    ViewGroup.LayoutParams.WRAP_CONTENT
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
                 )
                 setGravity(Gravity.CENTER)
             }
-
             dialog.setCancelable(false)
             dialog.show()
         } catch (e: Exception) {
@@ -528,8 +549,6 @@ class MainActivity : AppCompatActivity() {
                 if (serverVersionCode > localVersionCode) {
                     withContext(Dispatchers.Main) {
                         if (!isFinishing && !isDestroyed) {
-                            // HACK MAESTRO: Esperamos 600 milisegundos. Dejamos que salga la ventana nativa
-                            // e inmediatamente la aplastamos tirándole tu ventana de pantalla completa por encima.
                             kotlinx.coroutines.delay(600)
                             mostrarAlertaActualizacion(serverVersionName, releaseNotes, downloadUrl, isMandatory)
                         }
@@ -544,30 +563,31 @@ class MainActivity : AppCompatActivity() {
             val dialog = Dialog(this)
             dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
 
-            val themeColor = if (isMandatory) "#ff3e3e" else "#00BFFF"
+            val themeColor = if (isMandatory) "#E50914" else "#00BFFF"
 
-            // EL ATAÚD DE LA VENTANA NATIVA: Este layout ocupa toda la pantalla con un fondo negro brutal (95%)
-            // Literalmente oscurece y bloquea TODO lo que esté detrás, sepultando la ventana nativa.
             val rootLayout = LinearLayout(this).apply {
                 layoutParams = ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
                 gravity = Gravity.CENTER
-                setBackgroundColor(android.graphics.Color.parseColor("#F5050505")) // Negro absoluto 95%
-                isClickable = true // Atrapa todos los clicks perdidos
+                setBackgroundColor(android.graphics.Color.parseColor("#E6000000"))
+                isClickable = true
                 isFocusable = true
             }
 
-            // TU TARJETA PERSONALIZADA
             val cardLayout = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setPadding(60, 80, 60, 80)
+                setPadding(70, 90, 70, 90)
                 background = GradientDrawable().apply {
-                    setColor(android.graphics.Color.parseColor("#191C24"))
-                    cornerRadius = 60f
-                    setStroke(5, android.graphics.Color.parseColor(themeColor))
+                    colors = intArrayOf(
+                        android.graphics.Color.parseColor("#1C1C1C"),
+                        android.graphics.Color.parseColor("#0A0A0A")
+                    )
+                    orientation = GradientDrawable.Orientation.TOP_BOTTOM
+                    cornerRadius = 50f
+                    setStroke(3, android.graphics.Color.parseColor(themeColor))
                 }
                 layoutParams = LinearLayout.LayoutParams(
                     (resources.displayMetrics.widthPixels * 0.85).toInt(),
@@ -576,17 +596,16 @@ class MainActivity : AppCompatActivity() {
             }
 
             val iconView = ImageView(this).apply {
-                setImageResource(android.R.drawable.ic_popup_sync)
-                setColorFilter(android.graphics.Color.parseColor(themeColor))
-                layoutParams = LinearLayout.LayoutParams(160, 160).apply {
+                setImageResource(R.drawable.mono)
+                layoutParams = LinearLayout.LayoutParams(220, 220).apply {
                     gravity = Gravity.CENTER_HORIZONTAL
-                    bottomMargin = 50
+                    bottomMargin = 40
                 }
             }
 
             val titleView = TextView(this).apply {
                 text = "¡NUEVA VERSIÓN $versionName!"
-                textSize = 20f
+                textSize = 21f
                 setTypeface(null, Typeface.BOLD)
                 setTextColor(android.graphics.Color.WHITE)
                 gravity = Gravity.CENTER
@@ -594,21 +613,21 @@ class MainActivity : AppCompatActivity() {
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply {
-                    bottomMargin = 30
+                    bottomMargin = 25
                 }
             }
 
             val messageView = TextView(this).apply {
                 text = mensaje
                 textSize = 15f
-                setTextColor(android.graphics.Color.parseColor("#E0E0E0"))
+                setTextColor(android.graphics.Color.parseColor("#CCCCCC"))
                 gravity = Gravity.CENTER
-                setLineSpacing(0f, 1.3f)
+                setLineSpacing(0f, 1.4f)
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply {
-                    bottomMargin = 60
+                    bottomMargin = 70
                 }
             }
 
@@ -618,11 +637,22 @@ class MainActivity : AppCompatActivity() {
                 textSize = 15f
                 setTypeface(null, Typeface.BOLD)
                 background = GradientDrawable().apply {
-                    setColor(android.graphics.Color.parseColor(themeColor))
+                    if (isMandatory) {
+                        colors = intArrayOf(
+                            android.graphics.Color.parseColor("#E50914"),
+                            android.graphics.Color.parseColor("#990000")
+                        )
+                    } else {
+                        colors = intArrayOf(
+                            android.graphics.Color.parseColor("#00BFFF"),
+                            android.graphics.Color.parseColor("#007799")
+                        )
+                    }
+                    orientation = GradientDrawable.Orientation.BL_TR
                     cornerRadius = 25f
                 }
                 layoutParams = LinearLayout.LayoutParams(
-                    (resources.displayMetrics.widthPixels * 0.6).toInt(),
+                    (resources.displayMetrics.widthPixels * 0.65).toInt(),
                     130
                 ).apply {
                     gravity = Gravity.CENTER_HORIZONTAL
@@ -665,11 +695,9 @@ class MainActivity : AppCompatActivity() {
                 cardLayout.addView(cancelButton)
             }
 
-            // Metemos tu tarjeta dentro del "Ataúd" negro
             rootLayout.addView(cardLayout)
             dialog.setContentView(rootLayout)
 
-            // Forzamos a la ventana a tragarse la pantalla completa
             dialog.window?.apply {
                 setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
                 setLayout(

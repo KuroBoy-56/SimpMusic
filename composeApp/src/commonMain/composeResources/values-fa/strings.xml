@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="Song_and_artist_name">آهنگ • %1$s</string>
-    <string name="playlist_and_author">فهرست پخش • %1$s</string>
+    <string name="playlist_and_author">پلی‌لیست • %1$s</string>
     <string name="album_and_artist_name">آلبوم • %1$s</string>
-    <string name="subscribers">%1$s مشترک شده</string>
+    <string name="subscribers">%1$s سابسکرایبر‌ها</string>
     <string name="year_and_category">%1$s • %2$s</string>
-    <string name="album_length">%1$s آهنگ %2$s</string>
-    <string name="view_count">%1$s بازدید</string>
+    <string name="album_length">%1$s ترک ها %2$s</string>
+    <string name="view_count">%1$s بازدید‌ها</string>
     <string name="clear_search_history">پاک‌سازی تاریخچه جستجو</string>
-    <string name="liked">پسندیده شده</string>
-    <string name="like">پسندیدن</string>
+    <string name="liked">لایک شده</string>
+    <string name="like">لایک</string>
     <string name="hello_blank_fragment">سلام، بخش خالی</string>
     <string name="download">دانلود</string>
     <string name="downloaded">دانلود شده</string>
@@ -23,21 +23,21 @@
     <string name="followed">دنبال شده</string>
     <string name="most_played">بیشترین پخش شده</string>
     <string name="Downloaded">دانلود شده</string>
-    <string name="favorite_playlists">فهرست پخش‌های مورد علاقه</string>
-    <string name="no_favorite_playlists">هیچ فهرست پخش مورد علاقه‌ای نیست</string>
-    <string name="downloaded_playlists">فهرست پخش‌های دانلود شده</string>
-    <string name="no_playlists_downloaded">هیچ فهرست پخشی دانلود نشده</string>
-    <string name="your_playlists">فهرست پخش‌های محلی شما</string>
-    <string name="no_playlists_added">هیچ فهرست پخشی افزوده نشده است</string>
+    <string name="favorite_playlists">پلی‌لیست های مورد علاقه</string>
+    <string name="no_favorite_playlists">هیچ پلی‌لیست مورد علاقه‌ای نیست</string>
+    <string name="downloaded_playlists">پلی‌لیست های دانلود شده</string>
+    <string name="no_playlists_downloaded">هیچ پلی‌لیستی دانلود نشده</string>
+    <string name="your_playlists">پلی‌لیست های محلی شما</string>
+    <string name="no_playlists_added">هیچ پلی‌لیستی اضافه نشده</string>
     <string name="recently_added">به تازگی افزوده شده</string>
-    <string name="search_for_songs_artists_albums_playlists_and_more">جستجو برای آهنگ‌ها، هنرمندان، آلبوم‌ها، فهرست‌های پخش و بیشتر</string>
+    <string name="search_for_songs_artists_albums_playlists_and_more">جستجو برای آهنگ‌ها، هنرمندان، آلبوم‌ها، پلی‌لیست ها و بیشتر</string>
     <string name="everything_you_need">هر چیزی که نیاز دارید</string>
     <string name="restore_failed">بازیابی ناموفق</string>
     <string name="restore_success">بازیابی موفق</string>
-    <string name="search">جُستجو</string>
+    <string name="search">جستجو</string>
     <string name="songs">آهنگ‌ها</string>
     <string name="albums">آلبوم‌ها</string>
-    <string name="playlists">فهرست‌های پخش</string>
+    <string name="playlists">پلی‌لیست ها</string>
     <string name="artists">هنرمندان</string>
     <string name="library">کتابخانه</string>
     <string name="home">خانه</string>
@@ -45,8 +45,8 @@
     <string name="error">خطا</string>
     <string name="follow">دنبال کردن</string>
     <string name="retry">تلاش دوباره</string>
-    <string name="removed_download">دانلود شده پاک شد</string>
-    <string name="share_url">هم‌رسانی URL</string>
+    <string name="removed_download">دانلود پاک شد</string>
+    <string name="share_url">اشتراک گذاری لینک</string>
     <string name="available_online">آنلاین در دسترس است</string>
     <string name="unavailable">موجود نیست</string>
     <string name="you">شما</string>
@@ -55,11 +55,12 @@
     <string name="good_evening">عصر بخیر</string>
     <string name="good_night">شب بخیر</string>
     <string name="quick_picks">انتخاب‌های سریع</string>
-    <string name="this_song_is_not_available">این آهنگ موجود نیست</string>
+    <string name="this_song_is_not_available">این آهنگ در دسترس نیست</string>
     <string name="in_charts">در جدول‌ها</string>
-    <string name="playlist_name_cannot_be_empty">نام فهرست پخش نمی‌تواند خالی باشد</string>
+    <string name="playlist_name_cannot_be_empty">نام پلی‌لیست نمی‌تواند خالی باشد</string>
     <string name="this_app_needs_to_access_your_notification">این برنامه نیاز به دسترسی به اعلان‌های شما دارد</string>
     <string name="shared">هم‌رسانی شده</string>
+    <string name="rich_synced">کلمه به کلمه</string>
     <string name="line_synced">هماهنگ شده</string>
     <string name="unsynced">ناهماهنگ</string>
     <string name="playlist_is_empty">فهرست پخش خالی است</string>
@@ -72,6 +73,8 @@
     <string name="content_country">کشور محتوا</string>
     <string name="change">تغییر</string>
     <string name="quality">کیفیت</string>
+    <string name="prefer_320kbps_stream">ترجیح دادن پخش با بیت‌ریت ۳۲۰ kbps</string>
+    <string name="prefer_320kbps_stream_description">اگر نسخهٔ صوتی ۳۲۰ کیلوبیت‌برثانیه در اینترنت موجود باشد، به‌طور خودکار آن را جست‌وجو و پخش می‌کند. در صورت پیدا نشدن، از کیفیت پیش‌فرض استفاده می‌شود.</string>
     <string name="download_quality">کیفیت دانلود</string>
     <string name="video_download_quality">کیفیت دانلود ویدیو</string>
     <string name="clear_downloaded_cache">پاک‌سازی حافظه پنهان دانلود شده</string>
@@ -118,8 +121,9 @@
     <string name="about_us">درباره ما</string>
     <string name="version">نگارش</string>
     <string name="github">گیت‌هاب</string>
-    <string name="maxrave_dev">garevyn-dev</string>
+    <string name="maxrave_dev">maxrave-dev</string>
     <string name="buy_me_a_coffee">برای من یک قهوه بخر</string>
+    <string name="developer_blog">وبلاگ توسعه دهنده</string>
     <string name="paypal">پی‌پال</string>
     <string name="title">عنوان</string>
     <string name="custom_order">مرتب‌سازی سفارشی</string>
@@ -137,7 +141,7 @@
     <string name="albums_inArtist">آلبوم‌ها</string>
     <string name="singles_inArtist">تک‌آهنگ‌ها</string>
     <string name="fans_might_also_like_inArtist">طرفداران ممکن است همچنین دوست داشته باشند</string>
-    <string name="crash_log">KuroMusic دچار مشکل شد. بابت این مشکل متاسفیم.\nگزارش خرابی را به
+    <string name="crash_log">SimpMusic دچار مشکل شد. بابت این مشکل متاسفیم.\nگزارش خرابی را به
     توسعه‌دهنده ارسال کنید</string>
     <string name="crash">خرابی</string>
     <string name="send">ارسال</string>
@@ -156,9 +160,6 @@
     <string name="balance_media_loudness">تعادل بلندی صدا</string>
     <string name="normalize_volume">نرمال‌سازی صدا</string>
     <string name="audio">صدا</string>
-    <string name="no_equalizer">دستگاه شما اکولایزر ندارد</string>
-    <string name="open_system_equalizer">اکولایزر سامانه را باز کنید</string>
-    <string name="use_your_system_equalizer">از اکولایزر سامانه خود استفاده کنید</string>
     <string name="streaming_data_provider_piped">تأمین‌کننده داده‌های استریم (Piped)</string>
     <string name="itag">آی‌تگ</string>
     <string name="mime_type">نوع MIME</string>
@@ -199,14 +200,14 @@
     <string name="save">نگه‌داری</string>
     <string name="saved">نگه‌داری شد</string>
     <string name="sponsor_block_intro">SponsorBlock یک سامانه جمع‌سپاری شده برای رد کردن بخش‌های
-    آزاردهنده ویدیوهای یوتیوب است.\nریزگان بیشتر: https://sponsor.ajay.app/\nدر KuroMusic،
+    آزاردهنده ویدیوهای یوتیوب است.\nریزگان بیشتر: https://sponsor.ajay.app/\nدر SimpMusic،
     SponsorBlock فقط زمانی موجود است که دستگاه آنلاین باشد</string>
     <string name="skip_sponsor_part_of_video">رد کردن بخش حامی ویدیو</string>
     <string name="customactivityoncrash_error_activity_error_occurred_explanation">یک خطای غیرمنتظره
     رخ داده است. از بابت ناراحتی عذرخواهی می‌کنیم.</string>
     <string name="customactivityoncrash_error_activity_restart_app">برنامه را دوباره راه‌اندازی کنید</string>
-    <string name="help_build_lyrics_database">به KuroMusic کمک کنید تا پایگاه داده متن ترانه را بسازد</string>
-    <string name="help_build_lyrics_database_description">متن ترانه‌های ذخیره شده خود را به پایگاه داده متن KuroMusic ارسال کنید</string>
+    <string name="help_build_lyrics_database">به SimpMusic کمک کنید تا پایگاه داده متن ترانه را بسازد</string>
+    <string name="help_build_lyrics_database_description">متن ترانه‌های ذخیره شده خود را به پایگاه داده متن SimpMusic ارسال کنید</string>
     <string name="customactivityoncrash_error_activity_close_app">برنامه را ببندید</string>
     <string name="customactivityoncrash_error_activity_error_details">ریزگان خطا</string>
     <string name="customactivityoncrash_error_activity_error_details_title">ریزگان خطا</string>
@@ -242,7 +243,7 @@
     <string name="if_you_want_to_unsync_this_playlist_please_go_to_local_playlist">اگر می‌خواهید این
     فهرست پخش را از همگام‌سازی خارج کنید، لطفاً به فهرست پخش محلی بروید</string>
     <string name="log_in_to_get_YouTube_playlist">برای دریافت فهرست پخش یوتیوب وارد شوید</string>
-    <string name="sync_playlist_warning">KuroMusic به‌طور خودکار یک فهرست پخش یوتیوب موزیک ایجاد خواهد
+    <string name="sync_playlist_warning">SimpMusic به‌طور خودکار یک فهرست پخش یوتیوب موزیک ایجاد خواهد
     کرد. آیا مطمئن هستید؟</string>
     <string name="syncing">در حال همگام‌سازی</string>
     <string name="unsync_playlist_warning">"آیا این فهرست پخش را از همگام‌سازی خارج کنید؟ این فهرست پخش
@@ -262,7 +263,7 @@
     <string name="password">گذرواژه</string>
     <string name="please_enter_your_email_and_password">لطفاً رایانامه و گذرواژه خود را وارد کنید</string>
     <string name="translation_language_message">کد زبان را وارد کنید (مثلاً: en) (2 حرف). اگر
-    می‌خواهید همان زبان KuroMusic باشد، لطفاً کادر ویرایش را خالی بگذارید.</string>
+    می‌خواهید همان زبان SimpMusic باشد، لطفاً کادر ویرایش را خالی بگذارید.</string>
     <string name="invalid_language_code">کد زبان نامعتبر است</string>
     <string name="lyrics_provider_youtube">متن ترانه ارائه شده توسط یوتیوب</string>
     <string name="limit_player_cache">محدود کردن نهان‌گاه(Cache) پخش‌کننده</string>
@@ -280,7 +281,7 @@
     <string name="older_first">ابتدا قدیمی تر</string>
     <string name="newer_first">ابتدا جدیدتر</string>
     <string name="added_date">تاریخ افزوده شدن</string>
-    <string name="credit_app">یک برنامه موسیقی ساده که از هسته یوتیوب موزیک بهره میبرد\n\nKuroMusic یک پروژه متن‌باز برای پخش موسیقی از یوتیوب و یوتیوب موزیک بدون آگهی و ردیابی است. KuroMusic ویژگی‌های زیادی ارائه می‌دهد:\n\n - پخش موسیقی \n - متن ترانه همگام‌سازی شده\n - داده‌های شخصی‌سازی شده\n - و غیره… \n\nKuroMusic همیشه رایگان و بدون آگهی است\n\nساخته شده با ❤️ از Tuan Minh Nguyen Duc (garevyn-dev)</string>
+    <string name="credit_app">یک برنامه موسیقی ساده که از هسته یوتیوب موزیک بهره میبرد\n\nSimpMusic یک پروژه متن‌باز برای پخش موسیقی از یوتیوب و یوتیوب موزیک بدون آگهی و ردیابی است. SimpMusic ویژگی‌های زیادی ارائه می‌دهد:\n\n - پخش موسیقی \n - متن ترانه همگام‌سازی شده\n - داده‌های شخصی‌سازی شده\n - و غیره… \n\nSimpMusic همیشه رایگان و بدون آگهی است\n\nساخته شده با ❤️ از Tuan Minh Nguyen Duc (maxrave-dev)</string>
     <string name="issue_tracker">ردیاب مشکلات</string>
     <string name="featured_playlists">فهرست‌های پخش ویژه</string>
     <string name="featured_inArtist">ویژه در</string>
@@ -322,7 +323,7 @@
     <string name="enable_spotify_lyrics">به‌کارگیری متن ترانه اسپاتیفای</string>
     <string name="spotify_lyrícs_info">متن‌های بیشتری بدون ترجمه</string>
     <string name="enable_canvas">به‌کارگیری بوم</string>
-    <string name="canvas_info">نمایش بوم اسپاتیفای در KuroMusic</string>
+    <string name="canvas_info">نمایش بوم اسپاتیفای در SimpMusic</string>
     <string name="spotify_lyrics_provider">متن ترانه ارائه شده توسط اسپاتیفای</string>
     <string name="offline_mode">حالت آفلاین</string>
     <string name="added_to_youtube_liked">به فهرست پسندیده‌های یوتیوب افزوده شد</string>
@@ -371,7 +372,7 @@
     <string name="loading">درحال بارگذاری</string>
     <string name="updating">در حال بروز رسانی</string>
     <string name="go_to_log_in_page">به صفحه ورود به سیستم بروید</string>
-    <string name="log_in_warning">YouTube Music اکنون از شما می خواهد که برای پخش موسیقی وارد شوید، Piped Instance گاهی اوقات نیز نمی تواند کار کند. برای کسب تجربه بهتر با KuroMusic باید وارد YouTube شوید.</string>
+    <string name="log_in_warning">YouTube Music اکنون از شما می خواهد که برای پخش موسیقی وارد شوید، Piped Instance گاهی اوقات نیز نمی تواند کار کند. برای کسب تجربه بهتر با SimpMusic باید وارد YouTube شوید.</string>
     <string name="spotify_canvas_cache">کش Spotify Canvas</string>
     <string name="clear_canvas_cache">پاکسازی کش canvas</string>
     <string name="proxy">پروکسی</string>
@@ -392,13 +393,9 @@
     <string name="do_not_show_again">دوباره نشان نده</string>
     <string name="auto_check_for_update">بررسی خودکار بروزرسانی</string>
     <string name="auto_check_for_update_description">بررسی به روز رسانی هنگام باز کردن برنامه</string>
-    <string name="blur_fullscreen_lyrics">افکت محو کردن متن آهنگ در حالت تمام صفحه</string>
-    <string name="blur_fullscreen_lyrics_description">محو کردن پس‌زمینه‌ی صفحه‌ی کامل متن آهنگ</string>
     <string name="playback_speed_pitch"><![CDATA[سرعت پخش و گام]]></string>
     <string name="playback_speed">سرعت پخش</string>
     <string name="pitch">گام صدا</string>
-    <string name="blur_player_background">تار کردن پس‌زمینه‌ پخش کننده</string>
-    <string name="blur_player_background_description">تار کردن پس‌زمینه‌ی صفحه‌ی در حال پخش</string>
     <string name="merging_audio_and_video">ادغام صدا و ویدیو</string>
     <string name="error_occurred">خطایی رخ داد</string>
     <string name="downloading_audio">در حال دانلود صدا: %1$s </string>
@@ -410,8 +407,8 @@
     <string name="other_version">نسخه دیگر</string>
     <string name="later">بعدا</string>
     <string name="give_a_star">ستاره بدید</string>
-    <string name="enjoying_KuroMusic">از KuroMusic لذت می‌بری</string>
-    <string name="if_you_enjoy_using_KuroMusic_star_KuroMusic_on_github_or_leave_a_review_on">اگر از استفاده از KuroMusic لذت می‌برید، به KuroMusic در GitHub ستاره دهید یا نظر خود را درباره آن بنویسید</string>
+    <string name="enjoying_simpmusic">از SimpMusic لذت می‌بری</string>
+    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">اگر از استفاده از SimpMusic لذت می‌برید، به SimpMusic در GitHub ستاره دهید یا نظر خود را درباره آن بنویسید</string>
     <string name="if_you_love_my_work_consider">"اگر از کار من خوشتان می‌آید، لطفاً "</string>
     <string name="buying_me_a_coffee">یک قهوه برایم بخرید.</string>
     <string name="fade_audio_effect">افکت محو صدا</string>
@@ -456,7 +453,8 @@
     <string name="contributor_name">اسم مشارکت کننده</string>
     <string name="contributor_email">ایمیل مشارکت کننده</string>
     <string name="anonymous">ناشناس</string>
-    <string name="KuroMusic_lyrics">متن ترانه‌های KuroMusic</string>
-    <string name="lyrics_provider_KuroMusic">متن ترانه‌ها ارائه شده توسط سرویس متن ترانه‌های KuroMusic</string>
+    <string name="simpmusic_lyrics">متن ترانه‌های SimpMusic</string>
+    <string name="lyrics_provider_simpmusic">متن ترانه‌ها ارائه شده توسط سرویس متن ترانه‌های SimpMusic</string>
     <string name="backup_in_progress">پشتیبان گیری در حال انجام است</string>
+    <!-- Listen Together -->
 </resources>

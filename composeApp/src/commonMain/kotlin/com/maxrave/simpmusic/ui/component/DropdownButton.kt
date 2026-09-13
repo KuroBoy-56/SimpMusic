@@ -4,14 +4,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
+// Deliberate wildcard: androidx material3 1.5.0-alpha26 turned ExposedDropdownMenuBoxScope's
+// ExposedDropdownMenu member into a top-level extension, while the desktop JB material3
+// (1.12.0-alpha01 ≈ androidx alpha19) still ships the member. A wildcard tolerates both shapes;
+// a specific import compiles on exactly one target.
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -19,7 +16,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Color.Companion.Gray
+import androidx.compose.ui.graphics.Color.Companion.Transparent
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.maxrave.simpmusic.ui.theme.typo
@@ -44,7 +42,7 @@ fun DropdownButton(
                     Modifier
                         .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                         .widthIn(1.dp, Dp.Infinity),
-                textStyle = typo().bodyMedium.copy(color = MaterialTheme.colorScheme.onBackground),
+                textStyle = typo().bodyMedium,
                 readOnly = true,
                 value = selected,
                 onValueChange = {},
@@ -53,16 +51,16 @@ fun DropdownButton(
                 shape = RoundedCornerShape(40),
                 colors =
                     ExposedDropdownMenuDefaults.textFieldColors(
-                        focusedIndicatorColor = MaterialTheme.colorScheme.outline,
-                        unfocusedIndicatorColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                        unfocusedContainerColor = Color.Transparent,
-                        focusedContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Gray,
+                        unfocusedIndicatorColor = Gray,
+                        unfocusedContainerColor = Transparent,
+                        focusedContainerColor = Transparent,
                     ),
             )
             ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 items.forEachIndexed { index, s ->
                     DropdownMenuItem(
-                        text = { Text(s, style = typo().bodyMedium, color = MaterialTheme.colorScheme.onSurface) },
+                        text = { Text(s, style = typo().bodyMedium) },
                         onClick = {
                             selected = s
                             expanded = false

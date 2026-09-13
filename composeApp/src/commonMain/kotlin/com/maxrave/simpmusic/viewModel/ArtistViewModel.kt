@@ -33,6 +33,12 @@ import kotlinx.coroutines.launch
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.radio
 import simpmusic.composeapp.generated.resources.shuffle
+// --- ACTUALIZACIÓN LÓGICA ---
+// Importaciones añadidas para el feedback visual de sincronización con YouTube
+import simpmusic.composeapp.generated.resources.sync_follow_failed
+import simpmusic.composeapp.generated.resources.subscribed_on_youtube
+import simpmusic.composeapp.generated.resources.unsubscribed_on_youtube
+import org.jetbrains.compose.resources.getString
 
 class ArtistViewModel(
     private val artistRepository: ArtistRepository,
@@ -149,8 +155,25 @@ class ArtistViewModel(
     ) {
         viewModelScope.launch {
             _followed.value = (followed == 1)
-            artistRepository.updateFollowedStatus(channelId, followed)
-            log("updateFollowed: ${_followed.value}")
+            // --- ACTUALIZACIÓN LÓGICA ---
+            // Ambos resultados se informan mediante Toasts para sincronización con YouTube
+            val synced = artistRepository.updateFollowedStatus(channelId, followed)
+            when (synced) {
+                true ->
+                    makeToast(
+                        getString(
+                            if (followed == 1) {
+                                Res.string.subscribed_on_youtube
+                            } else {
+                                Res.string.unsubscribed_on_youtube
+                            },
+                        ),
+                    )
+
+                false -> makeToast(getString(Res.string.sync_follow_failed))
+                null -> Unit
+            }
+            log("updateFollowed: ${_followed.value}, synced: $synced")
         }
     }
 

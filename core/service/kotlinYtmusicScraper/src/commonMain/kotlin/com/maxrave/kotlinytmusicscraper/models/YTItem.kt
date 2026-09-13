@@ -34,9 +34,14 @@ data class SongItem(
     val badges: List<SongBadges>? = null,
     val likeStatus: LikeStatus = LikeStatus.INDIFFERENT,
     val setVideoId: String? = null,
+    /**
+     * YouTube's own `MUSIC_VIDEO_TYPE_*` for this track, or null when the response carried no
+     * music config. Null is "not stated", not "audio" — see `MusicVideoType` in core/domain.
+     */
+    val musicVideoType: String? = null,
 ) : YTItem() {
     override val shareLink: String
-        get() = "https://www.youtube.com/watch?v=$id"
+        get() = "https://simpmusic.org/app/watch?v=$id"
     override val type: YTItemType
         get() = YTItemType.SONG
 
@@ -60,9 +65,11 @@ data class VideoItem(
     val view: String? = null,
     val likeStatus: LikeStatus = LikeStatus.INDIFFERENT,
     val setVideoId: String? = null,
+    /** See [SongItem.musicVideoType]. */
+    val musicVideoType: String? = null,
 ) : YTItem() {
     override val shareLink: String
-        get() = "https://www.youtube.com/watch?v=$id"
+        get() = "https://simpmusic.org/app/watch?v=$id"
     override val type: YTItemType
         get() = YTItemType.VIDEO
 }
@@ -79,7 +86,7 @@ data class AlbumItem(
     override val explicit: Boolean = false,
 ) : YTItem() {
     override val shareLink: String
-        get() = "https://www.youtube.com/playlist?list=$playlistId"
+        get() = "https://simpmusic.org/app/playlist?list=$playlistId"
     override val type: YTItemType
         get() = YTItemType.ALBUM
 }
@@ -97,7 +104,7 @@ data class PlaylistItem(
     override val explicit: Boolean
         get() = false
     override val shareLink: String
-        get() = "https://www.youtube.com/playlist?list=$id"
+        get() = "https://simpmusic.org/app/playlist?list=$id"
     override val type: YTItemType
         get() = YTItemType.PLAYLIST
 }
@@ -113,7 +120,7 @@ data class ArtistItem(
     override val explicit: Boolean
         get() = false
     override val shareLink: String
-        get() = "https://www.youtube.com/channel/$id"
+        get() = "https://simpmusic.org/app/channel/$id"
     override val type: YTItemType
         get() = YTItemType.ARTIST
 }

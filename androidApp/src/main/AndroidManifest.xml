@@ -9,9 +9,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Permisos críticos de energía añadidos para bloquear la suspensión profunda -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/>
 
     <!-- Añadido por la actualización de Android Auto -->
     <uses-permission android:name="androidx.car.app.MEDIA_TEMPLATES" />
@@ -28,7 +32,6 @@
     <uses-feature
         android:name="android.hardware.screen.landscape"
         android:required="false" />
-    <!-- Añadido por la actualización de Android Auto -->
     <uses-feature
         android:name="android.software.car.templates_host.media"
         android:required="false" />
@@ -37,7 +40,6 @@
         <intent>
             <action android:name="android.media.action.DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
         </intent>
-        <!-- Tu personalización de paquete KuroMusic conservada -->
         <package android:name="com.maxrave.simpmusic" />
         <intent>
             <action android:name="androidx.media3.session.MediaSessionService" />
@@ -60,6 +62,7 @@
         tools:replace="android:name,android:allowBackup,android:icon,android:label,android:theme,android:dataExtractionRules"
         tools:targetApi="tiramisu">
 
+        <!-- TU LOGIN Y SEGURIDAD SE MANTIENEN INTACTOS -->
         <activity
             android:name=".LoginActivity"
             android:exported="true"
@@ -87,7 +90,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
 
-            <!-- Añadido por la actualización de Android Auto (Car App Library) -->
+            <!-- Android Auto -->
             <intent-filter>
                 <action android:name="androidx.car.app.media.action.SHOW_MEDIA_PLAYBACK" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -137,7 +140,7 @@
                 <data android:scheme="vnd.youtube.launch" />
             </intent-filter>
 
-            <!-- Tus enlaces DeepLink personalizados de KuroMusic conservados -->
+            <!-- Tus enlaces DeepLink de KuroMusic conservados -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -152,6 +155,14 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="kuromusic" />
+            </intent-filter>
+
+            <!-- Callback obligatorio de Last.fm -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:host="lastfm-auth" android:scheme="wordbyword" />
             </intent-filter>
 
             <intent-filter>
@@ -202,7 +213,7 @@
         <service
             android:name="com.maxrave.media3.service.SimpleMediaService"
             android:exported="true"
-            android:foregroundServiceType="mediaPlayback"
+            android:foregroundServiceType="mediaPlayback|dataSync"
             android:stopWithTask="false"
             tools:ignore="ExportedService">
             <intent-filter>
@@ -235,12 +246,10 @@
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
 
-        <!-- Añadido por la actualización de Android Auto: Obligatorio nivel de API -->
         <meta-data
             android:name="androidx.car.app.minCarApiLevel"
             android:value="8" />
 
-        <!-- Añadido por la actualización de Android Auto: Servicio que conecta con la pantalla del carro -->
         <service
             android:name="com.maxrave.media3.carapp.SimpMusicCarAppService"
             android:exported="true"
@@ -256,15 +265,39 @@
             android:name="io.sentry.auto-init"
             android:value="false" />
 
-        <receiver android:name=".ui.widget.AppWidgetReceiver"
+        <!-- LOS 3 WIDGETS NUEVOS DEL DESARROLLADOR ORIGINAL -->
+        <receiver android:name=".ui.widget.TurntableWidgetReceiver"
+            android:label="@string/widget_turntable_label"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/new_app_widget_info" />
+                android:resource="@xml/turntable_widget_info" />
         </receiver>
-    </application>
 
+        <receiver android:name=".ui.widget.PlaylistsWidgetReceiver"
+            android:label="@string/widget_playlists_label"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/playlists_widget_info" />
+        </receiver>
+
+        <receiver android:name=".ui.widget.ListeningInsightsWidgetReceiver"
+            android:label="@string/widget_insights_label"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/insights_widget_info" />
+        </receiver>
+
+    </application>
 </manifest>

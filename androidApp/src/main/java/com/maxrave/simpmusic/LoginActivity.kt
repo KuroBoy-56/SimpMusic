@@ -222,7 +222,7 @@ class LoginActivity : AppCompatActivity() {
         }
 
         val versionText = TextView(this).apply {
-            text = "V1.5.5g"
+            text = "V2.0.0g"
             textSize = 12f
             setTextColor(textColorSecondary)
             gravity = Gravity.CENTER

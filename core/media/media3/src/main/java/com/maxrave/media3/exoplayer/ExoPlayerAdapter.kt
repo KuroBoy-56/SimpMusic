@@ -219,6 +219,20 @@ class ExoPlayerAdapter(
             exoPlayer.volume = value
         }
 
+    /**
+     * Stored but not wired to anything. The sleep fade is applied by a SleepFadeAudioProcessor in
+     * the audio pipeline, and this adapter does not build its own renderers — it also is not the
+     * one Koin constructs (see Media3ServiceModule, which builds CrossfadeExoPlayerAdapter).
+     * Anything reviving this class needs to add that processor to its sink.
+     */
+    override var sleepFadeFactor: Float = 1f
+
+    /** No crossfade in this adapter; the flag exists to satisfy MediaPlayerInterface. */
+    override var crossfadeSuppressed: Boolean = false
+
+    /** Stored but unused: this adapter has no crossfade, so there is nothing to hold back. */
+    override var albumTrackIds: Set<String> = emptySet()
+
     override var skipSilenceEnabled: Boolean
         get() = exoPlayer.skipSilenceEnabled
         set(value) {
@@ -347,30 +361,6 @@ class ExoPlayerAdapter(
                     message = error.message,
                 )
             listeners.forEach { it.onPlayerError(genericError) }
-        }
-
-        override fun onEvents(
-            player: Player,
-            events: Player.Events,
-        ) {
-            val shouldBePlaying = !(player.playbackState == Player.STATE_ENDED || !player.playWhenReady)
-            if (events.containsAny(
-                    Player.EVENT_PLAYBACK_STATE_CHANGED,
-                    Player.EVENT_PLAY_WHEN_READY_CHANGED,
-                    Player.EVENT_IS_PLAYING_CHANGED,
-                    Player.EVENT_POSITION_DISCONTINUITY,
-                )
-            ) {
-                if (shouldBePlaying) {
-                    listeners.forEach {
-                        it.shouldOpenOrCloseEqualizerIntent(true)
-                    }
-                } else {
-                    listeners.forEach {
-                        it.shouldOpenOrCloseEqualizerIntent(false)
-                    }
-                }
-            }
         }
 
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {

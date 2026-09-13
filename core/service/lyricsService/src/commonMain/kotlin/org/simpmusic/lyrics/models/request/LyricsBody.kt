@@ -12,6 +12,7 @@ data class LyricsBody(
     val plainLyric: String,
     val syncedLyrics: String? = null,
     val richSyncLyrics: String? = null,
+    val trackType: String,
     val contributor: String,
     val contributorEmail: String,
 )

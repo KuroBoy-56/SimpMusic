@@ -9,7 +9,10 @@ import com.aallam.openai.client.OpenAI
 import com.aallam.openai.client.OpenAIConfig
 import com.aallam.openai.client.OpenAIHost
 import com.aallam.openai.client.OpenAIHost.Companion.Gemini
+import com.maxrave.domain.data.model.metadata.Line
 import com.maxrave.domain.data.model.metadata.Lyrics
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.add
@@ -70,6 +73,23 @@ class AiService(
         inputLyrics: Lyrics,
         targetLanguage: String,
     ): Lyrics {
+        val lines = inputLyrics.lines ?: throw IllegalStateException("No lyrics lines to translate")
+
+        // Build key-value map: index -> words (only non-empty lines)
+        val indexToWords = mutableMapOf<String, String>()
+        lines.forEachIndexed { index, line ->
+            val words = line.words.trim()
+            if (words.isNotEmpty() && words != "♫") {
+                indexToWords[index.toString()] = words
+            }
+        }
+
+        if (indexToWords.isEmpty()) {
+            throw IllegalStateException("No translatable lyrics lines found")
+        }
+
+        val inputJson = json.encodeToString(MapSerializer(String.serializer(), String.serializer()), indexToWords)
+
         val request =
             chatCompletionRequest {
                 this.model = this@AiService.model
@@ -77,26 +97,24 @@ class AiService(
                 messages {
                     system {
                         content =
-                            "You are a translation assistant.\n" +
+                            "You are a song lyrics translation assistant.\n" +
                             "\n" +
                             "TASK:\n" +
-                            "- Return the SAME JSON structure and values as the input, except:\n" +
-                            "  * Translate ONLY string text fields named exactly \"words\" and \"syllables\" items.\n" +
-                            "- DO NOT modify, create, remove, reorder, or reformat any other fields or values.\n" +
-                            "- DO NOT change numbers or numeric strings. Copy these EXACTLY:\n" +
-                            "  keys: startTimeMs, endTimeMs, syncType, error.\n" +
-                            "- Keep array lengths and item order IDENTICAL.\n" +
-                            "- Preserve whitespace, punctuation, timestamps, and all metadata UNCHANGED.\n" +
+                            "- You will receive a JSON object where keys are line indices and values are lyrics text.\n" +
+                            "- FIRST, detect the dominant language of the input lyrics.\n" +
+                            "- If the detected language is the SAME as the target language code, return an EMPTY \"translations\" object. Do NOT translate. Do NOT paraphrase.\n" +
+                            "- Otherwise, translate ONLY the values to the target language.\n" +
+                            "- When translating: keep ALL keys exactly the same, output MUST have the EXACT same number of entries as the input, do NOT merge/split/add/remove any entries, and preserve the song's meaning, tone, and emotion.\n" +
                             "\n" +
                             "OUTPUT:\n" +
-                            "- Valid JSON, same structure and keys, no commentary."
+                            "- A JSON object with the \"translations\" field containing the same keys mapped to translated values (or an empty object when the input is already in the target language)."
                     }
                     user {
                         content {
                             text("Target language: $targetLanguage")
                         }
                         content {
-                            text("Input lyrics: ${json.encodeToString(inputLyrics)}")
+                            text("Input lyrics: $inputJson")
                         }
                     }
                 }
@@ -114,13 +132,41 @@ class AiService(
                 ?.groups
                 ?.firstOrNull()
                 ?.value ?: jsonContent
-        val aiResponse =
-            json.decodeFromString<Lyrics>(
-                jsonData
-                    .replace("```json", "")
-                    .replace("```", ""),
+        val cleanedJson = jsonData.replace("```json", "").replace("```", "")
+        val translationResponse = json.decodeFromString<TranslationResponse>(cleanedJson)
+        val translatedMap = translationResponse.translations
+        if (translatedMap.isEmpty()) {
+            throw IllegalStateException(
+                "Input lyrics are already in the target language ($targetLanguage). Translation aborted.",
             )
-        return aiResponse
+        }
+
+        // Map translated text back to original lines, preserving all timestamps
+        val translatedLines = lines.mapIndexed { index, originalLine ->
+            val translatedWords = translatedMap[index.toString()]
+            if (translatedWords != null) {
+                Line(
+                    startTimeMs = originalLine.startTimeMs,
+                    endTimeMs = originalLine.endTimeMs,
+                    words = translatedWords,
+                    syllables = null,
+                )
+            } else {
+                // Non-translatable line (empty or ♫): keep original
+                Line(
+                    startTimeMs = originalLine.startTimeMs,
+                    endTimeMs = originalLine.endTimeMs,
+                    words = originalLine.words,
+                    syllables = originalLine.syllables,
+                )
+            }
+        }
+
+        return Lyrics(
+            error = false,
+            lines = translatedLines,
+            syncType = inputLyrics.syncType,
+        )
     }
 
     companion object {
@@ -128,55 +174,30 @@ class AiService(
             buildJsonObject {
                 put("type", "object")
                 putJsonObject("properties") {
-                    putJsonObject("lines") {
-                        put("type", "array")
-                        putJsonObject("items") {
-                            put("type", "object")
-                            putJsonObject("properties") {
-                                putJsonObject("startTimeMs") {
-                                    put("type", "string")
-                                }
-                                putJsonObject("endTimeMs") {
-                                    put("type", "string")
-                                }
-                                putJsonObject("syllables") {
-                                    put("type", "array")
-                                    putJsonObject("items") {
-                                        put("type", "string")
-                                    }
-                                }
-                                putJsonObject("words") {
-                                    put("type", "string")
-                                }
-                            }
-                            putJsonArray("required") {
-                                add("startTimeMs")
-                                add("endTimeMs")
-                                add("words")
-                            }
+                    putJsonObject("translations") {
+                        put("type", "object")
+                        putJsonObject("additionalProperties") {
+                            put("type", "string")
                         }
-                    }
-                    putJsonObject("syncType") {
-                        put("type", "string")
-                    }
-                    putJsonObject("error") {
-                        put("type", "boolean")
                     }
                 }
                 putJsonArray("required") {
-                    add("lines")
-                    add("syncType")
-                    add("error")
+                    add("translations")
                 }
             }
         private val aiResponseJsonSchema =
             JsonSchema(
-                name = "ai_translation_schema", // Give your schema a name
+                name = "ai_translation_schema",
                 schema = translationJsonSchema,
-                strict = true, // Recommended for better adherence
+                strict = false,
             )
     }
 }
+
+@kotlinx.serialization.Serializable
+data class TranslationResponse(
+    val translations: Map<String, String> = emptyMap(),
+)
 
 enum class AIHost {
     GEMINI,

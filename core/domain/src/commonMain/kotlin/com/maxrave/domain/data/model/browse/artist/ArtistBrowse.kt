@@ -21,6 +21,9 @@ data class ArtistBrowse(
     val subscribers: String?,
     val thumbnails: List<Thumbnail>?,
     val views: String?,
+    // Artist name-logo image (hidden catalog) + its dominant color (hex); filled in separately.
+    val nameLogoUrl: String? = null,
+    val nameLogoColor: String? = null,
 ) {
     data class Videos(
         val video: List<Track> = emptyList(),

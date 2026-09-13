@@ -3,6 +3,13 @@
 import com.android.build.gradle.internal.tasks.CompileArtProfileTask
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 
+val isFullBuild: Boolean =
+    try {
+        extra["isFullBuild"] == "true"
+    } catch (e: Exception) {
+        false
+    }
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kotlin.multiplatform.library)
@@ -18,11 +25,10 @@ kotlin {
         freeCompilerArgs.add("-Xmulti-dollar-interpolation")
         freeCompilerArgs.add("-Xwhen-guards")
     }
-    jvmToolchain(21)
     // Target declarations - add or remove as needed below. These define
     // which platforms this KMP module supports.
     // See: https://kotlinlang.org/docs/multiplatform-discover-project.html#targets
-    androidLibrary {
+    android {
         namespace = "com.maxrave.data"
         compileSdk = 37
         minSdk = 26
@@ -66,10 +72,19 @@ kotlin {
                 implementation(projects.common)
                 implementation(projects.domain)
                 implementation(projects.aiService)
+                implementation(projects.autoEqService)
                 implementation(projects.lyricsService)
                 implementation(projects.spotify)
                 implementation(projects.kotlinYtmusicScraper)
                 implementation(projects.kizzy)
+                implementation(projects.listenTogether)
+
+                // Last.fm (gated: real scrobbler for full builds, no-op stub for FOSS builds)
+                if (isFullBuild) {
+                    implementation(projects.lastfm)
+                } else {
+                    implementation(projects.lastfmEmpty)
+                }
 
                 implementation(libs.kotlin.stdlib)
                 // Add KMP dependencies here
@@ -86,6 +101,12 @@ kotlin {
 
                 // Koin
                 implementation(libs.koin.core)
+            }
+        }
+
+        commonTest {
+            dependencies {
+                implementation(libs.kotlin.test)
             }
         }
 

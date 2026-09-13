@@ -4,6 +4,7 @@ import com.maxrave.domain.data.entities.NewFormatEntity
 import com.maxrave.domain.data.entities.SongEntity
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.data.model.mediaService.SponsorSkipSegments
+import com.maxrave.domain.data.player.GenericCastState
 import com.maxrave.domain.data.player.GenericCommandButton
 import com.maxrave.domain.data.player.GenericMediaItem
 import com.maxrave.domain.data.player.PlayerError
@@ -27,6 +28,7 @@ interface MediaPlayerHandler {
     val skipSegments: StateFlow<List<SponsorSkipSegments>?>
     val format: StateFlow<NewFormatEntity?>
     val currentSongIndex: StateFlow<Int>
+    val castState: StateFlow<GenericCastState>
 
     // Listeners
     var onUpdateNotification: (List<GenericCommandButton>) -> Unit
@@ -177,6 +179,11 @@ sealed class PlayerEvent {
 
     data object Previous : PlayerEvent()
 
+    /**
+     * Always advances to the previous media item, bypassing the 3-second
+     * "seek to start of current track" behaviour of [Previous]. Used by UI
+     * affordances like the artwork pager swipe.
+     */
     data object SkipToPrevious : PlayerEvent()
 
     data object Shuffle : PlayerEvent()
@@ -330,11 +337,21 @@ data class QueueData(
 
     fun isRadio(): Boolean = this.data.playlistType == PlaylistType.RADIO
 
-    fun isPlaylist(): Boolean = this.data.playlistType == PlaylistType.PLAYLIST
+    /** True for both plain playlists and albums — an album queue is a playlist that knows its origin. */
+    fun isPlaylist(): Boolean =
+        this.data.playlistType == PlaylistType.PLAYLIST ||
+            this.data.playlistType == PlaylistType.ALBUM
 }
 
 enum class PlaylistType {
     PLAYLIST,
+
+    /**
+     * A queue loaded from an album. Behaves exactly like [PLAYLIST] everywhere else — it exists so
+     * playback can tell that the tracks were sequenced together deliberately, which is what lets
+     * crossfade step aside inside an album while still fading into whatever is queued after it.
+     */
+    ALBUM,
     LOCAL_PLAYLIST,
     RADIO,
 }

@@ -15,12 +15,18 @@ data class NotificationEntity(
     val single: List<Map<String, String>> = listOf(),
     val album: List<Map<String, String>> = listOf(),
     val time: LocalDateTime = now(),
-    @ColumnInfo(defaultValue = "0") val type: Int = TYPE_DEFAULT,
+    // Discriminates an artist-release notification from an RSS blog-post one.
+    // @ColumnInfo(defaultValue) is REQUIRED: Room AutoMigration adds this NOT NULL column and
+    // needs a SQL default to backfill existing rows (the Kotlin default alone is not enough).
+    // Every pre-existing row therefore becomes an artist notification.
+    @ColumnInfo(defaultValue = "artist")
+    val type: String = TYPE_ARTIST,
+    // Blog-only fields (null on artist rows). `link` doubles as the dedup key.
     val link: String? = null,
     val description: String? = null,
 ) {
     companion object {
-        const val TYPE_DEFAULT = 0
-        const val TYPE_BLOG = 1
+        const val TYPE_ARTIST = "artist"
+        const val TYPE_BLOG = "blog"
     }
 }

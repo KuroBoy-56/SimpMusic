@@ -8,8 +8,8 @@ import com.maxrave.domain.data.entities.analytics.PlaybackEventEntity
 import com.maxrave.domain.data.entities.analytics.query.TopPlayedAlbum
 import com.maxrave.domain.data.entities.analytics.query.TopPlayedArtist
 import com.maxrave.domain.data.entities.analytics.query.TopPlayedTracks
+import com.maxrave.domain.data.model.analytics.AnalyticsPeriodStats
 import com.maxrave.domain.extension.now
-import com.maxrave.domain.extension.startTimestampOfThisYear
 import com.maxrave.domain.repository.AlbumRepository
 import com.maxrave.domain.repository.AnalyticsRepository
 import com.maxrave.domain.repository.ArtistRepository
@@ -27,6 +27,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.atTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.minus
@@ -56,7 +58,7 @@ class AnalyticsViewModel(
                 runCatching { AnalyticsUiState.DayRange.valueOf(it) }.getOrNull()
             } ?: AnalyticsUiState.DayRange.LAST_7_DAYS
             _analyticsUIState.update { it.copy(dayRange = dayRange) }
-            getDataForDayRange(dayRange)
+            loadPeriod()
         }
     }
 
@@ -64,11 +66,63 @@ class AnalyticsViewModel(
         private const val ANALYTICS_DAY_RANGE_KEY = "analytics_day_range"
     }
 
-    private fun getDataForDayRange(dayRange: AnalyticsUiState.DayRange) {
-        getTopTracks(dayRange)
-        getTopArtists(dayRange)
-        getTopAlbums(dayRange)
-        getScrobblesLineChart(dayRange)
+    // --- ACTUALIZACIÓN LÓGICA ---
+    // Motor dinámico para calcular el inicio y fin de las estadísticas permitiendo "Viaje en el tiempo"
+    private fun rangeFor(
+        dayRange: AnalyticsUiState.DayRange,
+        offset: Int,
+    ): Pair<LocalDateTime, LocalDateTime> {
+        val today = now().date
+        return if (dayRange == AnalyticsUiState.DayRange.THIS_YEAR) {
+            val year = today.year - offset
+            val start = LocalDate(year, 1, 1)
+            val end = if (offset == 0) today else LocalDate(year, 12, 31)
+            start.atTime(0, 0) to end.atTime(23, 59, 59)
+        } else {
+            val length = dayRange.lengthInDays
+            val end = today.minus(DatePeriod(days = offset * length))
+            val start = end.minus(DatePeriod(days = length - 1))
+            start.atTime(0, 0) to end.atTime(23, 59, 59)
+        }
+    }
+
+    private fun loadPeriod() {
+        val state = _analyticsUIState.value
+        val (start, end) = rangeFor(state.dayRange, state.periodOffset)
+        _analyticsUIState.update {
+            it.copy(periodStart = start.date, periodEnd = end.date)
+        }
+        getTopTracks(start, end)
+        getTopArtists(start, end)
+        getTopAlbums(start, end)
+        getScrobblesLineChart(state.dayRange, end.date)
+        getPeriodStats(state.dayRange, state.periodOffset)
+    }
+
+    private fun getPeriodStats(
+        dayRange: AnalyticsUiState.DayRange,
+        offset: Int,
+    ) {
+        viewModelScope.launch {
+            _analyticsUIState.update { it.copy(stats = LocalResource.Loading()) }
+            val (start, end) = rangeFor(dayRange, offset)
+            val (prevStart, prevEnd) = rangeFor(dayRange, offset + 1)
+            val current = analyticsRepository.getPeriodStats(start, end)
+            val previous = analyticsRepository.getPeriodStats(prevStart, prevEnd)
+            _analyticsUIState.update {
+                it.copy(
+                    stats = LocalResource.Success(current),
+                    previousStats = previous.takeIf { p -> !p.isEmpty },
+                )
+            }
+        }
+    }
+
+    fun stepPeriod(delta: Int) {
+        val next = (_analyticsUIState.value.periodOffset - delta).coerceAtLeast(0)
+        if (next == _analyticsUIState.value.periodOffset) return
+        _analyticsUIState.update { it.copy(periodOffset = next) }
+        loadPeriod()
     }
 
     private fun getScrobblesCount() {
@@ -122,93 +176,35 @@ class AnalyticsViewModel(
         }
     }
 
-    private fun getTopTracks(dayRange: AnalyticsUiState.DayRange) {
+    private fun getTopTracks(
+        start: LocalDateTime,
+        end: LocalDateTime,
+    ) {
         viewModelScope.launch {
-            _analyticsUIState.update {
-                it.copy(
-                    topTracks = LocalResource.Loading(),
-                )
-            }
-            if (dayRange == AnalyticsUiState.DayRange.THIS_YEAR) {
-                analyticsRepository
-                    .queryTopPlayedSongsInRange(
-                        startTimestamp = startTimestampOfThisYear(),
-                        endTimestamp = now(),
-                    ).collect { topPlayedTracks ->
-                        topPlayedTracks
-                            .mapNotNull {
-                                val song = songRepository.getSongById(it.videoId).lastOrNull() ?: return@mapNotNull null
-                                it to song
-                            }.let { pairs ->
-                                _analyticsUIState.update {
-                                    it.copy(
-                                        topTracks = LocalResource.Success(pairs),
-                                    )
-                                }
-                            }
-                    }
-            } else {
-                val x =
-                    when (dayRange) {
-                        AnalyticsUiState.DayRange.LAST_7_DAYS -> 7
-                        AnalyticsUiState.DayRange.LAST_30_DAYS -> 30
-                        AnalyticsUiState.DayRange.LAST_90_DAYS -> 90
-                    }
-                analyticsRepository.queryTopPlayedSongsLastXDays(x).collect { topPlayedTracks ->
+            _analyticsUIState.update { it.copy(topTracks = LocalResource.Loading()) }
+            analyticsRepository
+                .queryTopPlayedSongsInRange(startTimestamp = start, endTimestamp = end)
+                .collect { topPlayedTracks ->
                     topPlayedTracks
                         .mapNotNull {
                             val song = songRepository.getSongById(it.videoId).lastOrNull() ?: return@mapNotNull null
                             it to song
                         }.let { pairs ->
-                            log("Top played tracks: $pairs")
-                            _analyticsUIState.update {
-                                it.copy(
-                                    topTracks = LocalResource.Success(pairs),
-                                )
-                            }
+                            _analyticsUIState.update { it.copy(topTracks = LocalResource.Success(pairs)) }
                         }
                 }
-            }
         }
     }
 
-    private fun getTopArtists(dayRange: AnalyticsUiState.DayRange) {
+    private fun getTopArtists(
+        start: LocalDateTime,
+        end: LocalDateTime,
+    ) {
         viewModelScope.launch {
-            _analyticsUIState.update {
-                it.copy(
-                    topArtists = LocalResource.Loading(),
-                )
-            }
-            if (dayRange == AnalyticsUiState.DayRange.THIS_YEAR) {
-                analyticsRepository
-                    .queryTopArtistsInRange(
-                        startTimestamp = startTimestampOfThisYear(),
-                        endTimestamp = now(),
-                    ).collect { topPlayedArtists ->
-                        topPlayedArtists
-                            .mapNotNull { topPlayedArtist ->
-                                val artist =
-                                    artistRepository.getArtistById(topPlayedArtist.channelId).lastOrNull()
-                                        ?: getArtistFromYouTube(topPlayedArtist.channelId)
-                                        ?: return@mapNotNull null
-                                topPlayedArtist to artist
-                            }.let { pairs ->
-                                log("Top played artists: $pairs")
-                                _analyticsUIState.update {
-                                    it.copy(
-                                        topArtists = LocalResource.Success(pairs),
-                                    )
-                                }
-                            }
-                    }
-            } else {
-                val x =
-                    when (dayRange) {
-                        AnalyticsUiState.DayRange.LAST_7_DAYS -> 7
-                        AnalyticsUiState.DayRange.LAST_30_DAYS -> 30
-                        AnalyticsUiState.DayRange.LAST_90_DAYS -> 90
-                    }
-                analyticsRepository.queryTopArtistsLastXDays(x).collect { topPlayedArtists ->
+            _analyticsUIState.update { it.copy(topArtists = LocalResource.Loading()) }
+            analyticsRepository
+                .queryTopArtistsInRange(startTimestamp = start, endTimestamp = end)
+                .collect { topPlayedArtists ->
                     topPlayedArtists
                         .mapNotNull { topPlayedArtist ->
                             val artist =
@@ -217,14 +213,9 @@ class AnalyticsViewModel(
                                     ?: return@mapNotNull null
                             topPlayedArtist to artist
                         }.let { pairs ->
-                            _analyticsUIState.update {
-                                it.copy(
-                                    topArtists = LocalResource.Success(pairs),
-                                )
-                            }
+                            _analyticsUIState.update { it.copy(topArtists = LocalResource.Success(pairs)) }
                         }
                 }
-            }
         }
     }
 
@@ -249,53 +240,23 @@ class AnalyticsViewModel(
                 entity
             }
 
-    private fun getTopAlbums(dayRange: AnalyticsUiState.DayRange) {
+    private fun getTopAlbums(
+        start: LocalDateTime,
+        end: LocalDateTime,
+    ) {
         viewModelScope.launch {
-            _analyticsUIState.update {
-                it.copy(
-                    topAlbums = LocalResource.Loading(),
-                )
-            }
-            if (dayRange == AnalyticsUiState.DayRange.THIS_YEAR) {
-                analyticsRepository
-                    .queryTopAlbumsInRange(
-                        startTimestamp = startTimestampOfThisYear(),
-                        endTimestamp = now(),
-                    ).collect { topPlayedAlbums ->
-                        topPlayedAlbums
-                            .mapNotNull {
-                                val album = albumRepository.getAlbum(it.albumBrowseId).lastOrNull() ?: return@mapNotNull null
-                                it to album
-                            }.let { pairs ->
-                                _analyticsUIState.update {
-                                    it.copy(
-                                        topAlbums = LocalResource.Success(pairs),
-                                    )
-                                }
-                            }
-                    }
-            } else {
-                val x =
-                    when (dayRange) {
-                        AnalyticsUiState.DayRange.LAST_7_DAYS -> 7
-                        AnalyticsUiState.DayRange.LAST_30_DAYS -> 30
-                        AnalyticsUiState.DayRange.LAST_90_DAYS -> 90
-                    }
-                analyticsRepository.queryTopAlbumsLastXDays(x).collect { topPlayedAlbums ->
+            _analyticsUIState.update { it.copy(topAlbums = LocalResource.Loading()) }
+            analyticsRepository
+                .queryTopAlbumsInRange(startTimestamp = start, endTimestamp = end)
+                .collect { topPlayedAlbums ->
                     topPlayedAlbums
                         .mapNotNull {
                             val album = albumRepository.getAlbum(it.albumBrowseId).lastOrNull() ?: return@mapNotNull null
                             it to album
                         }.let { pairs ->
-                            log("Top played albums: $pairs")
-                            _analyticsUIState.update {
-                                it.copy(
-                                    topAlbums = LocalResource.Success(pairs),
-                                )
-                            }
+                            _analyticsUIState.update { it.copy(topAlbums = LocalResource.Success(pairs)) }
                         }
                 }
-            }
         }
     }
 
@@ -323,7 +284,10 @@ class AnalyticsViewModel(
         }
     }
 
-    private fun getScrobblesLineChart(dayRange: AnalyticsUiState.DayRange) {
+    private fun getScrobblesLineChart(
+        dayRange: AnalyticsUiState.DayRange,
+        endDate: LocalDate,
+    ) {
         viewModelScope.launch {
             _analyticsUIState.update {
                 it.copy(
@@ -335,15 +299,18 @@ class AnalyticsViewModel(
                     AnalyticsUiState.DayRange.LAST_7_DAYS -> {
                         (0 until 7).map {
                             AnalyticsUiState.ChartType.Day(
-                                day = now().date.minus(DatePeriod(days = it)),
+                                day = endDate.minus(DatePeriod(days = it)),
                             )
                         }
                     }
 
                     AnalyticsUiState.DayRange.LAST_30_DAYS -> {
-                        (0 until 30).map {
-                            AnalyticsUiState.ChartType.Day(
-                                day = now().date.minus(DatePeriod(days = it)),
+                        // --- ACTUALIZACIÓN LÓGICA ---
+                        // Agrupa 30 días en 4 semanas para que la gráfica no sea un bloque ilegible
+                        (0 until 4).map { week ->
+                            AnalyticsUiState.ChartType.Week(
+                                start = endDate.minus(DatePeriod(days = week * 7 + 6)),
+                                end = endDate.minus(DatePeriod(days = week * 7)),
                             )
                         }
                     }
@@ -351,18 +318,18 @@ class AnalyticsViewModel(
                     AnalyticsUiState.DayRange.LAST_90_DAYS -> {
                         (0 until 3).map {
                             AnalyticsUiState.ChartType.Month(
-                                month = now().date.minus(DatePeriod(months = it)).month,
-                                year = now().date.minus(DatePeriod(months = it)).year,
+                                month = endDate.minus(DatePeriod(months = it)).month,
+                                year = endDate.minus(DatePeriod(months = it)).year,
                             )
                         }
                     }
 
                     AnalyticsUiState.DayRange.THIS_YEAR -> {
-                        val currentMonth = now().date.month
+                        val currentMonth = endDate.month
                         (1..currentMonth.number).map {
                             AnalyticsUiState.ChartType.Month(
                                 month = kotlinx.datetime.Month(it),
-                                year = now().date.year,
+                                year = endDate.year,
                             )
                         }
                     }
@@ -375,6 +342,23 @@ class AnalyticsViewModel(
                             val startTimestamp = it.day.atStartOfDayIn(currentTimeZone).toLocalDateTime(currentTimeZone)
                             val endTimestamp =
                                 it.day
+                                    .plus(DatePeriod(days = 1))
+                                    .atStartOfDayIn(currentTimeZone)
+                                    .toLocalDateTime(currentTimeZone)
+                            val count =
+                                analyticsRepository
+                                    .getPlaybackEventCountInRange(
+                                        startTimestamp = startTimestamp,
+                                        endTimestamp = endTimestamp,
+                                    ).lastOrNull() ?: 0L
+                            Pair(it, count)
+                        }
+
+                        is AnalyticsUiState.ChartType.Week -> {
+                            val startTimestamp =
+                                it.start.atStartOfDayIn(currentTimeZone).toLocalDateTime(currentTimeZone)
+                            val endTimestamp =
+                                it.end
                                     .plus(DatePeriod(days = 1))
                                     .atStartOfDayIn(currentTimeZone)
                                     .toLocalDateTime(currentTimeZone)
@@ -431,9 +415,10 @@ class AnalyticsViewModel(
         _analyticsUIState.update {
             it.copy(
                 dayRange = dayRange,
+                periodOffset = 0,
             )
         }
-        getDataForDayRange(dayRange)
+        loadPeriod()
         viewModelScope.launch {
             dataStoreManager.putString(ANALYTICS_DAY_RANGE_KEY, dayRange.name)
         }
@@ -445,22 +430,36 @@ data class AnalyticsUiState(
     val artistCount: LocalResource<Long> = LocalResource.Loading(),
     val totalListenTimeInSeconds: LocalResource<Long> = LocalResource.Loading(),
     val dayRange: DayRange = DayRange.LAST_7_DAYS,
+    val periodOffset: Int = 0,
+    val periodStart: LocalDate? = null,
+    val periodEnd: LocalDate? = null,
+    val stats: LocalResource<AnalyticsPeriodStats> = LocalResource.Loading(),
+    val previousStats: AnalyticsPeriodStats? = null,
     val recentlyRecord: LocalResource<List<Pair<PlaybackEventEntity, SongEntity>>> = LocalResource.Loading(),
     val topTracks: LocalResource<List<Pair<TopPlayedTracks, SongEntity>>> = LocalResource.Loading(),
     val topArtists: LocalResource<List<Pair<TopPlayedArtist, ArtistEntity>>> = LocalResource.Loading(),
     val topAlbums: LocalResource<List<Pair<TopPlayedAlbum, AlbumEntity>>> = LocalResource.Loading(),
     val scrobblesLineChart: LocalResource<List<Pair<ChartType, Long>>> = LocalResource.Loading(),
 ) {
-    enum class DayRange {
-        LAST_7_DAYS,
-        LAST_30_DAYS,
-        LAST_90_DAYS,
-        THIS_YEAR,
+    val canStepForward: Boolean get() = periodOffset > 0
+
+    enum class DayRange(
+        val lengthInDays: Int,
+    ) {
+        LAST_7_DAYS(7),
+        LAST_30_DAYS(30),
+        LAST_90_DAYS(90),
+        THIS_YEAR(365),
     }
 
     sealed class ChartType {
         data class Day(
             val day: LocalDate,
+        ) : ChartType()
+
+        data class Week(
+            val start: LocalDate,
+            val end: LocalDate,
         ) : ChartType()
 
         data class Month(

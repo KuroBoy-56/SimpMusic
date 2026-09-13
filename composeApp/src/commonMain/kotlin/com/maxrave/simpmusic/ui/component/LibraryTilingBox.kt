@@ -7,15 +7,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.TrendingUp
-import androidx.compose.material.icons.filled.Downloading
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -25,6 +19,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.maxrave.simpmusic.extension.NonLazyGrid
+import com.maxrave.simpmusic.ui.icon.Downloading
+import com.maxrave.simpmusic.ui.icon.Favorite
+import com.maxrave.simpmusic.ui.icon.Insights
+import com.maxrave.simpmusic.ui.icon.SimpIcons
+import com.maxrave.simpmusic.ui.icon.TrendingUp
 import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryDynamicPlaylistDestination
 import com.maxrave.simpmusic.ui.screen.library.LibraryDynamicPlaylistType
 import com.maxrave.simpmusic.ui.theme.typo
@@ -38,56 +37,61 @@ import simpmusic.composeapp.generated.resources.most_played
 
 @Composable
 fun LibraryTilingBox(navController: NavController) {
-    val listItem = listOf(
-        LibraryTilingState.Favorite,
-        LibraryTilingState.Followed,
-        LibraryTilingState.MostPlayed,
-        LibraryTilingState.Downloaded,
-    )
+    val listItem =
+        listOf(
+            LibraryTilingState.Favorite,
+            LibraryTilingState.Followed,
+            LibraryTilingState.MostPlayed,
+            LibraryTilingState.Downloaded,
+        )
     NonLazyGrid(
         columns = 2,
         itemCount = 4,
-        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp, end = 10.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = 10.dp, end = 10.dp),
     ) { number ->
-        Box(Modifier.padding(start = 10.dp, top = 10.dp)) {
-            val state = listItem[number]
-
-            // Colores dinámicos del Material Theme según la categoría
-            val containerColor = when(state) {
-                LibraryTilingState.Favorite -> MaterialTheme.colorScheme.primaryContainer
-                LibraryTilingState.Followed -> MaterialTheme.colorScheme.secondaryContainer
-                LibraryTilingState.MostPlayed -> MaterialTheme.colorScheme.tertiaryContainer
-                LibraryTilingState.Downloaded -> MaterialTheme.colorScheme.surfaceVariant
-                else -> MaterialTheme.colorScheme.surfaceVariant
-            }
-            val iconColor = when(state) {
-                LibraryTilingState.Favorite -> MaterialTheme.colorScheme.onPrimaryContainer
-                LibraryTilingState.Followed -> MaterialTheme.colorScheme.onSecondaryContainer
-                LibraryTilingState.MostPlayed -> MaterialTheme.colorScheme.onTertiaryContainer
-                LibraryTilingState.Downloaded -> MaterialTheme.colorScheme.onSurfaceVariant
-                else -> MaterialTheme.colorScheme.onSurfaceVariant
-            }
-
+        Box(
+            Modifier.padding(start = 10.dp, top = 10.dp),
+        ) {
             LibraryTilingItem(
-                state = state,
-                containerColor = containerColor,
-                iconColor = iconColor,
+                listItem[number],
                 onClick = {
-                    when (state) {
+                    when (listItem[number]) {
                         LibraryTilingState.Favorite -> {
-                            navController.navigate(LibraryDynamicPlaylistDestination(type = LibraryDynamicPlaylistType.Favorite.toStringParams()))
+                            navController.navigate(
+                                LibraryDynamicPlaylistDestination(
+                                    type = LibraryDynamicPlaylistType.Favorite.toStringParams(),
+                                ),
+                            )
                         }
+
                         LibraryTilingState.Followed -> {
-                            navController.navigate(LibraryDynamicPlaylistDestination(type = LibraryDynamicPlaylistType.Followed.toStringParams()))
+                            navController.navigate(
+                                LibraryDynamicPlaylistDestination(
+                                    type = LibraryDynamicPlaylistType.Followed.toStringParams(),
+                                ),
+                            )
                         }
+
                         LibraryTilingState.MostPlayed -> {
-                            navController.navigate(LibraryDynamicPlaylistDestination(type = LibraryDynamicPlaylistType.MostPlayed.toStringParams()))
+                            navController.navigate(
+                                LibraryDynamicPlaylistDestination(
+                                    type = LibraryDynamicPlaylistType.MostPlayed.toStringParams(),
+                                ),
+                            )
                         }
+
                         LibraryTilingState.Downloaded -> {
-                            navController.navigate(LibraryDynamicPlaylistDestination(type = LibraryDynamicPlaylistType.Downloaded.toStringParams()))
+                            navController.navigate(
+                                LibraryDynamicPlaylistDestination(
+                                    type = LibraryDynamicPlaylistType.Downloaded.toStringParams(),
+                                ),
+                            )
                         }
                     }
-                }
+                },
             )
         }
     }
@@ -96,16 +100,20 @@ fun LibraryTilingBox(navController: NavController) {
 @Composable
 fun LibraryTilingItem(
     state: LibraryTilingState,
-    containerColor: Color,
-    iconColor: Color,
     onClick: () -> Unit = {},
 ) {
     val title = stringResource(state.title)
     ElevatedCard(
-        modifier = Modifier.fillMaxWidth().clickable { onClick.invoke() },
+        modifier =
+            Modifier.fillMaxWidth().clickable {
+                onClick.invoke()
+            },
         shape = RoundedCornerShape(8.dp),
         elevation = CardDefaults.elevatedCardElevation(),
-        colors = CardDefaults.elevatedCardColors().copy(containerColor = containerColor),
+        colors =
+            CardDefaults.elevatedCardColors().copy(
+                containerColor = state.containerColor,
+            ),
     ) {
         Row(
             Modifier.fillMaxWidth(),
@@ -114,13 +122,16 @@ fun LibraryTilingItem(
             Icon(
                 state.icon,
                 contentDescription = title,
-                modifier = Modifier.size(50.dp).padding(10.dp),
-                tint = iconColor,
+                modifier =
+                    Modifier
+                        .size(50.dp)
+                        .padding(10.dp),
+                tint = state.iconColor,
             )
             Text(
                 title,
                 style = typo().titleSmall,
-                color = iconColor,
+                color = Color.Black,
             )
         }
     }
@@ -128,12 +139,38 @@ fun LibraryTilingItem(
 
 data class LibraryTilingState(
     val title: StringResource,
+    val containerColor: Color,
     val icon: ImageVector,
+    val iconColor: Color,
 ) {
     companion object {
-        val Favorite = LibraryTilingState(title = Res.string.favorite, icon = Icons.Default.Favorite)
-        val Followed = LibraryTilingState(title = Res.string.followed, icon = Icons.Default.Insights)
-        val MostPlayed = LibraryTilingState(title = Res.string.most_played, icon = Icons.AutoMirrored.Filled.TrendingUp)
-        val Downloaded = LibraryTilingState(title = Res.string.downloaded, icon = Icons.Default.Downloading)
+        val Favorite =
+            LibraryTilingState(
+                title = Res.string.favorite,
+                containerColor = Color(0xffff99ae),
+                icon = SimpIcons.Favorite,
+                iconColor = Color(0xffD10000),
+            )
+        val Followed =
+            LibraryTilingState(
+                title = Res.string.followed,
+                containerColor = Color(0xffFFEB3B),
+                icon = SimpIcons.Insights,
+                iconColor = Color.Black,
+            )
+        val MostPlayed =
+            LibraryTilingState(
+                title = Res.string.most_played,
+                containerColor = Color(0xff00BCD4),
+                icon = SimpIcons.TrendingUp,
+                iconColor = Color.Black,
+            )
+        val Downloaded =
+            LibraryTilingState(
+                title = Res.string.downloaded,
+                containerColor = Color(0xff4CAF50),
+                icon = SimpIcons.Downloading,
+                iconColor = Color.Black,
+            )
     }
 }

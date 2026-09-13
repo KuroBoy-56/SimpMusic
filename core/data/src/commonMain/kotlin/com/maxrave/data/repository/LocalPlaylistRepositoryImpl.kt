@@ -7,6 +7,7 @@ import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import com.maxrave.data.db.Converters
 import com.maxrave.data.db.datasource.LocalDataSource
+import com.maxrave.data.io.readLocalImageBytes
 import com.maxrave.data.extension.getFullDataFromDB
 import com.maxrave.data.mapping.toListTrack
 import com.maxrave.data.mapping.toTrack
@@ -107,6 +108,24 @@ internal class LocalPlaylistRepositoryImpl(
         localDataSource
             .getListTracksFlowOfLocalPlaylist(id)
             .map { Converters().fromString(it.firstOrNull()) ?: emptyList() }
+
+    override fun searchTracks(
+        id: Long,
+        query: String,
+        limit: Int,
+    ): Flow<List<Pair<SongEntity, PairSongLocalPlaylist>>> =
+        flow {
+            val pairs = localDataSource.searchPlaylistPairSong(id, query, limit)
+            if (pairs.isEmpty()) {
+                emit(emptyList())
+                return@flow
+            }
+            // Two steps, the same shape LocalPlaylistPagingSource uses: the join narrows the rows,
+            // then the songs are fetched by id. Re-sorted by the pair order afterwards because the
+            // id lookup returns them in whatever order the database finds them.
+            val byId = localDataSource.getSongByListVideoIdFull(pairs.map { it.songId }).associateBy { it.videoId }
+            emit(pairs.mapNotNull { pair -> byId[pair.songId]?.let { it to pair } })
+        }.flowOn(Dispatchers.IO)
 
     override fun getTracksPaging(
         id: Long,
@@ -225,11 +244,24 @@ internal class LocalPlaylistRepositoryImpl(
         id: Long,
         newThumbnail: String,
         successMessage: String,
-    ) = wrapMessageResource(
-        successMessage = successMessage,
-    ) {
-        localDataSource.updateLocalPlaylistThumbnail(id = id, thumbnail = newThumbnail)
-    }
+    ) = flow<LocalResource<String>> {
+        emit(LocalResource.Loading())
+        runCatching {
+            localDataSource.updateLocalPlaylistThumbnail(id = id, thumbnail = newThumbnail)
+            pushCustomThumbnailToYouTube(id, newThumbnail)
+        }.onSuccess { youTubeError ->
+            // The image IS saved locally either way. Reporting the YouTube half as an error anyway
+            // is deliberate: the user pressed this to change the cover of a synced playlist, and
+            // silently keeping the old one on YouTube is the failure they need to know about.
+            if (youTubeError == null) {
+                emit(LocalResource.Success(successMessage))
+            } else {
+                emit(LocalResource.Error<String>(youTubeError))
+            }
+        }.onFailure {
+            emit(LocalResource.Error<String>(it.message ?: "Error updating playlist thumbnail"))
+        }
+    }.flowOn(Dispatchers.IO)
 
     override fun updateDownloadState(
         id: Long,
@@ -390,6 +422,15 @@ internal class LocalPlaylistRepositoryImpl(
                     if (list.isEmpty()) Logger.w(TAG, "syncLocalPlaylistToYouTubePlaylist: SetVideoIds Empty list")
                     localDataSource.updateLocalPlaylistYouTubePlaylistId(playlistId, ytId)
                     localDataSource.updateLocalPlaylistYouTubePlaylistSyncState(playlistId, Synced)
+                    // Carry a cover the user picked over to the new YouTube playlist. Without this
+                    // the playlist arrives wearing YouTube's own four-song collage, which is what
+                    // the user was trying to replace in the first place.
+                    //
+                    // The returned reason is deliberately dropped HERE and only logged: the sync
+                    // itself has already succeeded, and reporting a cover problem as a sync error
+                    // would tell the user the playlist did not sync when it did. The other caller,
+                    // where changing the cover IS the whole operation, does surface it.
+                    pushCustomThumbnailToYouTube(playlistId, playlist.thumbnail)
                     Logger.d(TAG, "syncLocalPlaylistToYouTubePlaylist: $ytId")
                     emit(LocalResource.Success(ytId))
                 }.onFailure {
@@ -400,6 +441,58 @@ internal class LocalPlaylistRepositoryImpl(
             e?.printStackTrace()
             emit(LocalResource.Error(e?.message ?: errorMessage))
         }
+    }
+
+    /**
+     * Mirrors a locally picked cover onto the YouTube playlist backing this local one.
+     *
+     * Silent on every failure. It is a best-effort extra on top of an operation the user already
+     * considers done — the cover is saved locally either way, and a signed-out account or a revoked
+     * file permission must not turn "cover changed" into an error.
+     */
+    private suspend fun pushCustomThumbnailToYouTube(
+        playlistId: Long,
+        thumbnail: String?,
+    ): String? {
+        // Returns null when there was nothing to do or the upload worked, and a reason when the
+        // user should be told. Two of the three "nothing to do" cases are NOT failures: a playlist
+        // that is not synced has no YouTube cover to set, and a http(s) thumbnail is one this app
+        // derived from a track rather than something the user picked — pushing that back would
+        // overwrite the cover with art nobody chose.
+        val ytId =
+            runCatching {
+                localDataSource
+                    .getLocalPlaylist(playlistId)
+                    ?.youtubePlaylistId
+                    ?.takeIf { it.isNotBlank() }
+            }.getOrNull()
+        if (ytId == null) {
+            Logger.d(TAG, "Cover push skipped for $playlistId: playlist is not synced to YouTube")
+            return null
+        }
+        val uri = thumbnail?.takeIf { it.isNotBlank() && !it.startsWith("http") }
+        if (uri == null) {
+            Logger.d(TAG, "Cover push skipped for $playlistId: not a locally picked image ($thumbnail)")
+            return null
+        }
+        val bytes = readLocalImageBytes(uri)
+        if (bytes == null) {
+            Logger.w(TAG, "Cover push failed for $playlistId: could not read $uri")
+            return "Could not read the selected image"
+        }
+        Logger.d(TAG, "Uploading cover for $playlistId -> $ytId (${bytes.size} bytes)")
+        return youTube
+            .setPlaylistCustomThumbnail(ytId, bytes)
+            .fold(
+                onSuccess = { status ->
+                    Logger.d(TAG, "Cover uploaded for $ytId, status $status")
+                    if (status in 200..299) null else "YouTube rejected the cover (HTTP $status)"
+                },
+                onFailure = {
+                    Logger.e(TAG, "Cover upload failed for $ytId: ${it.message}")
+                    it.message ?: "Could not update the cover on YouTube"
+                },
+            )
     }
 
     override fun unsyncLocalPlaylist(
@@ -827,35 +920,96 @@ internal class LocalPlaylistRepositoryImpl(
             emit("Position updated")
         }.flowOn(Dispatchers.IO)
 
+    /**
+     * Move a song within a synced playlist.
+     * 1. Resolve setVideoIds for the moved item and its new successor from the local DB
+     * 2. Call YouTube API (ACTION_MOVE_VIDEO_BEFORE) to reorder on YouTube
+     * 3. Update local DB positions (shift items between from/to, then place the moved item)
+     */
     override fun moveItemInSyncedPlaylist(
         playlistId: Long,
         fromIndex: Int,
         toIndex: Int,
     ): Flow<LocalResource<String>> =
-        flow {
-            emit(LocalResource.Loading())
-            val localPlaylist = localDataSource.getLocalPlaylist(playlistId) ?: return@flow
-            val tracks = localPlaylist.tracks ?: emptyList()
-            val videoId = tracks.getOrNull(fromIndex) ?: return@flow
-
-            // Note: YouTube Music reordering via "browse/edit_playlist" needs "moveItemId" and "predecessorItemId"
-            // For now we just swap positions locally and log
-            Logger.d(TAG, "moveItemInSyncedPlaylist: moving $videoId from $fromIndex to $toIndex")
-
-            // Swapping logic for local data
-            val newTracks = tracks.toMutableList()
-            if (fromIndex in newTracks.indices && toIndex in newTracks.indices) {
-                val item = newTracks.removeAt(fromIndex)
-                newTracks.add(toIndex, item)
-                localDataSource.updateLocalPlaylistTracks(newTracks, playlistId)
-
-                // Update all positions in PairSongLocalPlaylist
-                newTracks.forEachIndexed { index, vid ->
-                    localDataSource.editPositionOfSongInPlaylist(playlistId, vid, index)
-                }
-                emit(LocalResource.Success("Playlist updated"))
-            } else {
-                emit(LocalResource.Error("Invalid index"))
+        flow<LocalResource<String>> {
+            if (fromIndex == toIndex) {
+                emit(LocalResource.Success("No change"))
+                return@flow
             }
+            emit(LocalResource.Loading())
+
+            val localPlaylist = localDataSource.getLocalPlaylist(playlistId) ?: run {
+                emit(LocalResource.Error("Playlist not found"))
+                return@flow
+            }
+            val ytPlaylistId = localPlaylist.youtubePlaylistId ?: run {
+                emit(LocalResource.Error("Playlist is not synced with YouTube"))
+                return@flow
+            }
+
+            // Get all pairs ordered by position to resolve indexes
+            val allPairs = localDataSource.getAllPlaylistPairSongByPosition(playlistId)
+            if (fromIndex >= allPairs.size || toIndex >= allPairs.size) {
+                emit(LocalResource.Error("Index out of bounds"))
+                return@flow
+            }
+
+            val movedPair = allPairs[fromIndex]
+            val movedVideoId = movedPair.songId
+
+            // Resolve setVideoId of the moved item
+            val movedSetVideoIdEntity = localDataSource.getSetVideoId(movedVideoId)
+            val movedSetVideoId = movedSetVideoIdEntity?.setVideoId ?: run {
+                emit(LocalResource.Error("SetVideoId not found for moved item: $movedVideoId"))
+                return@flow
+            }
+
+            // Resolve the successor's setVideoId (the item that should come AFTER the moved item)
+            // If moving down (fromIndex < toIndex): successor is the item at toIndex + 1 (if exists)
+            // If moving up (fromIndex > toIndex): successor is the item at toIndex
+            val successorSetVideoId: String? = if (fromIndex < toIndex) {
+                // Moving down: after removal, the successor is at toIndex + 1 in original list
+                val successorIndex = toIndex + 1
+                if (successorIndex < allPairs.size) {
+                    val successorVideoId = allPairs[successorIndex].songId
+                    localDataSource.getSetVideoId(successorVideoId)?.setVideoId
+                } else {
+                    null // Move to end
+                }
+            } else {
+                // Moving up: successor is the item currently at toIndex
+                val successorVideoId = allPairs[toIndex].songId
+                localDataSource.getSetVideoId(successorVideoId)?.setVideoId
+            }
+
+            // Step 1: Call YouTube API
+            youTube
+                .movePlaylistItem(
+                    playlistId = ytPlaylistId,
+                    setVideoId = movedSetVideoId,
+                    movedSetVideoIdSuccessor = successorSetVideoId,
+                ).onSuccess {
+                    Logger.d(TAG, "moveItemInSyncedPlaylist: YouTube API success, status=$it")
+                }.onFailure { e ->
+                    Logger.e(TAG, "moveItemInSyncedPlaylist: YouTube API failed: ${e.message}")
+                    emit(LocalResource.Error("Failed to reorder on YouTube: ${e.message}"))
+                    return@flow
+                }
+
+            // Step 2: Update local DB positions
+            val movedPosition = movedPair.position
+            val targetPosition = allPairs[toIndex].position
+
+            if (fromIndex < toIndex) {
+                // Moving down: shift items between (from, to] backward by 1
+                localDataSource.shiftPositionsBackward(playlistId, movedPosition, targetPosition)
+            } else {
+                // Moving up: shift items between [to, from) forward by 1
+                localDataSource.shiftPositionsForward(playlistId, targetPosition, movedPosition)
+            }
+            // Place the moved item at the target position
+            localDataSource.editPositionOfSongInPlaylist(playlistId, movedVideoId, targetPosition)
+
+            emit(LocalResource.Success("Position updated"))
         }.flowOn(Dispatchers.IO)
 }

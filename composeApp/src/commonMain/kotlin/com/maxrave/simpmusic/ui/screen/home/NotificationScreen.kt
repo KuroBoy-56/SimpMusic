@@ -1,7 +1,11 @@
 package com.maxrave.simpmusic.ui.screen.home
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
-import androidx.compose.foundation.Image
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.MarqueeAnimationMode
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
@@ -10,6 +14,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,16 +27,17 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,11 +45,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -56,186 +63,67 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.maxrave.domain.data.entities.NotificationEntity
 import com.maxrave.simpmusic.extension.formatTimeAgo
+import com.maxrave.simpmusic.ui.component.AmbientThemeGlow
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.RippleIconButton
+import com.maxrave.simpmusic.ui.component.rememberHolderPainter
+import com.maxrave.simpmusic.ui.component.rememberNowPlayingGlowTint
+import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
+import com.maxrave.simpmusic.ui.icon.RssFeed
+import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.NotificationViewModel
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.request.get
-import io.ktor.client.statement.bodyAsText
-import org.jetbrains.compose.resources.painterResource
+import com.maxrave.simpmusic.viewModel.SharedViewModel
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.album
-import simpmusic.composeapp.generated.resources.baseline_arrow_back_ios_new_24
-import simpmusic.composeapp.generated.resources.holder
-import simpmusic.composeapp.generated.resources.ic_rss_feed_24
-import simpmusic.composeapp.generated.resources.mono
 import simpmusic.composeapp.generated.resources.new_release
 import simpmusic.composeapp.generated.resources.no_notification
 import simpmusic.composeapp.generated.resources.notification
 import simpmusic.composeapp.generated.resources.singles
-
-private data class SyncPayload(
-    val version_code: Int,
-    val version_name: String,
-    val download_url: String,
-    val release_notes: String
-)
-
-@Composable
-private fun SystemUpdateNotificationItem(currentCode: Int) {
-    var payload by remember { mutableStateOf<SyncPayload?>(null) }
-    var visible by remember { mutableStateOf(false) }
-    val uriHandler = LocalUriHandler.current
-    val raw = "01101000011101000111010001110000011100110011101000101111001011110110011101100001011100100110010101110110011110010110111001110000011000010110111001100101011011000111001100101110011011000110000101110100011011010111000001111000001011100110001101101111011011010010111101111001011011110111010101110100011101010110001001100101001011110111000001100001011011100110010101101100001011110110000101110000011010010010111101100011011010000110010101100011011010110101111101110101011100000110010001100001011101000110010100101110011100000110100001110000"
-
-    fun decode(bin: String): String {
-        return bin.chunked(8).map { Integer.parseInt(it, 2).toChar() }.joinToString("")
-    }
-
-    LaunchedEffect(Unit) {
-        try {
-            val client = HttpClient(CIO)
-            val responseText = client.get(decode(raw)).bodyAsText()
-            client.close()
-
-            val vCode = """"version_code"\s*:\s*(\d+)""".toRegex().find(responseText)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-            val vName = """"version_name"\s*:\s*"([^"]+)"""".toRegex().find(responseText)?.groupValues?.get(1) ?: ""
-            var mandatory = """"is_mandatory"\s*:\s*(true|false)""".toRegex().find(responseText)?.groupValues?.get(1)?.toBoolean() ?: false
-            val url = """"download_url"\s*:\s*"([^"]+)"""".toRegex().find(responseText)?.groupValues?.get(1) ?: ""
-            val notes = """"release_notes"\s*:\s*"([^"]+)"""".toRegex().find(responseText)?.groupValues?.get(1) ?: ""
-
-            val obsoleteStr = """"obsolete_versions"\s*:\s*\[([\d,\s]*)\]""".toRegex().find(responseText)?.groupValues?.get(1) ?: ""
-            val obsoleteList = obsoleteStr.split(",").mapNotNull { it.trim().toIntOrNull() }
-
-            if (obsoleteList.contains(currentCode)) {
-                mandatory = true
-            }
-
-            if (vCode > currentCode || mandatory) {
-                payload = SyncPayload(vCode, vName, url, notes)
-                visible = true
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    if (visible && payload != null) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 15.dp, vertical = 8.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.primaryContainer,
-                            MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    )
-                )
-                .clickable { uriHandler.openUri(payload!!.download_url) }
-                .padding(16.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Image(
-                            painter = painterResource(Res.drawable.mono),
-                            contentDescription = "Update Icon",
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(16.dp))
-
-                    Column {
-                        Text(
-                            text = "Actualización de Sistema",
-                            style = typo().titleMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "Versión ${payload!!.version_name} • Toca para instalar",
-                            style = typo().bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(MaterialTheme.colorScheme.primary)
-                        .padding(horizontal = 14.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "NUEVA",
-                        style = typo().labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationScreen(
     navController: NavController,
     viewModel: NotificationViewModel = koinViewModel(),
+    sharedViewModel: SharedViewModel = koinInject(),
 ) {
     val listNotification by viewModel.listNotification.collectAsStateWithLifecycle()
-    Column {
-        TopAppBar(
-            title = {
-                Text(
-                    text = stringResource(Res.string.notification),
-                    style = typo().titleMedium,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-            },
-            navigationIcon = {
-                RippleIconButton(resId = Res.drawable.baseline_arrow_back_ios_new_24) {
-                    navController.navigateUp()
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = Color.Transparent,
-                titleContentColor = MaterialTheme.colorScheme.onBackground,
-                navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
-                actionIconContentColor = MaterialTheme.colorScheme.onBackground
-            )
-        )
+    val glowNowPlaying by sharedViewModel.nowPlayingState.collectAsStateWithLifecycle()
+    val listState = rememberLazyListState()
+    val density = LocalDensity.current
+    val hazeState = rememberHazeState(blurEnabled = true)
+    var topAppBarHeight by remember { mutableStateOf(0.dp) }
+    // Home's rule: transparent only while pixel-0 is on screen; the frost itself stays light.
+    val isAtTop by remember {
+        derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 }
+    }
 
-        SystemUpdateNotificationItem(currentCode = 50)
-
+    // Home-family ambient ground — scrolls away with the list (see SettingScreen's note on the
+    // draw-phase translation).
+    AmbientThemeGlow(
+        tint = rememberNowPlayingGlowTint(glowNowPlaying?.songEntity?.thumbnails),
+        modifier =
+            Modifier.graphicsLayer {
+                translationY =
+                    if (listState.firstVisibleItemIndex == 0) {
+                        -listState.firstVisibleItemScrollOffset.toFloat()
+                    } else {
+                        -size.height
+                    }
+            },
+    )
+    Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
         Crossfade(targetState = listNotification) {
             if (it == null) {
                 Box(
@@ -244,14 +132,23 @@ fun NotificationScreen(
                     CenterLoadingBox(modifier = Modifier.align(Alignment.Center))
                 }
             } else if (it.isNotEmpty()) {
+                // contentPadding, not Modifier.padding: the bar floats now, and the list has to
+                // slide UNDER it for the frost to have anything to frost.
                 LazyColumn(
-                    modifier = Modifier.padding(15.dp),
+                    state = listState,
+                    contentPadding =
+                        PaddingValues(
+                            start = 15.dp,
+                            end = 15.dp,
+                            top = topAppBarHeight + 15.dp,
+                            bottom = 15.dp,
+                        ),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     items(it) { notification ->
                         NotificationItem(
                             notification = notification,
-                            navController = navController,
+                            navController,
                         )
                     }
                     item {
@@ -265,12 +162,64 @@ fun NotificationScreen(
                     Text(
                         text = stringResource(Res.string.no_notification),
                         style = typo().titleMedium,
-                        color = MaterialTheme.colorScheme.onBackground,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.align(Alignment.Center),
                     )
                 }
             }
+        }
+    }
+    // The bar FLOATS over the list, Home style. It used to sit in-flow above the list, so once the
+    // glow scrolled away the transparent bar stood over nothing but the black window — which is
+    // exactly what "not transparent at all" looks like. Floating gives the list something to slide
+    // under and the frost something to frost.
+    val barTint = MaterialTheme.colorScheme.background
+    AnimatedContent(
+        targetState = isAtTop,
+        transitionSpec = {
+            fadeIn(tween(300)).togetherWith(fadeOut(tween(300)))
+        },
+    ) { atTop ->
+        Column(
+            Modifier
+                .then(
+                    if (atTop) {
+                        Modifier
+                    } else {
+                        // AlbumScreen's bar recipe, thinned to 0.3 — see SettingScreen.
+                        Modifier.hazeEffect(hazeState) {
+                            blurEnabled = true
+                            blurRadius = 24.dp
+                            backgroundColor = barTint
+                            tints = listOf(HazeTint(barTint.copy(alpha = 0.3f)))
+                        }
+                    },
+                ).onGloballyPositioned { coordinates ->
+                    topAppBarHeight = with(density) { coordinates.size.height.toDp() }
+                },
+        ) {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = stringResource(Res.string.notification),
+                        style = typo().titleMedium,
+                    )
+                },
+                navigationIcon = {
+                    RippleIconButton(
+                        imageVector = SimpIcons.ArrowBackIosNew,
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    ) {
+                        navController.navigateUp()
+                    }
+                },
+                // Transparent, or the default surface container paints an opaque strip over the
+                // very top of AmbientThemeGlow — the one part of it that actually carries colour.
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                    ),
+            )
         }
     }
 }
@@ -280,8 +229,10 @@ fun NotificationItem(
     notification: NotificationEntity,
     navController: NavController,
 ) {
-    val uriHandler = LocalUriHandler.current
-
+    if (notification.type == NotificationEntity.TYPE_BLOG) {
+        BlogNotificationItem(notification)
+        return
+    }
     Box(
         modifier =
             Modifier
@@ -291,20 +242,11 @@ fun NotificationItem(
         Column {
             Row(
                 Modifier.clickable {
-                    // Lógica para diferenciar Música de Comunicados/Actualizaciones
-                    if (notification.type == NotificationEntity.TYPE_BLOG) {
-                        notification.link?.let { url ->
-                            if (url.isNotEmpty() && (url.startsWith("http://") || url.startsWith("https://"))) {
-                                uriHandler.openUri(url)
-                            }
-                        }
-                    } else {
-                        navController.navigate(
-                            ArtistDestination(
-                                channelId = notification.channelId,
-                            ),
-                        )
-                    }
+                    navController.navigate(
+                        ArtistDestination(
+                            channelId = notification.channelId,
+                        ),
+                    )
                 },
             ) {
                 val thumb = notification.thumbnail
@@ -317,9 +259,8 @@ fun NotificationItem(
                             .diskCacheKey(thumb)
                             .crossfade(true)
                             .build(),
-                    // Mostramos el ícono oficial 'mono' si es comunicado tuyo, sino carátula por defecto
-                    placeholder = painterResource(if (notification.type == NotificationEntity.TYPE_BLOG) Res.drawable.mono else Res.drawable.holder),
-                    error = painterResource(if (notification.type == NotificationEntity.TYPE_BLOG) Res.drawable.mono else Res.drawable.holder),
+                    placeholder = rememberHolderPainter(),
+                    error = rememberHolderPainter(),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier =
@@ -332,52 +273,30 @@ fun NotificationItem(
                 )
                 Spacer(modifier = Modifier.padding(5.dp))
                 Column {
-                    Text(
-                        text = if (notification.type == NotificationEntity.TYPE_BLOG) "Comunicado Oficial" else stringResource(Res.string.new_release),
-                        style = typo().titleSmall,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
+                    Text(text = stringResource(Res.string.new_release), style = typo().titleSmall)
                     Spacer(modifier = Modifier.padding(3.dp))
-                    Text(
-                        text = notification.name,
-                        style = typo().headlineMedium,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
+                    Text(text = notification.name, style = typo().headlineMedium)
                 }
             }
-
-            // Si NO es un mensaje/comunicado, intentamos cargar canciones/álbumes debajo
-            if (notification.type != NotificationEntity.TYPE_BLOG) {
-                LazyRow(
-                    Modifier.padding(top = 15.dp),
-                ) {
-                    items(notification.single) { single ->
-                        ItemAlbumNotification(
-                            isAlbum = false,
-                            browseId = single["browseId"] ?: "",
-                            title = single["title"] ?: "",
-                            thumbnail = single["thumbnails"],
-                            navController,
-                        )
-                    }
-                    items(notification.album) { album ->
-                        ItemAlbumNotification(
-                            isAlbum = true,
-                            browseId = album["browseId"] ?: "",
-                            title = album["title"] ?: "",
-                            thumbnail = album["thumbnails"],
-                            navController = navController,
-                        )
-                    }
+            LazyRow(
+                Modifier.padding(top = 15.dp),
+            ) {
+                items(notification.single) { single ->
+                    ItemAlbumNotification(
+                        isAlbum = false,
+                        browseId = single["browseId"] ?: "",
+                        title = single["title"] ?: "",
+                        thumbnail = single["thumbnails"],
+                        navController,
+                    )
                 }
-            } else {
-                // Si ES un mensaje/comunicado, mostramos su descripción / texto
-                if (!notification.description.isNullOrEmpty()) {
-                    Text(
-                        text = notification.description!!,
-                        style = typo().bodyMedium,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
-                        modifier = Modifier.padding(top = 8.dp, start = 55.dp)
+                items(notification.album) { album ->
+                    ItemAlbumNotification(
+                        isAlbum = true,
+                        browseId = album["browseId"] ?: "",
+                        title = album["title"] ?: "",
+                        thumbnail = album["thumbnails"],
+                        navController = navController,
                     )
                 }
             }
@@ -386,7 +305,66 @@ fun NotificationItem(
         Text(
             text = notification.time.formatTimeAgo(),
             style = typo().titleSmall,
-            color = MaterialTheme.colorScheme.onBackground,
+            modifier =
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(end = 15.dp),
+        )
+    }
+}
+
+@Composable
+fun BlogNotificationItem(notification: NotificationEntity) {
+    val uriHandler = LocalUriHandler.current
+    val link = notification.link
+    Box(
+        modifier =
+            Modifier
+                .padding(5.dp)
+                .fillMaxWidth(),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(enabled = !link.isNullOrEmpty()) {
+                    link?.let { uriHandler.openUri(it) }
+                },
+        ) {
+            Box(
+                modifier =
+                    Modifier
+                        .align(Alignment.Top)
+                        .size(50.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = SimpIcons.RssFeed,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(26.dp),
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(Modifier.padding(end = 56.dp)) {
+                Text(text = "New blog post", style = typo().titleSmall)
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(text = notification.name, style = typo().titleMedium)
+                notification.description?.takeIf { it.isNotBlank() }?.let { desc ->
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = desc,
+                        style = typo().bodySmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+        Text(
+            text = notification.time.formatTimeAgo(),
+            style = typo().titleSmall,
             modifier =
                 Modifier
                     .align(Alignment.TopEnd)
@@ -426,8 +404,8 @@ fun ItemAlbumNotification(
                         .diskCacheKey(thumbnail)
                         .crossfade(true)
                         .build(),
-                placeholder = painterResource(Res.drawable.holder),
-                error = painterResource(Res.drawable.holder),
+                placeholder = rememberHolderPainter(),
+                error = rememberHolderPainter(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier =
@@ -441,7 +419,7 @@ fun ItemAlbumNotification(
             Text(
                 text = title,
                 style = typo().titleSmall,
-                color = MaterialTheme.colorScheme.onBackground,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 modifier =
                     Modifier
@@ -456,7 +434,6 @@ fun ItemAlbumNotification(
             Text(
                 text = if (isAlbum) stringResource(Res.string.album) else stringResource(Res.string.singles),
                 style = typo().bodySmall,
-                color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 modifier =
                     Modifier

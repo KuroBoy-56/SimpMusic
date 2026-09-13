@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -60,44 +58,40 @@ fun DescriptionView(
         }
     }
 
-    // AQUI ESTABA EL ERROR: Faltaba una comilla al final de esta línea
     val timeRegex = Regex("""(\d+):(\d+)(?::(\d+))?""")
     val urlRegex = Regex("""https?://\S+""")
-
     val annotatedString = AnnotatedString.Builder()
     var currentIndex = 0
-
-    // Usamos el color primario del tema para los enlaces, mucho más adaptable que el azul fijo
     val style =
         SpanStyle(
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold,
+            color = Color(0xFF00B0FF),
+            fontWeight = FontWeight.Normal,
         )
-
     val combinedRegex = Regex("${timeRegex.pattern}|${urlRegex.pattern}")
     val matchedWords = combinedRegex.findAll(text)
     matchedWords.forEachIndexed { index, matchResult ->
+        // Add text before the match
         if (matchResult.range.first > currentIndex) {
             annotatedString.append(text.substring(currentIndex, matchResult.range.first))
         }
 
+        // Add the matched text with the given style
         annotatedString.withStyle(style) {
             if (timeRegex.matches(matchResult.value)) {
                 pushStringAnnotation("CLICKABLE_USER_TIME", matchResult.value)
                 append(matchResult.value)
                 pop()
             } else if (urlRegex.matches(matchResult.value)) {
-                if (!matchResult.value.contains("simpmusic", ignoreCase = true)) {
-                    pushStringAnnotation("CLICKABLE_USER_URL", matchResult.value)
-                    append(matchResult.value)
-                    pop()
-                }
+                pushStringAnnotation("CLICKABLE_USER_URL", matchResult.value)
+                append(matchResult.value)
+                pop()
             }
         }
         if (index == matchedWords.count() - 1) {
             annotatedString.append(text.substring(matchResult.range.last + 1, text.length))
         }
 
+        // Update the current index to the end of the match
         currentIndex = matchResult.range.last + 1
     }
     if (matchedWords.count() == 0) {
@@ -107,7 +101,6 @@ fun DescriptionView(
     Column(modifier.animateContentSize()) {
         Text(
             text = annotatedString.toAnnotatedString(),
-            color = LocalContentColor.current, // Hereda el color dinámico inteligente (blanco/negro)
             modifier =
                 Modifier
                     .fillMaxWidth()
@@ -149,8 +142,7 @@ fun DescriptionView(
         androidx.compose.animation.AnimatedVisibility(!shouldHideExpandButton) {
             Text(
                 text = if (expanded) stringResource(Res.string.less) else stringResource(Res.string.more),
-                // Toma el color de lectura actual y le da transparencia para el efecto grisáceo dinámico
-                color = LocalContentColor.current.copy(alpha = 0.7f),
+                color = Color.LightGray,
                 modifier =
                     Modifier.clickable {
                         expanded = !expanded

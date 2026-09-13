@@ -9,10 +9,13 @@ import com.maxrave.domain.data.entities.PlaylistEntity
 import com.maxrave.domain.data.entities.SongEntity
 import com.maxrave.domain.data.model.searchResult.playlists.PlaylistsResult
 import com.maxrave.domain.data.type.ChartItem
+import com.maxrave.domain.data.type.MonthlyRecapItem
 import com.maxrave.domain.data.type.PlaylistType
 import com.maxrave.domain.data.type.RecentlyType
+import com.maxrave.domain.extension.now
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.repository.AlbumRepository
+import com.maxrave.domain.repository.AnalyticsRepository
 import com.maxrave.domain.repository.CommonRepository
 import com.maxrave.domain.repository.LocalPlaylistRepository
 import com.maxrave.domain.repository.PlaylistRepository
@@ -20,6 +23,8 @@ import com.maxrave.domain.repository.PodcastRepository
 import com.maxrave.domain.repository.SongRepository
 import com.maxrave.domain.utils.LocalResource
 import com.maxrave.domain.utils.Resource
+import com.maxrave.simpmusic.ui.screen.home.analytics.monthFullNameResource
+import com.maxrave.simpmusic.ui.screen.library.LibraryDynamicPlaylistType
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -30,17 +35,29 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.Month
+import kotlinx.datetime.atTime
+import kotlinx.datetime.minus
+import kotlinx.datetime.number
+import kotlinx.datetime.plus
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.added_local_playlist
+import simpmusic.composeapp.generated.resources.wrapped_recap_month
+import simpmusic.composeapp.generated.resources.wrapped_recap_month_year
 import simpmusic.composeapp.generated.resources.youtube_liked_music
 
 class LibraryViewModel(
     private val dataStoreManager: DataStoreManager,
+    // --- ACTUALIZACIÓN LÓGICA --- Inyectamos AnalyticsRepository
+    private val analyticsRepository: AnalyticsRepository,
     private val songRepository: SongRepository,
     private val commonRepository: CommonRepository,
     private val playlistRepository: PlaylistRepository,
@@ -86,11 +103,22 @@ class LibraryViewModel(
         MutableStateFlow(LocalResource.Loading())
     val listCanvasSong: StateFlow<LocalResource<List<SongEntity>>> get() = _listCanvasSong.asStateFlow()
 
+    // --- ACTUALIZACIÓN LÓGICA ---
+    // Manejo de los estados para los resúmenes mensuales
+    private val _monthlyRecaps: MutableStateFlow<LocalResource<List<MonthlyRecapItem>>> =
+        MutableStateFlow(LocalResource.Loading())
+    val monthlyRecaps: StateFlow<LocalResource<List<MonthlyRecapItem>>> get() = _monthlyRecaps.asStateFlow()
+
     private val _accountThumbnail: MutableStateFlow<String?> = MutableStateFlow(null)
     val accountThumbnail: StateFlow<String?> get() = _accountThumbnail.asStateFlow()
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val youtubeLoggedIn = dataStoreManager.loggedIn.mapLatest { it == DataStoreManager.TRUE }
+
+    // --- ACTUALIZACIÓN LÓGICA ---
+    // Determina si el chip de Wrapped/Recaps se debe mostrar basándose en si el rastreo está activado
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val localTrackingEnabled = dataStoreManager.localTrackingEnabled.mapLatest { it == DataStoreManager.TRUE }
 
     init {
         viewModelScope.launch {
@@ -232,7 +260,6 @@ class LibraryViewModel(
         _yourLocalPlaylist.value = LocalResource.Loading()
         viewModelScope.launch {
             localPlaylistRepository.getAllLocalPlaylists().collect { values ->
-//                    _listLocalPlaylist.postValue(values)
                 _yourLocalPlaylist.value = LocalResource.Success(values.reversed())
             }
         }
@@ -243,6 +270,56 @@ class LibraryViewModel(
             playlistRepository.getAllDownloadedPlaylist().collect { values ->
                 _downloadedPlaylist.value = LocalResource.Success(values)
             }
+        }
+    }
+
+    // --- ACTUALIZACIÓN LÓGICA ---
+    // Función para obtener las tarjetas de los recaps mensuales (Wrapped) de los últimos 12 meses
+    fun getMonthlyRecaps() {
+        _monthlyRecaps.value = LocalResource.Loading()
+        viewModelScope.launch {
+            val today = now().date
+            val thisMonth = LocalDate(today.year, today.month, 1)
+            val months =
+                (0 until MONTHS_OF_RECAP)
+                    .map { thisMonth.minus(it, DateTimeUnit.MONTH) }
+                    .mapNotNull { firstDay ->
+                        val lastDay = firstDay.plus(1, DateTimeUnit.MONTH).minus(1, DateTimeUnit.DAY)
+                        val start = firstDay.atTime(0, 0)
+                        val end = lastDay.atTime(23, 59, 59)
+                        val plays =
+                            analyticsRepository
+                                .getPlaybackEventCountInRange(
+                                    startTimestamp = start,
+                                    endTimestamp = end,
+                                ).firstOrNull() ?: 0L
+                        if (plays <= 0L) return@mapNotNull null
+                        MonthlyRecapItem(
+                            year = firstDay.year,
+                            month = firstDay.month.number,
+                            title = recapTitle(firstDay.year, firstDay.month, today.year),
+                        )
+                    }
+            _monthlyRecaps.value = LocalResource.Success(months)
+        }
+    }
+
+    // --- ACTUALIZACIÓN LÓGICA ---
+    // Resolución del título dinámico (Ej. "Recap January" o "Recap January 2025")
+    private suspend fun recapTitle(
+        year: Int,
+        month: Month,
+        currentYear: Int,
+    ): String {
+        val monthName =
+            org.jetbrains.compose.resources
+                .getString(monthFullNameResource(month))
+        return if (year == currentYear) {
+            org.jetbrains.compose.resources
+                .getString(Res.string.wrapped_recap_month, monthName)
+        } else {
+            org.jetbrains.compose.resources
+                .getString(Res.string.wrapped_recap_month_year, monthName, year.toString())
         }
     }
 
@@ -281,5 +358,9 @@ class LibraryViewModel(
             delay(500) // Wait for the database to update
             getRecentlyAdded()
         }
+    }
+
+    companion object {
+        private const val MONTHS_OF_RECAP = 12
     }
 }

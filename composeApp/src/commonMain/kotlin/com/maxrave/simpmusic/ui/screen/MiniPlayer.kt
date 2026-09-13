@@ -2,14 +2,22 @@ package com.maxrave.simpmusic.ui.screen
 
 import androidx.compose.animation.Animatable
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -21,7 +29,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,12 +48,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeOff
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.outlined.OpenInNew
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -56,6 +64,7 @@ import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -70,26 +79,34 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
+import coil3.request.crossfade
 import com.kmpalette.rememberPaletteState
 import com.maxrave.domain.data.entities.SongEntity
 import com.maxrave.domain.manager.DataStoreManager
@@ -107,13 +124,19 @@ import com.maxrave.simpmusic.ui.component.ExplicitBadge
 import com.maxrave.simpmusic.ui.component.HeartCheckBox
 import com.maxrave.simpmusic.ui.component.PlayPauseButton
 import com.maxrave.simpmusic.ui.component.PlayerControlLayout
+import com.maxrave.simpmusic.ui.component.QueueBottomSheet
+import com.maxrave.simpmusic.ui.component.liquidGlass
+import com.maxrave.simpmusic.ui.component.rememberHolderPainter
+import com.maxrave.simpmusic.ui.icon.Close
+import com.maxrave.simpmusic.ui.icon.PictureInPictureAlt
+import com.maxrave.simpmusic.ui.icon.QueueMusic
+import com.maxrave.simpmusic.ui.icon.SimpIcons
+import com.maxrave.simpmusic.ui.icon.VolumeOff
+import com.maxrave.simpmusic.ui.icon.VolumeUp
+import com.maxrave.simpmusic.ui.theme.LocalIsDarkTheme
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.UIEvent
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.request.get
-import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -122,37 +145,18 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import simpmusic.composeapp.generated.resources.Res
-import simpmusic.composeapp.generated.resources.holder
+import simpmusic.composeapp.generated.resources.crossfading
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 import kotlin.time.Duration.Companion.seconds
 
+import com.maxrave.simpmusic.ui.screen.player.cleanMusicTitle
+import com.maxrave.simpmusic.ui.screen.player.rememberHighResArtwork
+
 private const val TAG = "MiniPlayer"
-
-val itunesMiniPlayerClient = HttpClient(CIO)
-
-suspend fun fetchITunesCoverForMiniPlayer(title: String, artist: String): String? = withContext(Dispatchers.IO) {
-    try {
-        var clean = title
-        val bracketsRegex = Regex("(?i)[\\(\\[].*?(official|video|audio|lyric|live|remastered|version|edit|mix|cover)[\\)\\]]")
-        clean = clean.replace(bracketsRegex, "")
-        val ftRegex = Regex("(?i)(ft\\.|feat\\.|featuring).*$")
-        clean = clean.replace(ftRegex, "").trim()
-        val query = "$clean $artist".replace(" ", "+").replace("&", "%26")
-        val url = "https://itunes.apple.com/search?term=$query&entity=song&limit=1"
-        val response = itunesMiniPlayerClient.get(url).bodyAsText()
-        val regex = Regex(""""artworkUrl100":"([^"]+)"""")
-        val match = regex.find(response)
-        if (match != null) {
-            return@withContext match.groupValues[1].replace("100x100bb", "500x500bb")
-        }
-    } catch (e: Exception) {
-        e.printStackTrace()
-    }
-    return@withContext null
-}
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -163,55 +167,77 @@ fun MiniPlayer(
     onClose: () -> Unit,
     onClick: () -> Unit,
 ) {
+    val isLiquidGlassEnabled by sharedViewModel.getEnableLiquidGlass().collectAsStateWithLifecycle(DataStoreManager.FALSE)
     val controllerState by sharedViewModel.controllerState.collectAsStateWithLifecycle()
     val timelineState by sharedViewModel.timeline.collectAsStateWithLifecycle()
 
-    val defaultBgColor = MaterialTheme.colorScheme.surfaceVariant
-    val background = remember {
-        Animatable(defaultBgColor)
-    }
+    val layer = rememberGraphicsLayer()
+    val luminanceAnimation = remember { Animatable(0f) }
 
-    val isLightBg = background.value.luminance() > 0.5f
-    val targetTextColor = if (isLightBg) Color.Black else Color.White
-    val textShadow = if (!isLightBg) Shadow(color = Color.Black.copy(alpha = 0.6f), offset = Offset(0f, 2f), blurRadius = 4f) else null
+    val useGlassSurface = isLiquidGlassEnabled == DataStoreManager.TRUE || getPlatform() == Platform.Desktop
 
+    val isDarkTheme = LocalIsDarkTheme.current
     val textColor by animateColorAsState(
-        targetValue = targetTextColor,
+        targetValue =
+            if (useGlassSurface) {
+                if (isDarkTheme) Color.White else Color.Black
+            } else if (luminanceAnimation.value > 0.6f) {
+                Color.Black
+            } else {
+                Color.White
+            },
         label = "MiniPlayerTextColor",
         animationSpec = tween(500),
     )
 
-    val (songEntity, setSongEntity) = remember {
-        mutableStateOf<SongEntity?>(null)
-    }
-    val (liked, setLiked) = remember {
-        mutableStateOf(false)
-    }
-    val (isPlaying, setIsPlaying) = remember {
-        mutableStateOf(false)
-    }
-    val (progress, setProgress) = remember {
-        mutableFloatStateOf(0f)
-    }
-    val (isCrossfading, setIsCrossfading) = remember {
-        mutableStateOf(false)
-    }
-
-    var dynamicThumbnailUrl by remember { mutableStateOf<String?>(null) }
-    var currentSongId by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(songEntity?.videoId) {
-        if (songEntity?.videoId != null && songEntity.videoId != currentSongId) {
-            currentSongId = songEntity.videoId
-            val title = songEntity.title
-            val artist = songEntity.artistName?.connectArtists() ?: ""
-            val itunesCover = fetchITunesCoverForMiniPlayer(title, artist)
-            dynamicThumbnailUrl = itunesCover ?: songEntity.thumbnails
-        } else if (songEntity == null) {
-            dynamicThumbnailUrl = null
-            currentSongId = null
+    LaunchedEffect(layer, useGlassSurface) {
+        val buffer = IntArray(25)
+        while (isActive && useGlassSurface) {
+            try {
+                withContext(Dispatchers.Main) {
+                    val imageBitmap = layer.toImageBitmap()
+                    val thumbnail = imageBitmap.toResizedBitmap(5, 5)
+                    thumbnail.readPixels(buffer)
+                }
+            } catch (e: Exception) {
+                Logger.e(TAG, "Error getting pixels from layer: ${e.message}")
+            }
+            val averageLuminance =
+                (0 until 25).sumOf { index ->
+                    val color = buffer.get(index)
+                    val r = (color shr 16 and 0xFF) / 255f
+                    val g = (color shr 8 and 0xFF) / 255f
+                    val b = (color and 0xFF) / 255f
+                    0.2126 * r + 0.7152 * g + 0.0722 * b
+                } / 25
+            luminanceAnimation.animateTo(
+                averageLuminance.coerceIn(0.3, 0.8).toFloat(),
+                tween(500),
+            )
+            delay(1.seconds)
         }
     }
+
+    val (songEntity, setSongEntity) =
+        remember {
+            mutableStateOf<SongEntity?>(null)
+        }
+    val (liked, setLiked) =
+        remember {
+            mutableStateOf(false)
+        }
+    val (isPlaying, setIsPlaying) =
+        remember {
+            mutableStateOf(false)
+        }
+    val (progress, setProgress) =
+        remember {
+            mutableFloatStateOf(0f)
+        }
+    val (isCrossfading, setIsCrossfading) =
+        remember {
+            mutableStateOf(false)
+        }
 
     val coroutineScope = rememberCoroutineScope()
 
@@ -221,7 +247,12 @@ fun MiniPlayer(
         label = "",
     )
 
+    // Palette state
     val paletteState = rememberPaletteState()
+    val background =
+        remember {
+            Animatable(Color.DarkGray)
+        }
 
     val offsetX = remember { Animatable(initialValue = 0f) }
     val offsetY = remember { Animatable(0f) }
@@ -245,12 +276,7 @@ fun MiniPlayer(
         snapshotFlow { paletteState.palette }
             .distinctUntilChanged()
             .collectLatest {
-                val color = it.getColorFromPalette()
-                if (color != Color.Transparent) {
-                    background.animateTo(color)
-                } else {
-                    background.animateTo(defaultBgColor)
-                }
+                background.animateTo(it.getColorFromPalette())
             }
     }
 
@@ -289,51 +315,68 @@ fun MiniPlayer(
         job4.join()
     }
 
+    val highResThumbnail = rememberHighResArtwork(
+        title = songEntity?.title,
+        artist = songEntity?.artistName?.connectArtists(),
+        fallbackThumbnail = songEntity?.thumbnails
+    )
+
     if (getPlatform() == Platform.Android) {
+        val miniPlayerShape =
+            if (isLiquidGlassEnabled == DataStoreManager.TRUE) CircleShape else RoundedCornerShape(12.dp)
         Card(
-            shape = RoundedCornerShape(12.dp),
+            shape = miniPlayerShape,
             colors =
                 CardDefaults.cardColors(
-                    containerColor = background.value,
-                    disabledContainerColor = background.value,
+                    containerColor = if (isLiquidGlassEnabled == DataStoreManager.TRUE) Color.Transparent else background.value,
+                    disabledContainerColor = if (isLiquidGlassEnabled == DataStoreManager.TRUE) Color.Transparent else background.value,
                 ),
             modifier =
                 modifier
-                    .clipToBounds()
-                    .offset { IntOffset(0, offsetY.value.roundToInt()) },
-        ) {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxHeight()
-                        .pointerInput(Unit) {
-                            detectVerticalDragGestures(
-                                onDragStart = {
-                                },
-                                onVerticalDrag = { change: PointerInputChange, dragAmount: Float ->
-                                    if (offsetY.value + dragAmount > 0) {
-                                        coroutineScope.launch {
-                                            change.consume()
-                                            offsetY.animateTo(offsetY.value + 2 * dragAmount)
-                                        }
-                                    }
-                                },
-                                onDragCancel = {
-                                    coroutineScope.launch {
-                                        offsetY.animateTo(0f)
-                                    }
-                                },
-                                onDragEnd = {
-                                    coroutineScope.launch {
-                                        if (offsetY.value > 70) {
-                                            onClose()
-                                        }
-                                        offsetY.animateTo(0f)
-                                    }
-                                },
-                            )
+                    .then(
+                        if (isLiquidGlassEnabled == DataStoreManager.TRUE) {
+                            Modifier.liquidGlass(backdrop, layer, luminanceAnimation.value, RoundedCornerShape(16.dp))
+                        } else {
+                            Modifier
                         },
-            ) {
+                    ).then(
+                        Modifier
+                            .clip(miniPlayerShape)
+                            .offset { IntOffset(0, offsetY.value.roundToInt()) }
+                            .clickable(
+                                onClick = onClick,
+                            ).pointerInput(Unit) {
+                                detectVerticalDragGestures(
+                                    onDragStart = {
+                                    },
+                                    onVerticalDrag = { change: PointerInputChange, dragAmount: Float ->
+                                        if (offsetY.value + dragAmount > 0) {
+                                            coroutineScope.launch {
+                                                change.consume()
+                                                offsetY.animateTo(offsetY.value + 2 * dragAmount)
+                                                Logger.w("MiniPlayer", "Dragged ${offsetY.value}")
+                                            }
+                                        }
+                                    },
+                                    onDragCancel = {
+                                        coroutineScope.launch {
+                                            offsetY.animateTo(0f)
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        Logger.w("MiniPlayer", "Drag Ended")
+                                        coroutineScope.launch {
+                                            if (offsetY.value > 70) {
+                                                onClose()
+                                            }
+                                            offsetY.animateTo(0f)
+                                        }
+                                    },
+                                )
+                            },
+                    ),
+        ) {
+            Box(modifier = Modifier.fillMaxHeight()) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier =
@@ -341,21 +384,10 @@ fun MiniPlayer(
                             .fillMaxSize(),
                 ) {
                     Spacer(modifier = Modifier.size(8.dp))
-                    Box(
-                        modifier =
-                            Modifier
-                                .weight(1F)
-                                .fillMaxHeight()
-                                .clickable(
-                                    indication = null,
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    onClick = onClick,
-                                ),
-                    ) {
+                    Box(modifier = Modifier.weight(1F)) {
                         Row(
                             modifier =
                                 Modifier
-                                    .fillMaxHeight()
                                     .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                                     .pointerInput(Unit) {
                                         detectHorizontalDragGestures(
@@ -368,9 +400,11 @@ fun MiniPlayer(
                                                 coroutineScope.launch {
                                                     change.consume()
                                                     offsetX.animateTo(offsetX.value + dragAmount * 2)
+                                                    Logger.w("MiniPlayer", "Dragged ${offsetX.value}")
                                                 }
                                             },
                                             onDragCancel = {
+                                                Logger.w("MiniPlayer", "Drag Cancelled")
                                                 coroutineScope.launch {
                                                     if (offsetX.value > 200) {
                                                         sharedViewModel.onUIEvent(UIEvent.Previous)
@@ -381,6 +415,7 @@ fun MiniPlayer(
                                                 }
                                             },
                                             onDragEnd = {
+                                                Logger.w("MiniPlayer", "Drag Ended")
                                                 coroutineScope.launch {
                                                     if (offsetX.value > 200) {
                                                         sharedViewModel.onUIEvent(UIEvent.Previous)
@@ -392,16 +427,16 @@ fun MiniPlayer(
                                             },
                                         )
                                     },
-                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             AsyncImage(
                                 model =
                                     ImageRequest
                                         .Builder(LocalPlatformContext.current)
-                                        .data(dynamicThumbnailUrl)
+                                        .data(highResThumbnail)
+                                        .crossfade(550)
                                         .build(),
-                                placeholder = painterResource(Res.drawable.holder),
-                                error = painterResource(Res.drawable.holder),
+                                placeholder = rememberHolderPainter(),
+                                error = rememberHolderPainter(),
                                 contentDescription = null,
                                 contentScale = ContentScale.FillWidth,
                                 onSuccess = {
@@ -450,8 +485,8 @@ fun MiniPlayer(
                                             .align(Alignment.CenterVertically),
                                     ) {
                                         Text(
-                                            text = (songEntity?.title ?: "").toString(),
-                                            style = typo().labelSmall.copy(shadow = textShadow),
+                                            text = (songEntity?.title ?: "").toString().cleanMusicTitle(),
+                                            style = typo().labelSmall,
                                             color = textColor,
                                             maxLines = 1,
                                             modifier =
@@ -464,7 +499,6 @@ fun MiniPlayer(
                                                         animationMode = MarqueeAnimationMode.Immediately,
                                                     ).focusable(),
                                         )
-                                        val lyricLine by sharedViewModel.currentLyricLine.collectAsStateWithLifecycle()
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             androidx.compose.animation.AnimatedVisibility(visible = songEntity?.isExplicit == true) {
                                                 ExplicitBadge(
@@ -476,10 +510,10 @@ fun MiniPlayer(
                                                 )
                                             }
                                             Text(
-                                                text = lyricLine ?: (songEntity?.artistName?.connectArtists() ?: ""),
-                                                style = typo().bodySmall.copy(shadow = textShadow),
+                                                text = (songEntity?.artistName?.connectArtists() ?: ""),
+                                                style = typo().bodySmall,
                                                 maxLines = 1,
-                                                color = textColor.copy(alpha = 0.8f),
+                                                color = textColor,
                                                 modifier =
                                                     Modifier
                                                         .weight(1f)
@@ -497,10 +531,8 @@ fun MiniPlayer(
                         }
                     }
                     Spacer(modifier = Modifier.width(15.dp))
-                    CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides textColor) {
-                        HeartCheckBox(checked = liked, size = 30) {
-                            sharedViewModel.onUIEvent(UIEvent.ToggleLike)
-                        }
+                    HeartCheckBox(checked = liked, size = 30, tint = textColor) {
+                        sharedViewModel.onUIEvent(UIEvent.ToggleLike)
                     }
                     Spacer(modifier = Modifier.width(15.dp))
                     Crossfade(targetState = loading, label = "") {
@@ -508,15 +540,13 @@ fun MiniPlayer(
                             Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(18.dp),
-                                    color = textColor.copy(alpha = 0.7f),
+                                    color = textColor,
                                     strokeWidth = 3.dp,
                                 )
                             }
                         } else {
-                            CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides textColor) {
-                                PlayPauseButton(isPlaying = isPlaying, modifier = Modifier.size(48.dp)) {
-                                    sharedViewModel.onUIEvent(UIEvent.PlayPause)
-                                }
+                            PlayPauseButton(isPlaying = isPlaying, modifier = Modifier.size(48.dp), tint = textColor) {
+                                sharedViewModel.onUIEvent(UIEvent.PlayPause)
                             }
                         }
                     }
@@ -536,7 +566,7 @@ fun MiniPlayer(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .height(2.dp)
+                                .height(1.dp)
                                 .background(
                                     color = Color.Transparent,
                                     shape = RoundedCornerShape(4.dp),
@@ -550,11 +580,29 @@ fun MiniPlayer(
             }
         }
     } else {
+        val textColor = MaterialTheme.colorScheme.onBackground
+
+        val sweepTransition = rememberInfiniteTransition(label = "miniPlayerCrossfadeSweep")
+        val crossfadeSweep by sweepTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec =
+                infiniteRepeatable(
+                    animation = tween(3200, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart,
+                ),
+            label = "miniPlayerSweepHead",
+        )
+        val progressColor = textColor
+
         var isSliding by rememberSaveable {
             mutableStateOf(false)
         }
         var sliderValue by rememberSaveable {
             mutableFloatStateOf(0f)
+        }
+        var showQueueBottomSheet by rememberSaveable {
+            mutableStateOf(false)
         }
         LaunchedEffect(key1 = timelineState, key2 = isSliding) {
             if (!isSliding) {
@@ -566,52 +614,104 @@ fun MiniPlayer(
                     }
             }
         }
+        if (showQueueBottomSheet) {
+            QueueBottomSheet(
+                onDismiss = {
+                    showQueueBottomSheet = false
+                },
+            )
+        }
+        val capsuleShape = RoundedCornerShape(50)
+        val density = LocalDensity.current
         Box(
-            modifier.then(
-                Modifier.clickable {
+            modifier
+                .liquidGlass(backdrop, layer, luminanceAnimation.value, capsuleShape, blurScale = 1.2f)
+                .clip(capsuleShape)
+                .clickable {
                     onClick()
                 },
-            ),
             contentAlignment = Alignment.Center,
         ) {
             Row(
                 Modifier
-                    .fillMaxSize()
+                    .fillMaxHeight()
                     .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(modifier = Modifier.weight(1f).padding(vertical = 16.dp)) {
+                Box(Modifier.width(200.dp)) {
+                    PlayerControlLayout(
+                        controllerState,
+                        isSmallSize = true,
+                        plainPlayPause = true,
+                        horizontalPadding = 0.dp,
+                        activeColor = if (isDarkTheme) com.maxrave.simpmusic.ui.theme.seed else MaterialTheme.colorScheme.primary,
+                        contentColor = textColor,
+                    ) {
+                        sharedViewModel.onUIEvent(it)
+                    }
+                }
+                VerticalDivider(
+                    modifier = Modifier.height(28.dp).padding(horizontal = 14.dp),
+                    color = textColor.copy(alpha = 0.2f),
+                )
+                val trackInteraction = remember { MutableInteractionSource() }
+                val isTrackHovered by trackInteraction.collectIsHoveredAsState()
+                val showScrubber = isTrackHovered || isSliding
+                Box(
+                    modifier =
+                        Modifier
+                            .width(300.dp)
+                            .fillMaxHeight()
+                            .hoverable(trackInteraction),
+                ) {
+                    val scrubberDigits =
+                        typo().bodySmall.copy(
+                            lineHeight = 11.sp,
+                            lineHeightStyle =
+                                LineHeightStyle(
+                                    alignment = LineHeightStyle.Alignment.Center,
+                                    trim = LineHeightStyle.Trim.Both,
+                                ),
+                        )
+                    val infoAlpha by animateFloatAsState(
+                        targetValue = if (showScrubber) 0f else 1f,
+                        animationSpec = tween(200),
+                        label = "CapsuleInfoAlpha",
+                    )
                     Row(
+                        modifier =
+                            Modifier
+                                .align(Alignment.Center)
+                                .graphicsLayer { alpha = infoAlpha },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         AsyncImage(
                             model =
                                 ImageRequest
                                     .Builder(LocalPlatformContext.current)
-                                    .data(dynamicThumbnailUrl)
+                                    .data(highResThumbnail)
+                                    .crossfade(550)
                                     .build(),
-                            placeholder = painterResource(Res.drawable.holder),
-                            error = painterResource(Res.drawable.holder),
+                            placeholder = rememberHolderPainter(),
+                            error = rememberHolderPainter(),
                             contentDescription = null,
-                            contentScale = ContentScale.FillWidth,
+                            contentScale = ContentScale.Crop,
                             onSuccess = {
                                 bitmap =
                                     it.result.image.toImageBitmap()
                             },
                             modifier =
                                 Modifier
-                                    .fillMaxHeight()
-                                    .aspectRatio(1f)
-                                    .align(Alignment.CenterVertically)
+                                    .size(32.dp)
                                     .clip(
-                                        RoundedCornerShape(4.dp),
+                                        RoundedCornerShape(6.dp),
                                     ),
                         )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column {
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
                             Text(
-                                text = (songEntity?.title ?: "").toString(),
-                                style = typo().labelSmall.copy(shadow = textShadow),
+                                text = (songEntity?.title ?: "").toString().cleanMusicTitle(),
+                                style = typo().labelSmall.copy(fontSize = 12.sp),
                                 color = textColor,
                                 maxLines = 1,
                                 modifier =
@@ -629,301 +729,361 @@ fun MiniPlayer(
                                     ExplicitBadge(
                                         modifier =
                                             Modifier
-                                                .size(20.dp)
-                                                .padding(end = 4.dp)
-                                                .weight(1f),
+                                                .size(16.dp)
+                                                .padding(end = 4.dp),
                                     )
                                 }
                                 Text(
                                     text = (songEntity?.artistName?.connectArtists() ?: ""),
-                                    style = typo().bodySmall.copy(shadow = textShadow),
-                                    color = textColor.copy(alpha = 0.8f),
+                                    style = typo().bodySmall,
+                                    color = textColor.copy(alpha = 0.7f),
                                     maxLines = 1,
-                                    modifier =
-                                        Modifier
-                                            .weight(1f)
-                                            .wrapContentHeight(
-                                                align = Alignment.CenterVertically,
-                                            ).basicMarquee(
-                                                iterations = Int.MAX_VALUE,
-                                                animationMode = MarqueeAnimationMode.Immediately,
-                                            ).focusable(),
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false),
                                 )
-                            }
-                        }
-                    }
-                }
-                Box(modifier = Modifier.weight(1f)) {
-                    Column(Modifier.width(600.dp).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides textColor) {
-                                PlayerControlLayout(
-                                    controllerState,
-                                    isSmallSize = true,
+                                AnimatedVisibility(
+                                    visible = timelineState.isCrossfading,
+                                    enter = fadeIn(),
+                                    exit = fadeOut(),
                                 ) {
-                                    sharedViewModel.onUIEvent(it)
-                                }
-                            }
-                        }
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .wrapContentHeight(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = formatDuration((timelineState.total * (sliderValue / 100f)).roundToLong()),
-                                style = typo().bodyMedium.copy(shadow = textShadow),
-                                color = textColor,
-                                textAlign = TextAlign.Left,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.width(50.dp),
-                            )
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .weight(1f)
-                                        .padding(horizontal = 8.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Box(
-                                    modifier =
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .height(24.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Crossfade(timelineState.loading) {
-                                        if (it) {
-                                            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-                                                LinearProgressIndicator(
-                                                    modifier =
-                                                        Modifier
-                                                            .fillMaxWidth()
-                                                            .height(4.dp)
-                                                            .padding(
-                                                                horizontal = 3.dp,
-                                                            ).clip(
-                                                                RoundedCornerShape(8.dp),
-                                                            ),
-                                                    color = textColor.copy(alpha = 0.5f),
-                                                    trackColor = textColor.copy(alpha = 0.2f),
-                                                    strokeCap = StrokeCap.Round,
-                                                )
-                                            }
-                                        } else {
-                                            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-                                                LinearProgressIndicator(
-                                                    progress = { timelineState.bufferedPercent.toFloat() / 100 },
-                                                    modifier =
-                                                        Modifier
-                                                            .fillMaxWidth()
-                                                            .height(4.dp)
-                                                            .padding(
-                                                                horizontal = 3.dp,
-                                                            ).clip(
-                                                                RoundedCornerShape(8.dp),
-                                                            ),
-                                                    color = textColor.copy(alpha = 0.5f),
-                                                    trackColor = textColor.copy(alpha = 0.2f),
-                                                    strokeCap = StrokeCap.Round,
-                                                    drawStopIndicator = {},
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-                                    Slider(
-                                        value = sliderValue,
-                                        onValueChangeFinished = {
-                                            isSliding = false
-                                            sharedViewModel.onUIEvent(
-                                                UIEvent.UpdateProgress(sliderValue),
-                                            )
-                                        },
-                                        onValueChange = {
-                                            isSliding = true
-                                            sliderValue = it
-                                        },
-                                        valueRange = 0f..100f,
-                                        modifier =
-                                            Modifier
-                                                .fillMaxWidth()
-                                                .padding(top = 3.dp)
-                                                .align(
-                                                    Alignment.TopCenter,
-                                                ),
-                                        track = { sliderState ->
-                                            SliderDefaults.Track(
-                                                modifier =
-                                                    Modifier
-                                                        .height(5.dp),
-                                                enabled = true,
-                                                sliderState = sliderState,
-                                                colors =
-                                                    SliderDefaults.colors().copy(
-                                                        thumbColor = textColor,
-                                                        activeTrackColor = textColor,
-                                                        inactiveTrackColor = Color.Transparent,
+                                    val shimmerSpan = 140f
+                                    val shimmerHead = crossfadeSweep * (shimmerSpan * 3f) - shimmerSpan
+                                    Text(
+                                        text = " · " + stringResource(Res.string.crossfading),
+                                        style =
+                                            typo().bodySmall.copy(
+                                                brush =
+                                                    Brush.horizontalGradient(
+                                                        0f to textColor.copy(alpha = 0.45f),
+                                                        0.5f to Color.White,
+                                                        1f to textColor.copy(alpha = 0.45f),
+                                                        startX = shimmerHead,
+                                                        endX = shimmerHead + shimmerSpan,
+                                                        tileMode = TileMode.Clamp,
                                                     ),
-                                                thumbTrackGapSize = 0.dp,
-                                                drawTick = { _, _ -> },
-                                                drawStopIndicator = null,
-                                            )
-                                        },
-                                        thumb = {
-                                            SliderDefaults.Thumb(
-                                                modifier =
-                                                    Modifier
-                                                        .height(18.dp)
-                                                        .width(8.dp)
-                                                        .padding(
-                                                            vertical = 4.dp,
-                                                        ),
-                                                thumbSize = DpSize(8.dp, 8.dp),
-                                                interactionSource =
-                                                    remember {
-                                                        MutableInteractionSource()
-                                                    },
-                                                colors =
-                                                    SliderDefaults.colors().copy(
-                                                        thumbColor = textColor,
-                                                        activeTrackColor = textColor,
-                                                        inactiveTrackColor = Color.Transparent,
-                                                    ),
-                                                enabled = true,
-                                            )
-                                        },
+                                            ),
+                                        maxLines = 1,
                                     )
                                 }
                             }
-                            Text(
-                                text = formatDuration(timelineState.total),
-                                style = typo().bodyMedium.copy(shadow = textShadow),
-                                color = textColor,
-                                textAlign = TextAlign.Right,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.width(50.dp),
+                        }
+                    }
+                    Row(
+                        modifier =
+                            Modifier
+                                .align(Alignment.Center)
+                                .fillMaxWidth()
+                                .graphicsLayer { alpha = 1f - infoAlpha },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = formatDuration((timelineState.total * (sliderValue / 100f)).roundToLong()),
+                            style = scrubberDigits,
+                            color = textColor.copy(alpha = 0.7f),
+                            maxLines = 1,
+                        )
+                        Text(
+                            text =
+                                "−" +
+                                    formatDuration(
+                                        (timelineState.total * (1f - sliderValue / 100f)).roundToLong(),
+                                    ),
+                            style = scrubberDigits,
+                            color = textColor.copy(alpha = 0.7f),
+                            maxLines = 1,
+                        )
+                    }
+                    CapsuleProgress(
+                        sliderValue = sliderValue,
+                        loading = loading,
+                        trackHeight = if (showScrubber) 4.dp else 2.dp,
+                        thumbSize = 0.dp,
+                        textColor = textColor,
+                        progressColor = progressColor,
+                        modifier =
+                            Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth(),
+                        onValueChange = {
+                            isSliding = true
+                            sliderValue = it * 100f
+                        },
+                        onValueChangeFinished = {
+                            isSliding = false
+                            sharedViewModel.onUIEvent(
+                                UIEvent.UpdateProgress(sliderValue),
+                            )
+                        },
+                    )
+                }
+                VerticalDivider(
+                    modifier = Modifier.height(28.dp).padding(horizontal = 14.dp),
+                    color = textColor.copy(alpha = 0.2f),
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                        HeartCheckBox(checked = controllerState.isLiked, size = 32) {
+                            sharedViewModel.onUIEvent(UIEvent.ToggleLike)
+                        }
+                    }
+                    IconButton(
+                        onClick = {
+                            showQueueBottomSheet = true
+                        },
+                    ) {
+                        Icon(
+                            imageVector = SimpIcons.QueueMusic,
+                            tint = textColor,
+                            contentDescription = "",
+                        )
+                    }
+                    if (getPlatform() == Platform.Desktop) {
+                        IconButton(onClick = { toggleMiniPlayer() }) {
+                            Icon(
+                                imageVector = SimpIcons.PictureInPictureAlt,
+                                tint = textColor,
+                                contentDescription = "Mini Player",
                             )
                         }
                     }
-                }
-                Box(Modifier.weight(1f)) {
-                    Row(Modifier.fillMaxHeight().align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
-                        CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides textColor) {
-                            HeartCheckBox(checked = controllerState.isLiked, size = 30) {
-                                sharedViewModel.onUIEvent(UIEvent.ToggleLike)
-                            }
+                    var isVolumeSliding by rememberSaveable {
+                        mutableStateOf(false)
+                    }
+                    var volumeValue by rememberSaveable {
+                        mutableFloatStateOf(0f)
+                    }
+                    LaunchedEffect(key1 = controllerState, key2 = isVolumeSliding) {
+                        if (!isVolumeSliding) {
+                            volumeValue = controllerState.volume
                         }
-                        Spacer(Modifier.width(4.dp))
-                        if (getPlatform() == Platform.Desktop) {
-                            IconButton(onClick = { toggleMiniPlayer() }) {
-                                Icon(
-                                    imageVector = Icons.Outlined.OpenInNew,
-                                    contentDescription = "Mini Player",
-                                    tint = textColor
-                                )
-                            }
+                    }
+                    var previousVolumeValue by rememberSaveable {
+                        mutableFloatStateOf(controllerState.volume.takeIf { it > 0f } ?: 1f)
+                    }
+                    LaunchedEffect(controllerState.volume) {
+                        if (controllerState.volume > 0f) {
+                            previousVolumeValue = controllerState.volume
                         }
+                    }
+                    val volumeInteraction = remember { MutableInteractionSource() }
+                    val isVolumeHovered by volumeInteraction.collectIsHoveredAsState()
+                    val popupInteraction = remember { MutableInteractionSource() }
+                    val isPopupHovered by popupInteraction.collectIsHoveredAsState()
+                    Box(modifier = Modifier.hoverable(volumeInteraction)) {
                         IconButton(
                             onClick = {
-                                val newVolume = if (controllerState.volume > 0f) 0f else 1f
-                                sharedViewModel.onUIEvent(UIEvent.UpdateVolume(newVolume))
+                                if (controllerState.volume > 0f) {
+                                    sharedViewModel.onUIEvent(UIEvent.UpdateVolume(0f))
+                                } else {
+                                    sharedViewModel.onUIEvent(
+                                        UIEvent.UpdateVolume(previousVolumeValue.coerceIn(0.1f, 1f)),
+                                    )
+                                }
                             },
                         ) {
                             Icon(
                                 imageVector =
                                     if (controllerState.volume > 0f) {
-                                        Icons.AutoMirrored.Filled.VolumeUp
+                                        SimpIcons.VolumeUp
                                     } else {
-                                        Icons.AutoMirrored.Filled.VolumeOff
+                                        SimpIcons.VolumeOff
                                     },
+                                tint = textColor,
                                 contentDescription = if (controllerState.volume > 0f) "Mute" else "Unmute",
-                                tint = textColor
                             )
                         }
-                        Spacer(Modifier.width(2.dp))
-                        var isVolumeSliding by rememberSaveable {
-                            mutableStateOf(false)
-                        }
-                        var volumeValue by rememberSaveable {
-                            mutableFloatStateOf(0f)
-                        }
-                        LaunchedEffect(key1 = controllerState, key2 = isVolumeSliding) {
-                            if (!isVolumeSliding) {
-                                volumeValue = controllerState.volume
+                        var isVolumePopupVisible by remember { mutableStateOf(false) }
+                        LaunchedEffect(isVolumeHovered, isPopupHovered, isVolumeSliding) {
+                            if (isVolumeHovered || isPopupHovered || isVolumeSliding) {
+                                isVolumePopupVisible = true
+                            } else {
+                                delay(400)
+                                isVolumePopupVisible = false
                             }
                         }
-                        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-                            Slider(
-                                value = volumeValue,
-                                onValueChangeFinished = {
-                                    isVolumeSliding = false
-                                    sharedViewModel.onUIEvent(
-                                        UIEvent.UpdateVolume(volumeValue.coerceIn(0f, 1f)),
+                        if (isVolumePopupVisible) {
+                            Popup(
+                                alignment = Alignment.TopCenter,
+                                offset = IntOffset(0, with(density) { -(VOLUME_POPUP_HEIGHT + 4.dp).roundToPx() }),
+                            ) {
+                                Column(
+                                    modifier =
+                                        Modifier
+                                            .hoverable(popupInteraction)
+                                            .width(44.dp)
+                                            .height(VOLUME_POPUP_HEIGHT)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.96f))
+                                            .padding(vertical = 10.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Text(
+                                        text = (volumeValue * 100).roundToInt().toString(),
+                                        style = typo().bodySmall,
+                                        color = textColor.copy(alpha = 0.7f),
+                                        maxLines = 1,
                                     )
-                                },
-                                onValueChange = {
-                                    isVolumeSliding = true
-                                    volumeValue = it
-                                },
-                                valueRange = 0f..1f,
-                                modifier =
-                                    Modifier
-                                        .padding(top = 3.dp)
-                                        .width(64.dp),
-                                track = { sliderState ->
-                                    SliderDefaults.Track(
-                                        modifier =
-                                            Modifier
-                                                .height(5.dp),
-                                        enabled = true,
-                                        sliderState = sliderState,
-                                        colors =
-                                            SliderDefaults.colors().copy(
-                                                thumbColor = textColor,
-                                                activeTrackColor = textColor,
-                                                inactiveTrackColor = textColor.copy(alpha = 0.3f),
-                                            ),
-                                        thumbTrackGapSize = 0.dp,
-                                        drawTick = { _, _ -> },
-                                        drawStopIndicator = null,
-                                    )
-                                },
-                                thumb = {
-                                    SliderDefaults.Thumb(
-                                        modifier =
-                                            Modifier
-                                                .height(18.dp)
-                                                .width(8.dp)
-                                                .padding(
-                                                    vertical = 4.dp,
-                                                ),
-                                        thumbSize = DpSize(8.dp, 8.dp),
-                                        interactionSource =
-                                            remember {
-                                                MutableInteractionSource()
+                                    Box(
+                                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+                                            Slider(
+                                                value = volumeValue,
+                                                onValueChangeFinished = {
+                                                    isVolumeSliding = false
+                                                    sharedViewModel.onUIEvent(
+                                                        UIEvent.UpdateVolume(volumeValue.coerceIn(0f, 1f)),
+                                                    )
+                                                },
+                                                onValueChange = {
+                                                    isVolumeSliding = true
+                                                    volumeValue = it
+                                                },
+                                                valueRange = 0f..1f,
+                                                modifier =
+                                                    Modifier
+                                                        .graphicsLayer {
+                                                            rotationZ = 270f
+                                                            transformOrigin = TransformOrigin(0f, 0f)
+                                                        }.layout { measurable, constraints ->
+                                                            val placeable =
+                                                                measurable.measure(
+                                                                    Constraints(
+                                                                        minWidth = constraints.minHeight,
+                                                                        maxWidth = constraints.maxHeight,
+                                                                        minHeight = constraints.minWidth,
+                                                                        maxHeight = constraints.maxWidth,
+                                                                    ),
+                                                                )
+                                                            layout(placeable.height, placeable.width) {
+                                                                placeable.place(-placeable.width, 0)
+                                                            }
+                                                        }.width(VOLUME_SLIDER_LENGTH),
+                                                track = { sliderState ->
+                                                    SliderDefaults.Track(
+                                                        modifier =
+                                                            Modifier
+                                                                .height(4.dp),
+                                                        enabled = true,
+                                                        sliderState = sliderState,
+                                                        colors =
+                                                            SliderDefaults.colors().copy(
+                                                                thumbColor = textColor,
+                                                                activeTrackColor = textColor,
+                                                                inactiveTrackColor = textColor.copy(alpha = 0.3f),
+                                                            ),
+                                                        thumbTrackGapSize = 0.dp,
+                                                        drawTick = { _, _ -> },
+                                                        drawStopIndicator = null,
+                                                    )
+                                                },
+                                                thumb = {
+                                                    Spacer(Modifier.size(0.dp))
+                                                },
+                                            )
+                                        }
+                                    }
+                                    Icon(
+                                        imageVector =
+                                            if (controllerState.volume > 0f) {
+                                                SimpIcons.VolumeUp
+                                            } else {
+                                                SimpIcons.VolumeOff
                                             },
+                                        tint = textColor.copy(alpha = 0.7f),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(15.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    IconButton(onClick = { onClose() }) {
+                        Icon(SimpIcons.Close, "", tint = textColor)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private val VOLUME_POPUP_HEIGHT = 180.dp
+private val VOLUME_SLIDER_LENGTH = 96.dp
+
+@Composable
+private fun CapsuleProgress(
+    sliderValue: Float,
+    loading: Boolean,
+    trackHeight: Dp,
+    thumbSize: Dp,
+    textColor: Color,
+    progressColor: Color,
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier.height(16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+            Crossfade(targetState = loading, label = "capsuleProgress") { isLoading ->
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    if (isLoading) {
+                        LinearProgressIndicator(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(trackHeight)
+                                    .clip(RoundedCornerShape(8.dp)),
+                            color = progressColor,
+                            trackColor = textColor.copy(alpha = 0.25f),
+                            strokeCap = StrokeCap.Round,
+                        )
+                    } else {
+                        Slider(
+                            value = sliderValue / 100f,
+                            onValueChange = onValueChange,
+                            onValueChangeFinished = onValueChangeFinished,
+                            modifier = Modifier.fillMaxWidth(),
+                            track = { sliderState ->
+                                SliderDefaults.Track(
+                                    modifier = Modifier.height(trackHeight),
+                                    enabled = true,
+                                    sliderState = sliderState,
+                                    colors =
+                                        SliderDefaults.colors().copy(
+                                            thumbColor = progressColor,
+                                            activeTrackColor = progressColor,
+                                            inactiveTrackColor = textColor.copy(alpha = 0.25f),
+                                        ),
+                                    thumbTrackGapSize = 0.dp,
+                                    drawTick = { _, _ -> },
+                                    drawStopIndicator = null,
+                                )
+                            },
+                            thumb = {
+                                if (thumbSize > 0.dp) {
+                                    SliderDefaults.Thumb(
+                                        modifier = Modifier.size(thumbSize),
+                                        thumbSize = DpSize(thumbSize, thumbSize),
+                                        interactionSource = remember { MutableInteractionSource() },
                                         colors =
                                             SliderDefaults.colors().copy(
-                                                thumbColor = textColor,
-                                                activeTrackColor = textColor,
-                                                inactiveTrackColor = textColor.copy(alpha = 0.3f),
+                                                thumbColor = progressColor,
+                                                activeTrackColor = progressColor,
+                                                inactiveTrackColor = textColor.copy(alpha = 0.25f),
                                             ),
                                         enabled = true,
                                     )
-                                },
-                            )
-                        }
-                        Spacer(Modifier.width(4.dp))
-                        IconButton(onClick = { onClose() }) {
-                            Icon(Icons.Rounded.Close, "", tint = textColor)
-                        }
+                                } else {
+                                    Spacer(Modifier.size(0.dp))
+                                }
+                            },
+                        )
                     }
                 }
             }

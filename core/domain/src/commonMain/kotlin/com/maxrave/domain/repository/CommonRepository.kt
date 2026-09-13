@@ -22,9 +22,9 @@ interface CommonRepository {
     // Notifications
     suspend fun insertNotification(notificationEntity: NotificationEntity)
 
-    suspend fun isNotificationExists(link: String): Boolean
-
     suspend fun getAllNotifications(): Flow<List<NotificationEntity>?>
+
+    suspend fun isNotificationExists(link: String): Boolean
 
     suspend fun deleteNotification(id: Long)
 

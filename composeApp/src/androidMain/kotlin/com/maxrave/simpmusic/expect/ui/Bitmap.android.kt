@@ -1,6 +1,7 @@
 package com.maxrave.simpmusic.expect.ui
 
 import android.graphics.Bitmap.CompressFormat.JPEG
+import android.graphics.Bitmap.CompressFormat.PNG
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -11,8 +12,13 @@ import java.io.ByteArrayOutputStream
 actual fun ImageBitmap.toByteArray(): ByteArray? {
     val byteArrayOutputStream = ByteArrayOutputStream()
     this.asAndroidBitmap().compress(JPEG, 100, byteArrayOutputStream)
-    val bytesArray = byteArrayOutputStream.toByteArray()
-    return bytesArray
+    return byteArrayOutputStream.toByteArray()
+}
+
+actual fun ImageBitmap.toPngByteArray(): ByteArray? {
+    val byteArrayOutputStream = ByteArrayOutputStream()
+    this.asAndroidBitmap().compress(PNG, 100, byteArrayOutputStream)
+    return byteArrayOutputStream.toByteArray()
 }
 
 actual fun Image.toImageBitmap(): ImageBitmap = this.toBitmap().asImageBitmap()

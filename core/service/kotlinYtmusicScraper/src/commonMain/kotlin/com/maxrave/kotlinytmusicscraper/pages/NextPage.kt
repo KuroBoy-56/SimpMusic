@@ -23,7 +23,7 @@ data class NextResult(
 
 object NextPage {
     fun fromMusicResponsiveListItemRenderer(renderer: MusicResponsiveListItemRenderer): SongItem? {
-        val videoId = renderer.playlistItemData?.videoId ?: return null
+        val videoId = renderer.videoId ?: return null
         val artistRuns =
             renderer.flexColumns
                 .getOrNull(1)
@@ -95,6 +95,7 @@ object NextPage {
                     ?.navigationEndpoint
                     ?.watchEndpoint,
             thumbnails = renderer.thumbnail?.musicThumbnailRenderer?.thumbnail,
+            musicVideoType = renderer.musicVideoType,
         )
     }
 
@@ -141,6 +142,11 @@ object NextPage {
                     it.musicInlineBadgeRenderer?.icon?.iconType == "MUSIC_EXPLICIT_BADGE"
                 } != null,
             thumbnails = renderer.thumbnail,
+            musicVideoType =
+                renderer.navigationEndpoint.watchEndpoint
+                    ?.watchEndpointMusicSupportedConfigs
+                    ?.watchEndpointMusicConfig
+                    ?.musicVideoType,
         )
     }
 }

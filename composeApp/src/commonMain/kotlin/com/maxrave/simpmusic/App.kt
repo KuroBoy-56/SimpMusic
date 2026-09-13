@@ -21,8 +21,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,6 +31,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,6 +59,8 @@ import com.maxrave.simpmusic.expect.ui.rememberBackdrop
 import com.maxrave.simpmusic.extension.copy
 import com.maxrave.simpmusic.ui.component.AppBottomNavigationBar
 import com.maxrave.simpmusic.ui.component.AppNavigationRail
+import com.maxrave.simpmusic.ui.icon.ArrowForwardIos
+import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.home.NotificationDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
@@ -71,6 +72,7 @@ import com.maxrave.simpmusic.ui.screen.player.NowPlayingScreen
 import com.maxrave.simpmusic.ui.screen.player.NowPlayingScreenContent
 import com.maxrave.simpmusic.ui.screen.splash.SplashScreen
 import com.maxrave.simpmusic.ui.theme.AppTheme
+import com.maxrave.simpmusic.ui.theme.parseThemeColorHex
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.SettingsViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
@@ -90,7 +92,6 @@ import simpmusic.composeapp.generated.resources.sleep_timer_off
 import simpmusic.composeapp.generated.resources.this_app_needs_to_access_your_notification
 import simpmusic.composeapp.generated.resources.this_link_is_not_supported
 import simpmusic.composeapp.generated.resources.yes
-import kotlinx.coroutines.runBlocking
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -108,8 +109,11 @@ fun App(
 
     var showSplash by rememberSaveable { mutableStateOf(true) }
 
-    var isShowMiniPlayer by rememberSaveable {
-        mutableStateOf(true)
+    val isShowMiniPlayer by remember {
+        derivedStateOf {
+            val item = nowPlayingData?.mediaItem
+            item != null && item != GenericMediaItem.EMPTY
+        }
     }
 
     var isShowNowPlaylistScreen by rememberSaveable {
@@ -129,32 +133,35 @@ fun App(
             blurEnabled = true,
         )
 
-    val followSystemTheme by settingsViewModel.followSystemTheme.collectAsStateWithLifecycle()
-    val forceLightTheme by settingsViewModel.forceLightTheme.collectAsStateWithLifecycle()
-
-    LaunchedEffect(nowPlayingData) {
-        isShowMiniPlayer = !(nowPlayingData?.mediaItem == null || nowPlayingData?.mediaItem == GenericMediaItem.EMPTY)
-    }
+    val themeMode by viewModel.getThemeMode().collectAsStateWithLifecycle(DataStoreManager.THEME_MODE_DARK)
+    val themeColorSource by viewModel.getThemeColorSource().collectAsStateWithLifecycle(DataStoreManager.THEME_COLOR_DEFAULT)
+    val customThemeColorHex by viewModel.getCustomThemeColor().collectAsStateWithLifecycle(DataStoreManager.DEFAULT_THEME_COLOR_HEX)
+    val isLiquidGlassEnabled by viewModel.getEnableLiquidGlass().collectAsStateWithLifecycle(DataStoreManager.FALSE)
 
     LaunchedEffect(intent) {
         val intent = intent ?: return@LaunchedEffect
         val data = intent.data
         Logger.d("MainActivity", "onCreate: $data")
         if (data != null) {
-            if (data == "simpmusic://notification".toUri()) {
+            if (data == "kuromusic://notification".toUri()) {
                 viewModel.setIntent(null)
                 navController.navigate(
                     NotificationDestination,
                 )
-            } else if (data.host == "simpmusic.org" || data.scheme == "simpmusic") {
+            } else if (data.scheme == "wordbyword" && data.host == "lastfm-auth") {
+                val token = data.getQueryParameter("token")
+                Logger.d("MainActivity", "Last.fm callback, token present: ${!token.isNullOrEmpty()}")
+                viewModel.setIntent(null)
+                token?.let { viewModel.completeLastfmLogin(it) }
+            } else if (data.host == "kuromusic.org" || data.scheme == "kuromusic") {
                 val segments = data.pathSegments
                 val appPath =
-                    if (data.scheme == "simpmusic") {
+                    if (data.scheme == "kuromusic") {
                         data.host
                     } else {
                         segments.getOrNull(1)
                     }
-                Logger.d("MainActivity", "simpmusic.org deep link, appPath: $appPath")
+                Logger.d("MainActivity", "kuromusic.org deep link, appPath: $appPath")
                 viewModel.setIntent(null)
                 when (appPath) {
                     "watch" -> {
@@ -177,7 +184,7 @@ fun App(
 
                     "channel", "c" -> {
                         val artistId =
-                            if (data.scheme == "simpmusic") {
+                            if (data.scheme == "kuromusic") {
                                 segments.firstOrNull()
                             } else {
                                 segments.getOrNull(2)
@@ -283,8 +290,10 @@ fun App(
     val backdrop = rememberBackdrop(Color.Black)
 
     AppTheme(
-        followSystemTheme = followSystemTheme,
-        forceLightTheme = forceLightTheme
+        themeMode = themeMode,
+        themeColorSource = themeColorSource,
+        customThemeColor = parseThemeColorHex(customThemeColorHex),
+        liquidGlassEnabled = isLiquidGlassEnabled == DataStoreManager.TRUE || getPlatform() == Platform.Desktop
     )  {
         Box(modifier = Modifier.fillMaxSize()) {
             Scaffold(
@@ -441,7 +450,7 @@ fun App(
                                                 navController = navController,
                                                 sharedViewModel = viewModel,
                                                 isExpanded = true,
-                                                dismissIcon = Icons.AutoMirrored.Rounded.ArrowForwardIos,
+                                                dismissIcon = SimpIcons.ArrowForwardIos,
                                             ) {
                                                 isShowNowPlaylistScreen = false
                                             }

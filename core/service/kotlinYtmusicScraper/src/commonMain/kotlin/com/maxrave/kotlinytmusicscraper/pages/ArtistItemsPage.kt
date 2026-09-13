@@ -20,7 +20,7 @@ data class ArtistItemsPage(
     companion object {
         fun fromMusicResponsiveListItemRenderer(renderer: MusicResponsiveListItemRenderer): SongItem? {
             return SongItem(
-                id = renderer.playlistItemData?.videoId ?: return null,
+                id = renderer.videoId ?: return null,
                 title =
                     renderer.flexColumns
                         .firstOrNull()
@@ -64,6 +64,7 @@ data class ArtistItemsPage(
                         ?.musicPlayButtonRenderer
                         ?.playNavigationEndpoint
                         ?.watchEndpoint,
+                musicVideoType = renderer.musicVideoType,
             )
         }
 
@@ -73,13 +74,7 @@ data class ArtistItemsPage(
                     AlbumItem(
                         browseId = renderer.navigationEndpoint.browseEndpoint?.browseId ?: return null,
                         playlistId =
-                            renderer.thumbnailOverlay
-                                ?.musicItemThumbnailOverlayRenderer
-                                ?.content
-                                ?.musicPlayButtonRenderer
-                                ?.playNavigationEndpoint
-                                ?.watchPlaylistEndpoint
-                                ?.playlistId ?: return null,
+                            renderer.playlistId ?: return null,
                         title =
                             renderer.title.runs
                                 ?.firstOrNull()
@@ -116,6 +111,7 @@ data class ArtistItemsPage(
                         duration = null,
                         thumbnail = renderer.thumbnailRenderer.musicThumbnailRenderer?.getThumbnailUrl() ?: return null,
                         endpoint = renderer.navigationEndpoint.watchEndpoint,
+                        musicVideoType = renderer.musicVideoType,
                     )
                 renderer.isPlaylist ->
                     PlaylistItem(

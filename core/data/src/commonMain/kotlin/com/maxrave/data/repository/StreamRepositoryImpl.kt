@@ -1,5 +1,6 @@
 package com.maxrave.data.repository
 
+import com.maxrave.common.ITAG
 import com.maxrave.common.MERGING_DATA_TYPE
 import com.maxrave.common.QUALITY
 import com.maxrave.common.VIDEO_QUALITY
@@ -18,8 +19,6 @@ import com.maxrave.domain.utils.Resource
 import com.maxrave.kotlinytmusicscraper.YouTube
 import com.maxrave.kotlinytmusicscraper.models.MediaType
 import com.maxrave.kotlinytmusicscraper.models.response.PlayerResponse
-import com.maxrave.kotlinytmusicscraper.utils.decodeBase64
-import com.maxrave.kotlinytmusicscraper.utils.decodeTidalManifest
 import com.maxrave.logger.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -41,6 +40,8 @@ internal class StreamRepositoryImpl(
     override fun getNewFormat(videoId: String): Flow<NewFormatEntity?> = flow { emit(localDataSource.getNewFormat(videoId)) }.flowOn(Dispatchers.Main)
 
     override suspend fun getFormatFlow(videoId: String) = localDataSource.getNewFormatAsFlow(videoId)
+
+    override fun getExtractSource(videoId: String): String? = youTube.getExtractSource(videoId)
 
     override suspend fun updateFormat(videoId: String) {
         localDataSource.getNewFormat(videoId)?.let { oldFormat ->
@@ -91,9 +92,9 @@ internal class StreamRepositoryImpl(
         flow {
             val itag =
                 if (isDownloading) {
-                    QUALITY.itags.getOrNull(QUALITY.items.indexOf(dataStoreManager.downloadQuality.first()))
+                    QUALITY.itagOf(dataStoreManager.downloadQuality.first())
                 } else {
-                    QUALITY.itags.getOrNull(QUALITY.items.indexOf(dataStoreManager.quality.first()))
+                    QUALITY.itagOf(dataStoreManager.quality.first())
                 }
             val videoItag =
                 if (!muxed) {
@@ -106,11 +107,10 @@ internal class StreamRepositoryImpl(
                             },
                         ),
                     )
-                        ?: 134
+                        ?: ITAG.VIDEO_360P
                 } else {
-                    18
+                    ITAG.MUXED_360P
                 }
-            // 134, 136, 137
             youTube
                 .player(videoId, noLogIn = muxed)
                 .onSuccess { data ->
@@ -145,12 +145,16 @@ internal class StreamRepositoryImpl(
                     Logger.w("Stream", "Get stream for video $isVideo")
                     val videoFormat =
                         formatList.find { it.itag == videoItag }
-                            ?: formatList.find { it.itag == 136 }
-                            ?: formatList.find { it.itag == 134 }
+                            ?: formatList.find { it.itag == ITAG.VIDEO_720P }
+                            ?: formatList.find { it.itag == ITAG.VIDEO_360P }
                             ?: formatList.find { !it.isAudio && it.url.isNullOrEmpty().not() }
+                    val audioTwinItag = ITAG.highQualityTwinOf(itag)
                     val audioFormat =
-                        formatList.find { it.itag == itag } ?: formatList.find { it.itag == 141 }
-                            ?: formatList.find { it.isAudio && it.url.isNullOrEmpty().not() }
+                        formatList.find { it.itag == itag } ?: if (audioTwinItag != null) {
+                            formatList.find { it.itag == audioTwinItag }
+                        } else {
+                            formatList.find { it.isAudio && it.url.isNullOrEmpty().not() }
+                        }
                     var format =
                         if (isVideo) {
                             videoFormat
@@ -160,20 +164,6 @@ internal class StreamRepositoryImpl(
                     if (format == null) {
                         format = formatList.lastOrNull { it.url.isNullOrEmpty().not() }
                     }
-                    val superFormat =
-                        formatList
-                            .filter {
-                                it.audioQuality == "AUDIO_QUALITY_HIGH"
-                            }.let { highFormat ->
-                                highFormat.firstOrNull {
-                                    it.itag == 774 && it.url.isNullOrEmpty().not()
-                                } ?: highFormat.firstOrNull {
-                                    it.url.isNullOrEmpty().not()
-                                }
-                            }
-                    if (!isVideo && superFormat != null) {
-                        format = superFormat
-                    }
                     if (muxed) {
                         format = formatList
                             .filter {
@@ -182,83 +172,15 @@ internal class StreamRepositoryImpl(
                             }.maxByOrNull { it.width ?: 0 } ?: formatList.find { it.itag == videoItag }
                     }
                     Logger.w("Stream", "Selected hls ${response.streamingData?.hlsManifestUrl}")
-                    Logger.w("Stream", "Super format: $superFormat")
                     Logger.w("Stream", "format: $format")
                     Logger.d("Stream", "expireInSeconds ${response.streamingData?.expiresInSeconds}")
                     Logger.w("Stream", "expired at ${now().plusSeconds(response.streamingData?.expiresInSeconds?.toLong() ?: 0L)}")
-                    val prefer320kbps = dataStoreManager.prefer320kbpsStream.first() == DataStoreManager.TRUE
                     val durationSecond = response.videoDetails?.lengthSeconds?.toIntOrNull()
-                    // AutoMix metadata from Tidal (hoisted for NewFormatEntity insertion below)
+                    // AutoMix metadata from Tidal official API
                     var tidalBpm: Int? = null
                     var tidalMusicKey: String? = null
                     var tidalKeyScale: String? = null
-                    if (prefer320kbps && !isVideo && durationSecond != null && data.third == MediaType.Song) {
-                        val your320kbpsUrl = dataStoreManager.your320kbpsUrl.first()
-                        Logger.d("Stream", "Prefer 320kbps enabled ${response.videoDetails}")
-                        val title = response.videoDetails?.title ?: ""
-                        val author = response.videoDetails?.author ?: ""
-                        val q =
-                            "$title $author"
-                                .replace(
-                                    Regex("\\((feat\\.|ft.|cùng với|con|mukana|com|avec|合作音乐人: ) "),
-                                    " ",
-                                ).replace(
-                                    Regex("( và | & | и | e | und |, |和| dan)"),
-                                    " ",
-                                ).replace("  ", " ")
-                                .replace(Regex("([()])"), "")
-                                .replace(".", " ")
-                                .replace("  ", " ")
-                        Logger.d("Stream", "Search query for 320kbps: $q")
-                        val tidalResult =
-                            youTube
-                                .getTidalStream(your320kbpsUrl, q, durationSecond)
-                                .apply {
-                                    onSuccess {
-                                        Logger.w("Stream", "Tidal response: $this")
-                                    }.onFailure {
-                                        Logger.e("Stream", "Tidal error: ${it.message}", it)
-                                    }
-                                }.getOrNull()
-                        // Extract AutoMix metadata from Tidal match (bpm, key, keyScale)
-                        tidalBpm = tidalResult?.bpm
-                        tidalMusicKey = tidalResult?.musicKey
-                        tidalKeyScale = tidalResult?.keyScale
-                        val audioData =
-                            tidalResult
-                                ?.stream
-                                ?.data
-                                ?.manifest
-                                ?.decodeTidalManifest()
-                        if (audioData != null) {
-                            Logger.d("Stream", "Found potential 320kbps stream from Tidal: $tidalResult")
-                            format =
-                                format?.copy(
-                                    itag = 0,
-                                    url = audioData.urls.firstOrNull() ?: format.url,
-                                    mimeType = "${audioData.mimeType}; codecs=\"${audioData.codecs}\"",
-                                    bitrate = 320000,
-                                )
-                        } else if (tidalResult
-                                ?.stream
-                                ?.data
-                                ?.manifest
-                                ?.decodeBase64()
-                                ?.contains("MPD") == true
-                        ) {
-                            Logger.d("Stream", "Found potential 320kbps stream from Tidal manifest DASH: ${tidalResult.stream.data?.manifest}")
-                            format =
-                                format?.copy(
-                                    itag = 0,
-                                    url =
-                                        tidalResult.stream.data
-                                            ?.manifest
-                                            ?.decodeBase64(),
-                                    bitrate = 320000,
-                                )
-                        }
-                    } else if (!isVideo && durationSecond != null && data.third == MediaType.Song) {
-                        val your320kbpsUrl = dataStoreManager.your320kbpsUrl.first()
+                    if (!isVideo && durationSecond != null && data.third == MediaType.Song) {
                         val title = response.videoDetails?.title ?: ""
                         val author = response.videoDetails?.author ?: ""
                         val q =
@@ -275,7 +197,7 @@ internal class StreamRepositoryImpl(
                                 .replace("  ", " ")
                         Logger.d("Stream", "Search Tidal metadata for: $q")
                         youTube
-                            .searchTidalMetadata(your320kbpsUrl, q, durationSecond)
+                            .searchTidalMetadata(q, durationSecond)
                             .onSuccess { metadata ->
                                 Logger.w("Stream", "Tidal metadata: $metadata")
                                 tidalBpm = metadata.bpm
@@ -288,7 +210,7 @@ internal class StreamRepositoryImpl(
                     insertNewFormat(
                         NewFormatEntity(
                             videoId = if (VIDEO_QUALITY.itags.contains(format?.itag)) "${MERGING_DATA_TYPE.VIDEO}$videoId" else videoId,
-                            itag = format?.itag ?: itag ?: 141,
+                            itag = format?.itag ?: itag,
                             mimeType =
                                 Regex("""([^;]+);\s*codecs=["']([^"']+)["']""")
                                     .find(
@@ -336,9 +258,7 @@ internal class StreamRepositoryImpl(
                     )
                     if (data.first != null) {
                         emit(
-                            if (prefer320kbps) {
-                                format?.url
-                            } else if (muxed) {
+                            if (muxed) {
                                 response.streamingData?.hlsManifestUrl
                             } else {
                                 format?.url?.let { url ->
@@ -352,9 +272,7 @@ internal class StreamRepositoryImpl(
                         )
                     } else {
                         emit(
-                            if (prefer320kbps) {
-                                format?.url
-                            } else if (muxed) {
+                            if (muxed) {
                                 response.streamingData?.hlsManifestUrl
                             } else {
                                 format?.url?.let { url ->
@@ -469,5 +387,4 @@ internal class StreamRepositoryImpl(
             }
         }
     }
-    override fun getExtractSource(videoId: String): String? = null
 }

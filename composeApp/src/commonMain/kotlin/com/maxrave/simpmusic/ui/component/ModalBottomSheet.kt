@@ -46,13 +46,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.AddCircleOutline
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Remove
-import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.BasicAlertDialog
@@ -71,7 +64,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -98,7 +90,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboard
@@ -120,6 +112,7 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.maxrave.data.io.readLocalImageBytes
 import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.entities.LocalPlaylistEntity
 import com.maxrave.domain.data.entities.SongEntity
@@ -134,13 +127,43 @@ import com.maxrave.domain.utils.FilterState
 import com.maxrave.domain.utils.connectArtists
 import com.maxrave.domain.utils.toListName
 import com.maxrave.logger.Logger
-import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.copyToClipboard
 import com.maxrave.simpmusic.expect.shareUrl
+import com.maxrave.simpmusic.expect.ui.persistPickedImage
 import com.maxrave.simpmusic.expect.ui.photoPickerResult
 import com.maxrave.simpmusic.extension.displayNameRes
 import com.maxrave.simpmusic.extension.greyScale
-import com.maxrave.simpmusic.getPlatform
+import com.maxrave.simpmusic.ui.icon.AccessAlarm
+import com.maxrave.simpmusic.ui.icon.Add
+import com.maxrave.simpmusic.ui.icon.AddCircleOutline
+import com.maxrave.simpmusic.ui.icon.AddPhotoAlternate
+import com.maxrave.simpmusic.ui.icon.Album
+import com.maxrave.simpmusic.ui.icon.CheckCircle
+import com.maxrave.simpmusic.ui.icon.ContentCopy
+import com.maxrave.simpmusic.ui.icon.Delete
+import com.maxrave.simpmusic.ui.icon.Done
+import com.maxrave.simpmusic.ui.icon.DownloadForOffline
+import com.maxrave.simpmusic.ui.icon.DownloadForOfflineOutlined
+import com.maxrave.simpmusic.ui.icon.Downloading
+import com.maxrave.simpmusic.ui.icon.Edit
+import com.maxrave.simpmusic.ui.icon.FavoriteBorder
+import com.maxrave.simpmusic.ui.icon.KeyboardArrowDown
+import com.maxrave.simpmusic.ui.icon.KeyboardDoubleArrowDown
+import com.maxrave.simpmusic.ui.icon.KeyboardDoubleArrowUp
+import com.maxrave.simpmusic.ui.icon.Lyrics
+import com.maxrave.simpmusic.ui.icon.PeopleAlt
+import com.maxrave.simpmusic.ui.icon.PlayCircle
+import com.maxrave.simpmusic.ui.icon.PlaylistAdd
+import com.maxrave.simpmusic.ui.icon.QueueMusic
+import com.maxrave.simpmusic.ui.icon.Remove
+import com.maxrave.simpmusic.ui.icon.Sensors
+import com.maxrave.simpmusic.ui.icon.Share
+import com.maxrave.simpmusic.ui.icon.SimpIcons
+import com.maxrave.simpmusic.ui.icon.Speed
+import com.maxrave.simpmusic.ui.icon.Sync
+import com.maxrave.simpmusic.ui.icon.SyncDisabled
+import com.maxrave.simpmusic.ui.icon.Tune
+import com.maxrave.simpmusic.ui.icon.Update
 import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
 import com.maxrave.simpmusic.ui.theme.seed
@@ -150,8 +173,6 @@ import com.maxrave.simpmusic.viewModel.NowPlayingBottomSheetViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -163,45 +184,24 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
-import simpmusic.composeapp.generated.resources.KuroMusic_lyrics
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.add_to_a_playlist
 import simpmusic.composeapp.generated.resources.add_to_queue
 import simpmusic.composeapp.generated.resources.album
 import simpmusic.composeapp.generated.resources.artists
-import simpmusic.composeapp.generated.resources.baseline_access_alarm_24
-import simpmusic.composeapp.generated.resources.baseline_add_photo_alternate_24
-import simpmusic.composeapp.generated.resources.baseline_album_24
-import simpmusic.composeapp.generated.resources.baseline_delete_24
-import simpmusic.composeapp.generated.resources.baseline_downloaded
-import simpmusic.composeapp.generated.resources.baseline_downloading_white
-import simpmusic.composeapp.generated.resources.baseline_edit_24
 import simpmusic.composeapp.generated.resources.baseline_favorite_24
-import simpmusic.composeapp.generated.resources.baseline_favorite_border_24
-import simpmusic.composeapp.generated.resources.baseline_keyboard_arrow_down_24
-import simpmusic.composeapp.generated.resources.baseline_keyboard_double_arrow_down_24
-import simpmusic.composeapp.generated.resources.baseline_keyboard_double_arrow_up_24
-import simpmusic.composeapp.generated.resources.baseline_lyrics_24
-import simpmusic.composeapp.generated.resources.baseline_people_alt_24
-import simpmusic.composeapp.generated.resources.baseline_playlist_add_24
-import simpmusic.composeapp.generated.resources.baseline_queue_music_24
-import simpmusic.composeapp.generated.resources.baseline_sensors_24
-import simpmusic.composeapp.generated.resources.baseline_share_24
-import simpmusic.composeapp.generated.resources.baseline_sync_24
-import simpmusic.composeapp.generated.resources.baseline_sync_disabled_24
-import simpmusic.composeapp.generated.resources.baseline_update_24
 import simpmusic.composeapp.generated.resources.better_lyrics
 import simpmusic.composeapp.generated.resources.bitrate
 import simpmusic.composeapp.generated.resources.bpm
 import simpmusic.composeapp.generated.resources.can_not_be_empty
 import simpmusic.composeapp.generated.resources.cancel
+import simpmusic.composeapp.generated.resources.crop_cover
 import simpmusic.composeapp.generated.resources.codec
 import simpmusic.composeapp.generated.resources.copied_to_clipboard
 import simpmusic.composeapp.generated.resources.delete
 import simpmusic.composeapp.generated.resources.delete_playlist
 import simpmusic.composeapp.generated.resources.delete_song_from_playlist
 import simpmusic.composeapp.generated.resources.description
-import simpmusic.composeapp.generated.resources.done
 import simpmusic.composeapp.generated.resources.download
 import simpmusic.composeapp.generated.resources.download_speed
 import simpmusic.composeapp.generated.resources.download_this_song_video_file_to_your_device
@@ -213,7 +213,7 @@ import simpmusic.composeapp.generated.resources.edit_thumbnail
 import simpmusic.composeapp.generated.resources.edit_title
 import simpmusic.composeapp.generated.resources.endless_queue
 import simpmusic.composeapp.generated.resources.error_occurred
-import simpmusic.composeapp.generated.resources.holder
+import simpmusic.composeapp.generated.resources.extract_source
 import simpmusic.composeapp.generated.resources.itag
 import simpmusic.composeapp.generated.resources.key
 import simpmusic.composeapp.generated.resources.like
@@ -232,9 +232,7 @@ import simpmusic.composeapp.generated.resources.no_playlist_found
 import simpmusic.composeapp.generated.resources.now_playing
 import simpmusic.composeapp.generated.resources.now_playing_upper
 import simpmusic.composeapp.generated.resources.ok
-import simpmusic.composeapp.generated.resources.outline_download_for_offline_24
 import simpmusic.composeapp.generated.resources.pitch
-import simpmusic.composeapp.generated.resources.play_circle
 import simpmusic.composeapp.generated.resources.play_next
 import simpmusic.composeapp.generated.resources.playback_speed
 import simpmusic.composeapp.generated.resources.playback_speed_pitch
@@ -244,7 +242,6 @@ import simpmusic.composeapp.generated.resources.plays
 import simpmusic.composeapp.generated.resources.processing
 import simpmusic.composeapp.generated.resources.queue
 import simpmusic.composeapp.generated.resources.radio
-import simpmusic.composeapp.generated.resources.round_speed_24
 import simpmusic.composeapp.generated.resources.save
 import simpmusic.composeapp.generated.resources.save_to_local_playlist
 import simpmusic.composeapp.generated.resources.saved_to_local_playlist
@@ -278,6 +275,11 @@ import simpmusic.composeapp.generated.resources.your_youtube_playlists
 import simpmusic.composeapp.generated.resources.youtube_transcript
 import simpmusic.composeapp.generated.resources.youtube_url
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Sentinel value used by SleepTimerBottomSheet to signal "end of current song"
+// Handle this in NowPlayingBottomSheetViewModel / SharedViewModel:
+//   if (minutes == END_OF_SONG_SENTINEL) → stop after current track finishes
+// ─────────────────────────────────────────────────────────────────────────────
 const val END_OF_SONG_SENTINEL = Int.MAX_VALUE
 
 @ExperimentalMaterial3Api
@@ -298,10 +300,30 @@ fun InfoPlayerBottomSheet(
     val screenDataState by sharedViewModel.nowPlayingScreenData.collectAsStateWithLifecycle()
     val songEntity by sharedViewModel.nowPlayingState.map { it?.songEntity }.collectAsState(null)
     val format by sharedViewModel.format.collectAsState(null)
+    val extractSource by sharedViewModel.extractSource.collectAsState()
     val downloadProgress by sharedViewModel.downloadFileProgress.collectAsStateWithLifecycle()
 
-    if (downloadProgress != DownloadProgress.INIT) {
-        Box(modifier = Modifier.fillMaxSize()) {
+    ModalBottomSheet(
+        onDismissRequest = {
+            onDismiss()
+        },
+        containerColor = rememberSurfaceDarkColors().container,
+        contentColor = Color.Transparent,
+        dragHandle = {},
+        scrimColor = Color.Black.copy(alpha = .5f),
+        sheetState = sheetState,
+        modifier = Modifier.fillMaxHeight(),
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
+        shape = RectangleShape,
+    ) {
+        // This dialog MUST stay inside the sheet's content lambda. A Dialog is its own window
+        // (Android ComponentDialog) / scene layer (skiko), so nothing in the layout tree orders
+        // it — the layer attached LAST wins, and DisposableEffects attach in composition order.
+        // Written as a sibling BEFORE ModalBottomSheet it lost to the sheet whenever both entered
+        // composition in the same pass: reopening the sheet mid-download, or an Android config
+        // change (downloadProgress lives in the ViewModel, so it survives this composable leaving).
+        // Nested here, the sheet's layer necessarily exists first, so the dialog is always on top.
+        if (downloadProgress != DownloadProgress.INIT) {
             BasicAlertDialog(
                 onDismissRequest = { },
                 modifier = Modifier.wrapContentSize(),
@@ -309,7 +331,7 @@ fun InfoPlayerBottomSheet(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.background,
+                    color = rememberSurfaceDarkColors().container,
                     tonalElevation = AlertDialogDefaults.TonalElevation,
                     shadowElevation = 1.dp,
                 ) {
@@ -322,11 +344,10 @@ fun InfoPlayerBottomSheet(
                         Text(
                             stringResource(Res.string.downloading),
                             style = typo().headlineMedium,
-                            color = MaterialTheme.colorScheme.onBackground
                         )
                         Row(Modifier.padding(top = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (!downloadProgress.isDone && !downloadProgress.isError) {
-                                CircularProgressIndicator(color = MaterialTheme.colorScheme.onBackground)
+                                CircularProgressIndicator()
                                 Spacer(Modifier.size(15.dp))
                             }
                             Crossfade(downloadProgress) {
@@ -335,7 +356,6 @@ fun InfoPlayerBottomSheet(
                                         text = stringResource(Res.string.merging_audio_and_video),
                                         modifier = Modifier.padding(vertical = 5.dp),
                                         style = typo().bodyMedium,
-                                        color = MaterialTheme.colorScheme.onBackground
                                     )
                                 } else if (it.isError) {
                                     Column {
@@ -343,14 +363,12 @@ fun InfoPlayerBottomSheet(
                                             text = stringResource(Res.string.error_occurred),
                                             modifier = Modifier.padding(vertical = 5.dp),
                                             style = typo().bodyMedium,
-                                            color = MaterialTheme.colorScheme.onBackground
                                         )
                                         Text(
                                             text = downloadProgress.errorMessage,
                                             modifier = Modifier.padding(bottom = 5.dp),
                                             maxLines = 2,
                                             style = typo().bodyMedium,
-                                            color = MaterialTheme.colorScheme.onBackground
                                         )
                                     }
                                 } else if (it.isDone) {
@@ -361,7 +379,6 @@ fun InfoPlayerBottomSheet(
                                                     .replace("\"", ""),
                                         modifier = Modifier.padding(vertical = 5.dp),
                                         style = typo().bodyMedium,
-                                        color = MaterialTheme.colorScheme.onBackground
                                     )
                                 } else {
                                     Column {
@@ -374,7 +391,6 @@ fun InfoPlayerBottomSheet(
                                                     ),
                                                 modifier = Modifier.padding(vertical = 5.dp),
                                                 style = typo().bodyMedium,
-                                                color = MaterialTheme.colorScheme.onBackground
                                             )
                                         }
                                         if (it.videoDownloadProgress != 0f) {
@@ -386,7 +402,6 @@ fun InfoPlayerBottomSheet(
                                                     ),
                                                 modifier = Modifier.padding(vertical = 5.dp),
                                                 style = typo().bodyMedium,
-                                                color = MaterialTheme.colorScheme.onBackground
                                             )
                                         }
                                         if (downloadProgress.downloadSpeed != 0) {
@@ -398,7 +413,6 @@ fun InfoPlayerBottomSheet(
                                                     ),
                                                 modifier = Modifier.padding(vertical = 5.dp),
                                                 style = typo().bodyMedium,
-                                                color = MaterialTheme.colorScheme.onBackground
                                             )
                                         }
                                     }
@@ -411,7 +425,7 @@ fun InfoPlayerBottomSheet(
                                     Spacer(Modifier.height(10.dp))
                                     OutlinedButton(onClick = {
                                         sharedViewModel.downloadFileDone()
-                                    }) { Text(stringResource(Res.string.ok), color = MaterialTheme.colorScheme.onBackground) }
+                                    }) { Text(stringResource(Res.string.ok)) }
                                 }
                             }
                             if (it.isDone) {
@@ -419,7 +433,7 @@ fun InfoPlayerBottomSheet(
                                     Spacer(Modifier.height(10.dp))
                                     OutlinedButton(onClick = {
                                         sharedViewModel.downloadFileDone()
-                                    }) { Text(stringResource(Res.string.ok), color = MaterialTheme.colorScheme.onBackground) }
+                                    }) { Text(stringResource(Res.string.ok)) }
                                 }
                             }
                         }
@@ -427,28 +441,14 @@ fun InfoPlayerBottomSheet(
                 }
             }
         }
-    }
 
-    ModalBottomSheet(
-        onDismissRequest = {
-            onDismiss()
-        },
-        containerColor = MaterialTheme.colorScheme.background,
-        contentColor = Color.Transparent,
-        dragHandle = {},
-        scrimColor = Color.Black.copy(alpha = .5f),
-        sheetState = sheetState,
-        modifier = Modifier.fillMaxHeight(),
-        contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
-        shape = RectangleShape,
-    ) {
         Card(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .fillMaxHeight(),
             shape = RectangleShape,
-            colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.background),
+            colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
         ) {
             Column(
                 modifier =
@@ -476,12 +476,12 @@ fun InfoPlayerBottomSheet(
                             Text(
                                 text = stringResource(Res.string.now_playing_upper),
                                 style = typo().bodyMedium,
-                                color = MaterialTheme.colorScheme.onBackground,
+                                color = rememberSurfaceDarkColors().content,
                             )
                             Text(
                                 text = screenDataState.nowPlayingTitle,
                                 style = typo().labelMedium,
-                                color = MaterialTheme.colorScheme.onBackground,
+                                color = rememberSurfaceDarkColors().content,
                                 textAlign = TextAlign.Center,
                                 maxLines = 1,
                                 modifier =
@@ -503,9 +503,9 @@ fun InfoPlayerBottomSheet(
                             }
                         }) {
                             Icon(
-                                painter = painterResource(Res.drawable.baseline_keyboard_arrow_down_24),
+                                imageVector = SimpIcons.KeyboardArrowDown,
                                 contentDescription = "",
-                                tint = MaterialTheme.colorScheme.onBackground,
+                                tint = rememberSurfaceDarkColors().content,
                             )
                         }
                     },
@@ -525,7 +525,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = screenDataState.nowPlayingTitle,
@@ -542,7 +542,6 @@ fun InfoPlayerBottomSheet(
                     style = typo().bodyMedium,
                     maxLines = 1,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 )
                 Text(
                     text = stringResource(Res.string.artists),
@@ -552,7 +551,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = screenDataState.artistName,
@@ -568,7 +567,6 @@ fun InfoPlayerBottomSheet(
                     style = typo().bodyMedium,
                     maxLines = 1,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 )
                 Text(
                     text = stringResource(Res.string.album),
@@ -578,7 +576,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = songEntity?.albumName ?: stringResource(Res.string.unknown),
@@ -594,7 +592,6 @@ fun InfoPlayerBottomSheet(
                     style = typo().bodyMedium,
                     maxLines = 1,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 )
                 Text(
                     text = stringResource(Res.string.itag),
@@ -604,7 +601,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = format?.itag?.toString() ?: stringResource(Res.string.unknown),
@@ -620,7 +617,6 @@ fun InfoPlayerBottomSheet(
                     style = typo().bodyMedium,
                     maxLines = 1,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 )
                 Text(
                     text = stringResource(Res.string.mime_type),
@@ -630,7 +626,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = format?.mimeType ?: stringResource(Res.string.unknown),
@@ -646,7 +642,6 @@ fun InfoPlayerBottomSheet(
                     style = typo().bodyMedium,
                     maxLines = 1,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 )
                 Text(
                     text = stringResource(Res.string.codec),
@@ -656,7 +651,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = format?.codecs ?: stringResource(Res.string.unknown),
@@ -672,7 +667,6 @@ fun InfoPlayerBottomSheet(
                     style = typo().bodyMedium,
                     maxLines = 1,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 )
                 Text(
                     text = stringResource(Res.string.bitrate),
@@ -682,7 +676,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = format?.bitrate?.toString() ?: stringResource(Res.string.unknown),
@@ -698,7 +692,6 @@ fun InfoPlayerBottomSheet(
                     style = typo().bodyMedium,
                     maxLines = 1,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 )
                 Text(
                     text = stringResource(Res.string.bpm),
@@ -708,7 +701,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = format?.bpm?.toString() ?: stringResource(Res.string.unknown),
@@ -724,7 +717,6 @@ fun InfoPlayerBottomSheet(
                     style = typo().bodyMedium,
                     maxLines = 1,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 )
                 Text(
                     text = stringResource(Res.string.key),
@@ -734,7 +726,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = format?.musicKey ?: stringResource(Res.string.unknown),
@@ -750,7 +742,6 @@ fun InfoPlayerBottomSheet(
                     style = typo().bodyMedium,
                     maxLines = 1,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 )
                 Text(
                     text = stringResource(Res.string.scale),
@@ -760,7 +751,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = format?.keyScale ?: stringResource(Res.string.unknown),
@@ -776,7 +767,32 @@ fun InfoPlayerBottomSheet(
                     style = typo().bodyMedium,
                     maxLines = 1,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                )
+
+                Text(
+                    text = stringResource(Res.string.extract_source),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 10.dp),
+                    textAlign = TextAlign.Center,
+                    style = typo().labelMedium,
+                    color = rememberSurfaceDarkColors().content,
+                )
+                Text(
+                    text = extractSource ?: stringResource(Res.string.unknown),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .wrapContentHeight(align = Alignment.CenterVertically)
+                            .basicMarquee(
+                                iterations = Int.MAX_VALUE,
+                                animationMode = MarqueeAnimationMode.Immediately,
+                            ).focusable()
+                            .padding(horizontal = 10.dp),
+                    style = typo().bodyMedium,
+                    maxLines = 1,
+                    textAlign = TextAlign.Center,
                 )
 
                 Text(
@@ -787,7 +803,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = screenDataState.songInfoData?.viewCount?.toString() ?: stringResource(Res.string.unknown),
@@ -803,7 +819,6 @@ fun InfoPlayerBottomSheet(
                     style = typo().bodyMedium,
                     maxLines = 1,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 )
                 Text(
                     text = stringResource(Res.string.like),
@@ -813,7 +828,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text =
@@ -833,7 +848,6 @@ fun InfoPlayerBottomSheet(
                             .padding(horizontal = 10.dp),
                     style = typo().bodyMedium,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 )
                 Text(
                     text = stringResource(Res.string.description),
@@ -843,7 +857,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text = screenDataState.songInfoData?.description ?: stringResource(Res.string.no_description),
@@ -854,7 +868,6 @@ fun InfoPlayerBottomSheet(
                             .padding(horizontal = 10.dp),
                     style = typo().bodyMedium,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 )
                 Text(
                     text = stringResource(Res.string.youtube_url),
@@ -864,7 +877,7 @@ fun InfoPlayerBottomSheet(
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
                     style = typo().labelMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = rememberSurfaceDarkColors().content,
                 )
                 Text(
                     text =
@@ -887,7 +900,6 @@ fun InfoPlayerBottomSheet(
                                 animationMode = MarqueeAnimationMode.Immediately,
                             ).focusable(),
                     style = typo().bodyMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
                     textAlign = TextAlign.Center,
                 )
                 OutlinedButton(
@@ -903,7 +915,7 @@ fun InfoPlayerBottomSheet(
                             .align(Alignment.CenterHorizontally)
                             .padding(vertical = 10.dp),
                 ) {
-                    Text(text = stringResource(Res.string.download_this_song_video_file_to_your_device), color = MaterialTheme.colorScheme.onBackground)
+                    Text(text = stringResource(Res.string.download_this_song_video_file_to_your_device))
                 }
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -913,7 +925,7 @@ fun InfoPlayerBottomSheet(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalCoroutinesApi::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalCoroutinesApi::class, ExperimentalCoroutinesApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun QueueBottomSheet(
     onDismiss: () -> Unit,
@@ -965,9 +977,11 @@ fun QueueBottomSheet(
             }
         }
 
+    // Convert the state into a cold flow and collect
     LaunchedEffect(shouldLoadMore) {
         snapshotFlow { shouldLoadMore.value }
             .collect {
+                // if should load more, then invoke loadMore
                 if (it && loadMoreState == QueueData.StateSource.STATE_INITIALIZED) musicServiceHandler.loadMore()
             }
     }
@@ -1002,7 +1016,7 @@ fun QueueBottomSheet(
         onDismissRequest = {
             onDismiss()
         },
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = rememberSurfaceDarkColors().container,
         contentColor = Color.Transparent,
         dragHandle = {},
         scrimColor = Color.Black.copy(alpha = .5f),
@@ -1017,7 +1031,7 @@ fun QueueBottomSheet(
                     .fillMaxWidth()
                     .fillMaxHeight(),
             shape = RectangleShape,
-            colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.background),
+            colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
         ) {
             Column(
                 modifier =
@@ -1043,12 +1057,12 @@ fun QueueBottomSheet(
                             Text(
                                 text = stringResource(Res.string.now_playing_upper),
                                 style = typo().bodyMedium,
-                                color = MaterialTheme.colorScheme.onBackground,
+                                color = rememberSurfaceDarkColors().content,
                             )
                             Text(
                                 text = screenDataState.playlistName,
                                 style = typo().labelMedium,
-                                color = MaterialTheme.colorScheme.onBackground,
+                                color = rememberSurfaceDarkColors().content,
                                 textAlign = TextAlign.Center,
                                 maxLines = 1,
                                 modifier =
@@ -1070,9 +1084,9 @@ fun QueueBottomSheet(
                             }
                         }) {
                             Icon(
-                                painter = painterResource(Res.drawable.baseline_keyboard_arrow_down_24),
+                                imageVector = SimpIcons.KeyboardArrowDown,
                                 contentDescription = "",
-                                tint = MaterialTheme.colorScheme.onBackground,
+                                tint = rememberSurfaceDarkColors().content,
                             )
                         }
                     },
@@ -1087,7 +1101,6 @@ fun QueueBottomSheet(
                 Text(
                     text = stringResource(Res.string.now_playing),
                     style = typo().titleMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.padding(horizontal = 20.dp),
                 )
                 SongFullWidthItems(
@@ -1103,7 +1116,6 @@ fun QueueBottomSheet(
                     Text(
                         text = stringResource(Res.string.queue),
                         style = typo().titleMedium,
-                        color = MaterialTheme.colorScheme.onBackground,
                         modifier =
                             Modifier
                                 .padding(horizontal = 20.dp)
@@ -1113,7 +1125,6 @@ fun QueueBottomSheet(
                         Text(
                             text = stringResource(Res.string.endless_queue),
                             style = typo().bodySmall,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                             modifier = Modifier.padding(horizontal = 8.dp),
                         )
                         Switch(
@@ -1273,7 +1284,7 @@ fun QueueItemBottomSheet(
                     .fillMaxWidth()
                     .wrapContentHeight(),
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.background),
+            colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -1286,7 +1297,7 @@ fun QueueItemBottomSheet(
                             .height(4.dp),
                     colors =
                         CardDefaults.cardColors().copy(
-                            containerColor = MaterialTheme.colorScheme.outline,
+                            containerColor = rememberSurfaceDarkColors().handle,
                         ),
                     shape = RoundedCornerShape(50),
                 ) {}
@@ -1295,18 +1306,18 @@ fun QueueItemBottomSheet(
                     val canMoveUp =
                         index > 0 &&
                             index < (
-                            musicServiceHandler.queueData.value
-                                ?.data
-                                ?.listTracks
-                                ?.size ?: 0
+                                musicServiceHandler.queueData.value
+                                    ?.data
+                                    ?.listTracks
+                                    ?.size ?: 0
                             )
                     val canMoveDown =
                         index >= 0 &&
                             index < (
-                            musicServiceHandler.queueData.value
-                                ?.data
-                                ?.listTracks
-                                ?.size ?: 0
+                                musicServiceHandler.queueData.value
+                                    ?.data
+                                    ?.listTracks
+                                    ?.size ?: 0
                             ) - 1
                     items(listAction) { action ->
                         val disable =
@@ -1351,34 +1362,25 @@ fun QueueItemBottomSheet(
                                 when (action) {
                                     QueueItemAction.UP -> {
                                         Image(
-                                            painter =
-                                                painterResource(
-                                                    Res.drawable.baseline_keyboard_double_arrow_up_24,
-                                                ),
+                                            imageVector = SimpIcons.KeyboardDoubleArrowUp,
                                             contentDescription = "Move up",
-                                            colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onBackground)
+                                            colorFilter = ColorFilter.tint(rememberSurfaceDarkColors().content),
                                         )
                                     }
 
                                     QueueItemAction.DOWN -> {
                                         Image(
-                                            painter =
-                                                painterResource(
-                                                    Res.drawable.baseline_keyboard_double_arrow_down_24,
-                                                ),
+                                            imageVector = SimpIcons.KeyboardDoubleArrowDown,
                                             contentDescription = "Move down",
-                                            colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onBackground)
+                                            colorFilter = ColorFilter.tint(rememberSurfaceDarkColors().content),
                                         )
                                     }
 
                                     QueueItemAction.DELETE -> {
                                         Image(
-                                            painter =
-                                                painterResource(
-                                                    Res.drawable.baseline_delete_24,
-                                                ),
+                                            imageVector = SimpIcons.Delete,
                                             contentDescription = "Delete",
-                                            colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onBackground)
+                                            colorFilter = ColorFilter.tint(rememberSurfaceDarkColors().content),
                                         )
                                     }
                                 }
@@ -1393,7 +1395,6 @@ fun QueueItemBottomSheet(
                                             },
                                         ),
                                     style = typo().labelSmall,
-                                    color = MaterialTheme.colorScheme.onBackground
                                 )
                             }
                         }
@@ -1511,7 +1512,7 @@ fun NowPlayingBottomSheet(
 
     if (sleepTimerWarning) {
         AlertDialog(
-            containerColor = MaterialTheme.colorScheme.background,
+            containerColor = rememberSurfaceDarkColors().container,
             onDismissRequest = { sleepTimerWarning = false },
             confirmButton = {
                 TextButton(onClick = {
@@ -1522,19 +1523,19 @@ fun NowPlayingBottomSheet(
                         ),
                     )
                 }) {
-                    Text(text = stringResource(Res.string.yes), style = typo().labelSmall, color = MaterialTheme.colorScheme.onBackground)
+                    Text(text = stringResource(Res.string.yes), style = typo().labelSmall)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { sleepTimerWarning = false }) {
-                    Text(text = stringResource(Res.string.cancel), style = typo().labelSmall, color = MaterialTheme.colorScheme.onBackground)
+                    Text(text = stringResource(Res.string.cancel), style = typo().labelSmall)
                 }
             },
             title = {
-                Text(text = stringResource(Res.string.warning), style = typo().labelSmall, color = MaterialTheme.colorScheme.onBackground)
+                Text(text = stringResource(Res.string.warning), style = typo().labelSmall)
             },
             text = {
-                Text(text = stringResource(Res.string.sleep_timer_warning), style = typo().bodyMedium, color = MaterialTheme.colorScheme.onBackground)
+                Text(text = stringResource(Res.string.sleep_timer_warning), style = typo().bodyMedium)
             },
         )
     }
@@ -1554,12 +1555,11 @@ fun NowPlayingBottomSheet(
 
         AlertDialog(
             onDismissRequest = { mainLyricsProvider = false },
-            containerColor = MaterialTheme.colorScheme.background,
+            containerColor = rememberSurfaceDarkColors().container,
             title = {
                 Text(
                     text = stringResource(Res.string.main_lyrics_provider),
                     style = typo().titleMedium,
-                    color = MaterialTheme.colorScheme.onBackground
                 )
             },
             text = {
@@ -1574,7 +1574,7 @@ fun NowPlayingBottomSheet(
                     ) {
                         RadioButton(selected = selected == 0, onClick = { selected = 0 })
                         Spacer(modifier = Modifier.size(10.dp))
-                        Text(text = stringResource(Res.string.KuroMusic_lyrics), style = typo().labelSmall, color = MaterialTheme.colorScheme.onBackground)
+                        Text(text = stringResource(Res.string.simpmusic_lyrics), style = typo().labelSmall)
                     }
                     Row(
                         modifier =
@@ -1586,7 +1586,7 @@ fun NowPlayingBottomSheet(
                     ) {
                         RadioButton(selected = selected == 1, onClick = { selected = 1 })
                         Spacer(modifier = Modifier.size(10.dp))
-                        Text(text = stringResource(Res.string.lrclib), style = typo().labelSmall, color = MaterialTheme.colorScheme.onBackground)
+                        Text(text = stringResource(Res.string.lrclib), style = typo().labelSmall)
                     }
                     Row(
                         modifier =
@@ -1598,7 +1598,7 @@ fun NowPlayingBottomSheet(
                     ) {
                         RadioButton(selected = selected == 2, onClick = { selected = 2 })
                         Spacer(modifier = Modifier.size(10.dp))
-                        Text(text = stringResource(Res.string.youtube_transcript), style = typo().labelSmall, color = MaterialTheme.colorScheme.onBackground)
+                        Text(text = stringResource(Res.string.youtube_transcript), style = typo().labelSmall)
                     }
                     Row(
                         modifier =
@@ -1610,7 +1610,7 @@ fun NowPlayingBottomSheet(
                     ) {
                         RadioButton(selected = selected == 3, onClick = { selected = 3 })
                         Spacer(modifier = Modifier.size(10.dp))
-                        Text(text = stringResource(Res.string.better_lyrics), style = typo().labelSmall, color = MaterialTheme.colorScheme.onBackground)
+                        Text(text = stringResource(Res.string.better_lyrics), style = typo().labelSmall)
                     }
                 }
             },
@@ -1631,12 +1631,12 @@ fun NowPlayingBottomSheet(
                         mainLyricsProvider = false
                     },
                 ) {
-                    Text(text = stringResource(Res.string.yes), style = typo().labelSmall, color = MaterialTheme.colorScheme.onBackground)
+                    Text(text = stringResource(Res.string.yes), style = typo().labelSmall)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { mainLyricsProvider = false }) {
-                    Text(text = stringResource(Res.string.cancel), style = typo().labelSmall, color = MaterialTheme.colorScheme.onBackground)
+                    Text(text = stringResource(Res.string.cancel), style = typo().labelSmall)
                 }
             },
         )
@@ -1658,7 +1658,7 @@ fun NowPlayingBottomSheet(
                         .fillMaxWidth()
                         .wrapContentHeight(),
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-                colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.background),
+                colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -1672,7 +1672,7 @@ fun NowPlayingBottomSheet(
                                 .height(4.dp),
                         colors =
                             CardDefaults.cardColors().copy(
-                                containerColor = MaterialTheme.colorScheme.outline,
+                                containerColor = rememberSurfaceDarkColors().handle,
                             ),
                         shape = RoundedCornerShape(50),
                     ) {}
@@ -1695,8 +1695,8 @@ fun NowPlayingBottomSheet(
                                     .diskCacheKey(thumb)
                                     .crossfade(550)
                                     .build(),
-                            placeholder = painterResource(Res.drawable.holder),
-                            error = painterResource(Res.drawable.holder),
+                            placeholder = rememberHolderPainter(),
+                            error = rememberHolderPainter(),
                             contentDescription = null,
                             contentScale = ContentScale.Inside,
                             modifier =
@@ -1710,7 +1710,10 @@ fun NowPlayingBottomSheet(
                             Text(
                                 text = uiState.songUIState.title,
                                 style = typo().labelMedium,
-                                color = MaterialTheme.colorScheme.onBackground,
+                                // typo() bakes a colour into the style, computed from the app's own
+                                // scheme — on this always-dark sheet that reads as washed out next
+                                // to the ActionButton rows below, which take their colour from here.
+                                color = rememberSurfaceDarkColors().content,
                                 maxLines = 1,
                                 modifier =
                                     Modifier
@@ -1724,7 +1727,7 @@ fun NowPlayingBottomSheet(
                                         .toListName()
                                         .connectArtists(),
                                 style = typo().bodyMedium,
-                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                                color = rememberSurfaceDarkColors().subtitle,
                                 maxLines = 1,
                                 modifier =
                                     Modifier
@@ -1738,13 +1741,12 @@ fun NowPlayingBottomSheet(
                     HorizontalDivider(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                         thickness = 1.dp,
-                        color = MaterialTheme.colorScheme.outline
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Crossfade(targetState = onDelete != null) {
                         if (it) {
                             ActionButton(
-                                icon = painterResource(Res.drawable.baseline_delete_24),
+                                icon = SimpIcons.Delete,
                                 text = Res.string.delete_song_from_playlist,
                             ) {
                                 hideModalBottomSheet()
@@ -1755,7 +1757,7 @@ fun NowPlayingBottomSheet(
                     Crossfade(targetState = onLibraryDelete != null) {
                         if (it) {
                             ActionButton(
-                                icon = painterResource(Res.drawable.baseline_delete_24),
+                                icon = SimpIcons.Delete,
                                 text = Res.string.delete,
                             ) {
                                 hideModalBottomSheet()
@@ -1773,11 +1775,19 @@ fun NowPlayingBottomSheet(
                     ActionButton(
                         icon =
                             when (uiState.songUIState.downloadState) {
-                                DownloadState.STATE_NOT_DOWNLOADED -> painterResource(Res.drawable.outline_download_for_offline_24)
-                                DownloadState.STATE_DOWNLOADING -> painterResource(Res.drawable.baseline_downloading_white)
-                                DownloadState.STATE_DOWNLOADED -> painterResource(Res.drawable.baseline_downloaded)
-                                DownloadState.STATE_PREPARING -> painterResource(Res.drawable.baseline_downloading_white)
-                                else -> painterResource(Res.drawable.outline_download_for_offline_24)
+                                DownloadState.STATE_NOT_DOWNLOADED -> SimpIcons.DownloadForOfflineOutlined
+                                DownloadState.STATE_DOWNLOADING -> SimpIcons.Downloading
+                                DownloadState.STATE_DOWNLOADED -> SimpIcons.DownloadForOffline
+                                DownloadState.STATE_PREPARING -> SimpIcons.Downloading
+                                else -> SimpIcons.DownloadForOfflineOutlined
+                            },
+                        // The old baseline_downloaded.xml carried #FF00A0CB baked in; the shared
+                        // symbol is neutral, so the "done" state has to say the colour out loud.
+                        iconColor =
+                            if (uiState.songUIState.downloadState == DownloadState.STATE_DOWNLOADED) {
+                                Color(0xFF00A0CB)
+                            } else {
+                                Color.Unspecified
                             },
                         text =
                             when (uiState.songUIState.downloadState) {
@@ -1791,34 +1801,51 @@ fun NowPlayingBottomSheet(
                         viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.Download)
                     }
                     ActionButton(
-                        icon = painterResource(Res.drawable.baseline_playlist_add_24),
+                        icon = SimpIcons.PlaylistAdd,
                         text = Res.string.add_to_a_playlist,
                     ) {
                         viewModel.resetPlaylists()
                         addToAPlaylist = true
                     }
                     ActionButton(
-                        icon = painterResource(Res.drawable.play_circle),
+                        icon = SimpIcons.PlayCircle,
                         text = Res.string.play_next,
                     ) {
                         viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.PlayNext)
                     }
                     ActionButton(
-                        icon = painterResource(Res.drawable.baseline_queue_music_24),
+                        icon = SimpIcons.QueueMusic,
                         text = Res.string.add_to_queue,
                     ) {
                         viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToQueue)
                     }
                     ActionButton(
-                        icon = painterResource(Res.drawable.baseline_people_alt_24),
+                        icon = SimpIcons.PeopleAlt,
                         text = Res.string.artists,
                     ) {
                         artist = true
                     }
                     ActionButton(
-                        icon = painterResource(Res.drawable.baseline_album_24),
-                        text = if (uiState.songUIState.album == null) Res.string.no_album else null,
-                        textString = uiState.songUIState.album?.name,
+                        icon = SimpIcons.Album,
+                        // Three states, not two. A track can carry an album ID with no title: the
+                        // row it was parsed from links an album but never spells its name out.
+                        // That case still navigates, so it must not read "No album" — but the name
+                        // is genuinely unknown, so fall back to the generic label rather than
+                        // showing a blank row. The parser deliberately leaves the name empty
+                        // instead of inventing one, because a made-up title would travel out to
+                        // MediaSession and into external scrobblers.
+                        text =
+                            when {
+                                uiState.songUIState.album == null -> Res.string.no_album
+                                uiState.songUIState.album
+                                    ?.name
+                                    .isNullOrBlank() -> Res.string.album
+                                else -> null
+                            },
+                        textString =
+                            uiState.songUIState.album
+                                ?.name
+                                ?.takeIf { it.isNotBlank() },
                         enable = uiState.songUIState.album != null,
                     ) {
                         uiState.songUIState.album?.id?.let { id ->
@@ -1827,7 +1854,7 @@ fun NowPlayingBottomSheet(
                         }
                     }
                     ActionButton(
-                        icon = painterResource(Res.drawable.baseline_sensors_24),
+                        icon = SimpIcons.Sensors,
                         text = Res.string.start_radio,
                     ) {
                         viewModel.onUIEvent(
@@ -1841,7 +1868,7 @@ fun NowPlayingBottomSheet(
                     Crossfade(targetState = changeMainLyricsProviderEnable) {
                         if (it) {
                             ActionButton(
-                                icon = painterResource(Res.drawable.baseline_lyrics_24),
+                                icon = SimpIcons.Lyrics,
                                 text = Res.string.main_lyrics_provider,
                             ) {
                                 mainLyricsProvider = true
@@ -1851,12 +1878,13 @@ fun NowPlayingBottomSheet(
                     Crossfade(targetState = setSleepTimerEnable) {
                         val sleepTimerState = uiState.sleepTimer
                         if (it) {
+                            // timeRemaining > 0 → countdown mode, -1 → end-of-song mode, 0 → off
                             val isEndOfSong = sleepTimerState.timeRemaining == -1
                             val isRunning = sleepTimerState.timeRemaining > 0 || isEndOfSong
                             Crossfade(targetState = isRunning) { running ->
                                 if (running) {
                                     ActionButton(
-                                        icon = painterResource(Res.drawable.baseline_access_alarm_24),
+                                        icon = SimpIcons.AccessAlarm,
                                         textString =
                                             if (isEndOfSong) {
                                                 stringResource(Res.string.sleep_timer_end_of_song)
@@ -1871,7 +1899,7 @@ fun NowPlayingBottomSheet(
                                     }
                                 } else {
                                     ActionButton(
-                                        icon = painterResource(Res.drawable.baseline_access_alarm_24),
+                                        icon = SimpIcons.AccessAlarm,
                                         text = Res.string.sleep_timer_off,
                                     ) {
                                         sleepTimer = true
@@ -1882,12 +1910,11 @@ fun NowPlayingBottomSheet(
                     }
                     Crossfade(targetState = setSleepTimerEnable) {
                         if (it) {
-                            val isDesktop = getPlatform() == Platform.Desktop
                             ActionButton(
-                                icon = painterResource(Res.drawable.round_speed_24),
+                                icon = SimpIcons.Speed,
                                 text =
                                     if (crossfadeEnabled != DataStoreManager.TRUE) {
-                                        if (isDesktop) Res.string.playback_speed else Res.string.playback_speed_pitch
+                                        Res.string.playback_speed_pitch
                                     } else {
                                         Res.string.playback_speed_pitch_disabled
                                     },
@@ -1896,6 +1923,12 @@ fun NowPlayingBottomSheet(
                                 changePlaybackSpeedPitch = true
                             }
                         }
+                    }
+                    ActionButton(
+                        icon = SimpIcons.Share,
+                        text = Res.string.share,
+                    ) {
+                        viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.Share)
                     }
                     EndOfModalBottomSheet()
                 }
@@ -1906,14 +1939,16 @@ fun NowPlayingBottomSheet(
 
 @Composable
 fun ActionButton(
-    icon: Painter,
+    icon: ImageVector,
     text: StringResource?,
     textString: String? = null,
     textColor: Color? = null,
-    iconColor: Color = MaterialTheme.colorScheme.onBackground,
+    iconColor: Color = Color.Unspecified,
     enable: Boolean = true,
     onClick: () -> Unit,
 ) {
+    val c = rememberSurfaceDarkColors()
+    val resolvedIconColor = if (iconColor == Color.Unspecified) c.content else iconColor
     Box(
         modifier =
             Modifier
@@ -1928,7 +1963,7 @@ fun ActionButton(
             modifier = Modifier.padding(horizontal = 20.dp),
         ) {
             Image(
-                painter = icon,
+                imageVector = icon,
                 contentDescription = if (text != null) stringResource(text) else textString ?: "",
                 modifier =
                     Modifier
@@ -1936,15 +1971,15 @@ fun ActionButton(
                         .padding(12.dp),
                 colorFilter =
                     if (enable) {
-                        ColorFilter.tint(iconColor)
+                        ColorFilter.tint(resolvedIconColor)
                     } else {
-                        ColorFilter.tint(Color.Gray)
+                        ColorFilter.tint(c.disabled)
                     },
             )
             Text(
                 text = if (text != null) stringResource(text) else textString ?: "",
                 style = typo().labelSmall,
-                color = if (enable) textColor ?: MaterialTheme.colorScheme.onBackground else Color.Gray,
+                color = if (enable) textColor ?: c.content else c.disabled,
                 modifier =
                     Modifier
                         .padding(start = 10.dp)
@@ -1983,9 +2018,9 @@ fun CheckBoxActionButton(
                 } else {
                     Crossfade(stateChecked) {
                         if (it) {
-                            Icon(Icons.Rounded.CheckCircle, "", tint = MaterialTheme.colorScheme.onBackground)
+                            Icon(SimpIcons.CheckCircle, "")
                         } else {
-                            Icon(Icons.Rounded.AddCircleOutline, "", tint = MaterialTheme.colorScheme.onBackground)
+                            Icon(SimpIcons.AddCircleOutline, "")
                         }
                     }
                 }
@@ -1998,7 +2033,9 @@ fun CheckBoxActionButton(
                         stringResource(Res.string.like)
                     },
                 style = typo().labelSmall,
-                color = MaterialTheme.colorScheme.onBackground,
+                // Matches [ActionButton], which this sits directly above in every sheet that uses
+                // both — without it the label alone falls back to the colour typo() carries.
+                color = rememberSurfaceDarkColors().content,
                 modifier =
                     Modifier
                         .padding(start = 10.dp)
@@ -2012,14 +2049,23 @@ fun CheckBoxActionButton(
 fun HeartCheckBox(
     size: Int = 24,
     checked: Boolean,
+    tint: Color = rememberSurfaceDarkColors().content,
     onStateChange: (() -> Unit)? = null,
 ) {
+    val burstState = rememberHeartBurstState()
     Box(
         modifier =
             Modifier
                 .size(size.dp)
+                // Before .clip: the burst draws outside the button bounds and the circle clip
+                // would trim it to the heart's own circle.
+                .heartBurst(burstState)
                 .clip(CircleShape)
                 .clickable {
+                    // Judged at TAP time: tapping an unchecked heart is a like. Firing from the
+                    // tap — not from watching `checked` — is what keeps a track change onto an
+                    // already-liked song from celebrating a like nobody gave.
+                    if (!checked) burstState.fire()
                     onStateChange?.invoke()
                 },
     ) {
@@ -2032,10 +2078,10 @@ fun HeartCheckBox(
                 )
             } else {
                 Image(
-                    painter = painterResource(Res.drawable.baseline_favorite_border_24),
+                    imageVector = SimpIcons.FavoriteBorder,
                     contentDescription = "Favorite unchecked",
                     modifier = Modifier.fillMaxSize().padding(4.dp),
-                    colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onBackground)
+                    colorFilter = ColorFilter.tint(tint),
                 )
             }
         }
@@ -2064,7 +2110,7 @@ fun PlaybackSpeedPitchBottomSheet(
         Card(
             modifier = Modifier.fillMaxWidth().wrapContentHeight(),
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.background),
+            colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -2072,19 +2118,20 @@ fun PlaybackSpeedPitchBottomSheet(
             ) {
                 Card(
                     modifier = Modifier.width(40.dp).height(4.dp),
-                    colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.outline),
+                    colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
                     shape = RoundedCornerShape(50),
                 ) {}
                 Spacer(modifier = Modifier.height(16.dp))
+                // Playback Speed row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Image(
-                        painter = painterResource(Res.drawable.round_speed_24),
+                        imageVector = SimpIcons.Speed,
                         contentDescription = stringResource(Res.string.playback_speed),
                         modifier = Modifier.size(24.dp),
-                        colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onBackground),
+                        colorFilter = ColorFilter.tint(rememberSurfaceDarkColors().subtitle),
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     IconButton(
@@ -2097,15 +2144,15 @@ fun PlaybackSpeedPitchBottomSheet(
                         },
                     ) {
                         Icon(
-                            Icons.Rounded.Remove,
+                            SimpIcons.Remove,
                             contentDescription = "Decrease speed",
-                            tint = MaterialTheme.colorScheme.onBackground,
+                            tint = rememberSurfaceDarkColors().subtitle,
                         )
                     }
                     Text(
                         text = "x${String.format("%.1f", playbackSpeed)}",
                         style = typo().titleMedium,
-                        color = MaterialTheme.colorScheme.onBackground,
+                        color = rememberSurfaceDarkColors().subtitle,
                         modifier = Modifier.widthIn(min = 60.dp),
                         textAlign = TextAlign.Center,
                     )
@@ -2119,23 +2166,28 @@ fun PlaybackSpeedPitchBottomSheet(
                         },
                     ) {
                         Icon(
-                            Icons.Rounded.Add,
+                            SimpIcons.Add,
                             contentDescription = "Increase speed",
-                            tint = MaterialTheme.colorScheme.onBackground,
+                            tint = rememberSurfaceDarkColors().subtitle,
                         )
                     }
                 }
-                if (getPlatform() != Platform.Desktop) {
+                // Shown on every platform. It used to be hidden on Desktop because LibVLC had no
+                // independent pitch control, but that backend is long gone — mpv shifts pitch with
+                // its rubberband filter. The control is still locked out while crossfade is on,
+                // handled by the caller: crossfade owns mpv's filter chain and the two would fight
+                // over it.
+                run {
                     Spacer(modifier = Modifier.height(4.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(
-                            Icons.Rounded.Tune,
+                            SimpIcons.Tune,
                             contentDescription = stringResource(Res.string.pitch),
                             modifier = Modifier.size(24.dp),
-                            tint = MaterialTheme.colorScheme.onBackground,
+                            tint = rememberSurfaceDarkColors().subtitle,
                         )
                         Spacer(modifier = Modifier.weight(1f))
                         IconButton(
@@ -2145,15 +2197,15 @@ fun PlaybackSpeedPitchBottomSheet(
                             },
                         ) {
                             Icon(
-                                Icons.Rounded.Remove,
+                                SimpIcons.Remove,
                                 contentDescription = "Decrease pitch",
-                                tint = MaterialTheme.colorScheme.onBackground,
+                                tint = rememberSurfaceDarkColors().subtitle,
                             )
                         }
                         Text(
                             text = "$pitch",
                             style = typo().titleMedium,
-                            color = MaterialTheme.colorScheme.onBackground,
+                            color = rememberSurfaceDarkColors().subtitle,
                             modifier = Modifier.widthIn(min = 60.dp),
                             textAlign = TextAlign.Center,
                         )
@@ -2164,9 +2216,9 @@ fun PlaybackSpeedPitchBottomSheet(
                             },
                         ) {
                             Icon(
-                                Icons.Rounded.Add,
+                                SimpIcons.Add,
                                 contentDescription = "Increase pitch",
-                                tint = MaterialTheme.colorScheme.onBackground,
+                                tint = rememberSurfaceDarkColors().subtitle,
                             )
                         }
                     }
@@ -2177,6 +2229,11 @@ fun PlaybackSpeedPitchBottomSheet(
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// REDESIGNED SleepTimerBottomSheet
+// Quick presets (5, 10, 15, 30, 45 min, 1 hour) + End of Song + Custom input
+// Passes END_OF_SONG_SENTINEL (Int.MAX_VALUE) for "End of Song" option.
+// ─────────────────────────────────────────────────────────────────────────────
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SleepTimerBottomSheet(
@@ -2187,6 +2244,7 @@ fun SleepTimerBottomSheet(
     val modelBottomSheetState =
         rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    // -1 = nothing selected, Int.MAX_VALUE = End of Song, else = minutes
     var selectedPreset by rememberSaveable { mutableIntStateOf(-1) }
     var showCustomInput by rememberSaveable { mutableStateOf(false) }
     var customMinutes by rememberSaveable { mutableStateOf("") }
@@ -2206,6 +2264,7 @@ fun SleepTimerBottomSheet(
             Preset("1 hour", 60),
         )
 
+    // Whether the Set button should be enabled
     val isSetEnabled =
         when {
             selectedPreset == END_OF_SONG_SENTINEL -> true
@@ -2226,7 +2285,7 @@ fun SleepTimerBottomSheet(
         Card(
             modifier = Modifier.fillMaxWidth().wrapContentHeight(),
             shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.background),
+            colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -2234,20 +2293,22 @@ fun SleepTimerBottomSheet(
             ) {
                 Spacer(modifier = Modifier.height(8.dp))
 
+                // Drag handle
                 Card(
                     modifier = Modifier.width(40.dp).height(4.dp),
-                    colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.outline),
+                    colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().disabled),
                     shape = RoundedCornerShape(50),
                 ) {}
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // Title row with alarm icon
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Image(
-                        painter = painterResource(Res.drawable.baseline_access_alarm_24),
+                        imageVector = SimpIcons.AccessAlarm,
                         contentDescription = null,
                         colorFilter = ColorFilter.tint(seed),
                         modifier = Modifier.size(20.dp),
@@ -2256,12 +2317,13 @@ fun SleepTimerBottomSheet(
                     Text(
                         text = stringResource(Res.string.sleep_timer_off),
                         style = typo().titleMedium,
-                        color = MaterialTheme.colorScheme.onBackground,
+                        color = rememberSurfaceDarkColors().content,
                     )
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // ── Preset grid: 3 columns × 2 rows ──────────────────────
                 val presetRows = presets.chunked(3)
                 presetRows.forEach { row ->
                     Row(
@@ -2285,14 +2347,14 @@ fun SleepTimerBottomSheet(
                                 border =
                                     BorderStroke(
                                         width = if (isSelected) 1.5.dp else 1.dp,
-                                        color = if (isSelected) seed else MaterialTheme.colorScheme.outline,
+                                        color = if (isSelected) seed else rememberSurfaceDarkColors().disabled,
                                     ),
                                 contentPadding = PaddingValues(vertical = 10.dp, horizontal = 4.dp),
                             ) {
                                 Text(
                                     text = preset.label,
                                     style = typo().bodySmall,
-                                    color = if (isSelected) seed else MaterialTheme.colorScheme.onBackground,
+                                    color = if (isSelected) seed else rememberSurfaceDarkColors().subtitle,
                                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                                 )
                             }
@@ -2301,10 +2363,12 @@ fun SleepTimerBottomSheet(
                     Spacer(modifier = Modifier.height(8.dp))
                 }
 
+                // ── End of Song + Custom row ─────────────────────────────
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    // End of Song
                     val isEndSelected = selectedPreset == END_OF_SONG_SENTINEL && !showCustomInput
                     OutlinedButton(
                         onClick = {
@@ -2321,18 +2385,19 @@ fun SleepTimerBottomSheet(
                         border =
                             BorderStroke(
                                 width = if (isEndSelected) 1.5.dp else 1.dp,
-                                color = if (isEndSelected) seed else MaterialTheme.colorScheme.outline,
+                                color = if (isEndSelected) seed else rememberSurfaceDarkColors().disabled,
                             ),
                         contentPadding = PaddingValues(vertical = 10.dp, horizontal = 4.dp),
                     ) {
                         Text(
                             text = "End of song",
                             style = typo().bodySmall,
-                            color = if (isEndSelected) seed else MaterialTheme.colorScheme.onBackground,
+                            color = if (isEndSelected) seed else rememberSurfaceDarkColors().subtitle,
                             fontWeight = if (isEndSelected) FontWeight.SemiBold else FontWeight.Normal,
                         )
                     }
 
+                    // Custom
                     val isCustomSelected = showCustomInput
                     OutlinedButton(
                         onClick = {
@@ -2348,19 +2413,20 @@ fun SleepTimerBottomSheet(
                         border =
                             BorderStroke(
                                 width = if (isCustomSelected) 1.5.dp else 1.dp,
-                                color = if (isCustomSelected) seed else MaterialTheme.colorScheme.outline,
+                                color = if (isCustomSelected) seed else rememberSurfaceDarkColors().disabled,
                             ),
                         contentPadding = PaddingValues(vertical = 10.dp, horizontal = 4.dp),
                     ) {
                         Text(
                             text = "Custom",
                             style = typo().bodySmall,
-                            color = if (isCustomSelected) seed else MaterialTheme.colorScheme.onBackground,
+                            color = if (isCustomSelected) seed else rememberSurfaceDarkColors().subtitle,
                             fontWeight = if (isCustomSelected) FontWeight.SemiBold else FontWeight.Normal,
                         )
                     }
                 }
 
+                // ── Custom input (animated expand) ───────────────────────
                 AnimatedVisibility(visible = showCustomInput) {
                     Column {
                         Spacer(modifier = Modifier.height(12.dp))
@@ -2381,7 +2447,7 @@ fun SleepTimerBottomSheet(
                                 Text(
                                     text = "min",
                                     style = typo().bodySmall,
-                                    color = Color.Gray,
+                                    color = rememberSurfaceDarkColors().disabled,
                                 )
                             },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -2394,6 +2460,7 @@ fun SleepTimerBottomSheet(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // ── Set button ───────────────────────────────────────────
                 Button(
                     onClick = {
                         when {
@@ -2446,7 +2513,7 @@ fun SleepTimerBottomSheet(
                     Text(
                         text = stringResource(Res.string.set),
                         style = typo().labelSmall,
-                        color = Color.White,
+                        color = rememberSurfaceDarkColors().content,
                         modifier = Modifier.padding(vertical = 4.dp),
                     )
                 }
@@ -2496,7 +2563,7 @@ fun AddToPlaylistModalBottomSheet(
                         .fillMaxWidth()
                         .wrapContentHeight(),
                 shape = BottomSheetDefaults.ExpandedShape,
-                colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.background),
+                colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -2505,7 +2572,7 @@ fun AddToPlaylistModalBottomSheet(
                     Spacer(modifier = Modifier.height(5.dp))
                     Card(
                         modifier = Modifier.width(60.dp).height(4.dp),
-                        colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.outline),
+                        colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
                         shape = RoundedCornerShape(50),
                     ) {}
                     Spacer(modifier = Modifier.height(5.dp))
@@ -2544,7 +2611,7 @@ fun AddToPlaylistModalBottomSheet(
                             text = stringResource(Res.string.no_playlist_found),
                             style = typo().labelSmall,
                             modifier = Modifier.padding(20.dp),
-                            color = MaterialTheme.colorScheme.onBackground,
+                            color = rememberSurfaceDarkColors().disabled,
                         )
                     } else {
                         Crossfade(isYouTubePlaylistClicked) { clicked ->
@@ -2566,15 +2633,15 @@ fun AddToPlaylistModalBottomSheet(
                                                 modifier = Modifier.padding(12.dp).align(Alignment.CenterStart),
                                             ) {
                                                 Image(
-                                                    painter = painterResource(Res.drawable.baseline_playlist_add_24),
+                                                    imageVector = SimpIcons.PlaylistAdd,
                                                     contentDescription = "",
-                                                    colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onBackground)
+                                                    colorFilter = ColorFilter.tint(rememberSurfaceDarkColors().content),
                                                 )
                                                 Spacer(modifier = Modifier.width(10.dp))
                                                 Text(
                                                     text = playlist.title,
                                                     style = typo().labelSmall,
-                                                    color = MaterialTheme.colorScheme.onBackground,
+                                                    color = rememberSurfaceDarkColors().content,
                                                 )
                                             }
                                         }
@@ -2603,15 +2670,15 @@ fun AddToPlaylistModalBottomSheet(
                                                 Crossfade(targetState = playlist.tracks?.contains(videoId) == true) {
                                                     if (it) {
                                                         Image(
-                                                            painter = painterResource(Res.drawable.done),
+                                                            imageVector = SimpIcons.Done,
                                                             contentDescription = "",
-                                                            colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onBackground)
+                                                            colorFilter = ColorFilter.tint(rememberSurfaceDarkColors().content),
                                                         )
                                                     } else {
                                                         Image(
-                                                            painter = painterResource(Res.drawable.baseline_playlist_add_24),
+                                                            imageVector = SimpIcons.PlaylistAdd,
                                                             contentDescription = "",
-                                                            colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onBackground)
+                                                            colorFilter = ColorFilter.tint(rememberSurfaceDarkColors().content),
                                                         )
                                                     }
                                                 }
@@ -2619,7 +2686,14 @@ fun AddToPlaylistModalBottomSheet(
                                                 Text(
                                                     text = playlist.title,
                                                     style = typo().labelSmall,
-                                                    color = if (playlist.tracks?.contains(videoId) == true) Color.Gray else MaterialTheme.colorScheme.onBackground,
+                                                    color =
+                                                        if (playlist.tracks?.contains(videoId) ==
+                                                            true
+                                                        ) {
+                                                            rememberSurfaceDarkColors().disabled
+                                                        } else {
+                                                            rememberSurfaceDarkColors().content
+                                                        },
                                                 )
                                             }
                                         }
@@ -2667,13 +2741,13 @@ fun ArtistModalBottomSheet(
             Card(
                 modifier = Modifier.fillMaxWidth().wrapContentHeight(),
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-                colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.background),
+                colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(modifier = Modifier.height(5.dp))
                     Card(
                         modifier = Modifier.width(60.dp).height(4.dp),
-                        colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.outline),
+                        colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
                         shape = RoundedCornerShape(50),
                     ) {}
                     Spacer(modifier = Modifier.height(5.dp))
@@ -2696,12 +2770,12 @@ fun ArtistModalBottomSheet(
                                     modifier = Modifier.padding(20.dp).align(Alignment.CenterStart),
                                 ) {
                                     Image(
-                                        painter = painterResource(Res.drawable.baseline_people_alt_24),
+                                        imageVector = SimpIcons.PeopleAlt,
                                         contentDescription = "",
-                                        colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onBackground)
+                                        colorFilter = ColorFilter.tint(rememberSurfaceDarkColors().content),
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
-                                    Text(text = artist.name, style = typo().labelSmall, color = MaterialTheme.colorScheme.onBackground)
+                                    Text(text = artist.name, style = typo().labelSmall)
                                 }
                             }
                         }
@@ -2760,13 +2834,13 @@ fun PlaylistBottomSheet(
             Card(
                 modifier = Modifier.fillMaxWidth().wrapContentHeight(),
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-                colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.background),
+                colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(modifier = Modifier.height(5.dp))
                     Card(
                         modifier = Modifier.width(60.dp).height(4.dp),
-                        colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.outline),
+                        colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
                         shape = RoundedCornerShape(50),
                     ) {}
                     Spacer(modifier = Modifier.height(5.dp))
@@ -2790,7 +2864,7 @@ fun PlaylistBottomSheet(
                         },
                         modifier = Modifier.fillMaxWidth().align(Alignment.CenterHorizontally),
                     ) {
-                        Text(text = stringResource(Res.string.save), color = MaterialTheme.colorScheme.onBackground)
+                        Text(text = stringResource(Res.string.save))
                     }
                     EndOfModalBottomSheet()
                 }
@@ -2816,19 +2890,19 @@ fun PlaylistBottomSheet(
         Card(
             modifier = Modifier.fillMaxWidth().wrapContentHeight(),
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.background),
+            colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Spacer(modifier = Modifier.height(5.dp))
                 Card(
                     modifier = Modifier.width(60.dp).height(4.dp),
-                    colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.outline),
+                    colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
                     shape = RoundedCornerShape(50),
                 ) {}
                 Spacer(modifier = Modifier.height(5.dp))
                 if (onAddToQueue != null) {
                     ActionButton(
-                        icon = painterResource(Res.drawable.baseline_queue_music_24),
+                        icon = SimpIcons.QueueMusic,
                         text = Res.string.add_to_queue,
                     ) {
                         onAddToQueue()
@@ -2836,15 +2910,15 @@ fun PlaylistBottomSheet(
                     }
                 }
                 if (isYourYouTubePlaylist) {
-                    ActionButton(icon = painterResource(Res.drawable.baseline_edit_24), text = Res.string.edit_title) {
+                    ActionButton(icon = SimpIcons.Edit, text = Res.string.edit_title) {
                         showEditTitle = true
                     }
                     ActionButton(
                         icon =
                             if (isSavedToLocal) {
-                                painterResource(Res.drawable.baseline_sync_disabled_24)
+                                SimpIcons.SyncDisabled
                             } else {
-                                painterResource(Res.drawable.baseline_sync_24)
+                                SimpIcons.Sync
                             },
                         text =
                             if (isSavedToLocal) {
@@ -2859,7 +2933,7 @@ fun PlaylistBottomSheet(
                     }
                 }
                 val shareTitle = stringResource(Res.string.share)
-                ActionButton(icon = painterResource(Res.drawable.baseline_share_24), text = Res.string.share) {
+                ActionButton(icon = SimpIcons.Share, text = Res.string.share) {
                     val url = "https://music.youtube.com/playlist?list=${playlistId.replaceFirst("VL", "")}"
                     shareUrl(shareTitle, url)
                 }
@@ -2894,10 +2968,39 @@ fun LocalPlaylistBottomSheet(
                 onDismiss()
             }
         }
+    // The picked file is cropped before it is used. A cover slot is square, so an uncropped 16:9
+    // photo would be squashed to fit — which is what it used to do.
+    var imageAwaitingCrop by remember { mutableStateOf<ByteArray?>(null) }
     val resultLauncher =
-        photoPickerResult {
-            it?.let { onEditThumbnail(it) }
+        photoPickerResult { pickedUri ->
+            pickedUri?.let { uri ->
+                coroutineScope.launch { imageAwaitingCrop = readLocalImageBytes(uri) }
+            }
         }
+    imageAwaitingCrop?.let { bytes ->
+        ImageCropperDialog(
+            imageBytes = bytes,
+            titleText = stringResource(Res.string.crop_cover),
+            confirmText = stringResource(Res.string.save),
+            cancelText = stringResource(Res.string.cancel),
+            onDismiss = { imageAwaitingCrop = null },
+            onCropped = { cropped ->
+                imageAwaitingCrop = null
+                coroutineScope.launch {
+                    // Written into the app's own storage, NOT reused from the picker's uri: that
+                    // one still points at the original uncropped file, and on Android the read
+                    // permission granted for it does not outlive the process.
+                    // Named after the CONTENT, not the clock. A fixed name would be overwritten
+                    // in place and Coil, which caches by url, would keep showing the previous
+                    // cover; a timestamp would leave a new file behind every time the user
+                    // re-picked the same picture. Hashing gives a fresh name for a new image and
+                    // the same name for the same one.
+                    persistPickedImage(cropped, "cover_${cropped.contentHashCode().toUInt()}.jpg")
+                        ?.let(onEditThumbnail)
+                }
+            },
+        )
+    }
     if (showEditTitle) {
         var newTitle by remember { mutableStateOf(title) }
         val showEditTitleSheetState =
@@ -2921,13 +3024,13 @@ fun LocalPlaylistBottomSheet(
             Card(
                 modifier = Modifier.fillMaxWidth().wrapContentHeight(),
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-                colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.background),
+                colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(modifier = Modifier.height(5.dp))
                     Card(
                         modifier = Modifier.width(60.dp).height(4.dp),
-                        colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.outline),
+                        colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
                         shape = RoundedCornerShape(50),
                     ) {}
                     Spacer(modifier = Modifier.height(5.dp))
@@ -2951,7 +3054,7 @@ fun LocalPlaylistBottomSheet(
                         },
                         modifier = Modifier.fillMaxWidth().align(Alignment.CenterHorizontally),
                     ) {
-                        Text(text = stringResource(Res.string.save), color = MaterialTheme.colorScheme.onBackground)
+                        Text(text = stringResource(Res.string.save))
                     }
                     EndOfModalBottomSheet()
                 }
@@ -2971,31 +3074,31 @@ fun LocalPlaylistBottomSheet(
             Card(
                 modifier = Modifier.fillMaxWidth().wrapContentHeight(),
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-                colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.background),
+                colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(modifier = Modifier.height(5.dp))
                     Card(
                         modifier = Modifier.width(60.dp).height(4.dp),
-                        colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.outline),
+                        colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
                         shape = RoundedCornerShape(50),
                     ) {}
                     Spacer(modifier = Modifier.height(5.dp))
-                    ActionButton(icon = painterResource(Res.drawable.baseline_edit_24), text = Res.string.edit_title) {
+                    ActionButton(icon = SimpIcons.Edit, text = Res.string.edit_title) {
                         showEditTitle = true
                     }
-                    ActionButton(icon = painterResource(Res.drawable.baseline_add_photo_alternate_24), text = Res.string.edit_thumbnail) {
+                    ActionButton(icon = SimpIcons.AddPhotoAlternate, text = Res.string.edit_thumbnail) {
                         resultLauncher.launch()
                     }
-                    ActionButton(icon = painterResource(Res.drawable.baseline_queue_music_24), text = Res.string.add_to_queue) {
+                    ActionButton(icon = SimpIcons.QueueMusic, text = Res.string.add_to_queue) {
                         onAddToQueue()
                     }
                     ActionButton(
                         icon =
                             if (ytPlaylistId != null) {
-                                painterResource(Res.drawable.baseline_sync_disabled_24)
+                                SimpIcons.SyncDisabled
                             } else {
-                                painterResource(Res.drawable.baseline_sync_24)
+                                SimpIcons.Sync
                             },
                         text =
                             if (ytPlaylistId != null) {
@@ -3007,19 +3110,19 @@ fun LocalPlaylistBottomSheet(
                         onSync()
                     }
                     ActionButton(
-                        icon = painterResource(Res.drawable.baseline_update_24),
+                        icon = SimpIcons.Update,
                         text = Res.string.update_playlist,
                         enable = (ytPlaylistId != null),
                     ) {
                         onUpdatePlaylist()
                     }
-                    ActionButton(icon = painterResource(Res.drawable.baseline_delete_24), text = Res.string.delete_playlist) {
+                    ActionButton(icon = SimpIcons.Delete, text = Res.string.delete_playlist) {
                         onDelete()
                         hideModalBottomSheet()
                     }
                     val shareTitle = stringResource(Res.string.share_url)
                     ActionButton(
-                        icon = painterResource(Res.drawable.baseline_share_24),
+                        icon = SimpIcons.Share,
                         text = if (ytPlaylistId != null) Res.string.share else Res.string.sync_first,
                         enable = (ytPlaylistId != null),
                     ) {
@@ -3064,19 +3167,19 @@ fun SortPlaylistBottomSheet(
         Card(
             modifier = Modifier.fillMaxWidth().wrapContentHeight(),
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.background),
+            colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Spacer(modifier = Modifier.height(5.dp))
                 Card(
                     modifier = Modifier.width(60.dp).height(4.dp),
-                    colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.outline),
+                    colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
                     shape = RoundedCornerShape(50),
                 ) {}
                 Text(
                     stringResource(Res.string.sort_by),
                     style = typo().labelSmall,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier =
                         Modifier
                             .padding(start = 16.dp, top = 16.dp, bottom = 24.dp)
@@ -3098,12 +3201,12 @@ fun SortPlaylistBottomSheet(
                                 text = stringResource(filterOption.displayNameRes()),
                                 style = typo().labelMedium,
                                 fontWeight = FontWeight.Medium,
-                                color = if (isSelected) seed else MaterialTheme.colorScheme.onBackground,
+                                color = if (isSelected) seed else rememberSurfaceDarkColors().content,
                             )
                             Spacer(modifier = Modifier.weight(1f))
                             if (isSelected) {
                                 Image(
-                                    painter = painterResource(Res.drawable.done),
+                                    imageVector = SimpIcons.Done,
                                     contentDescription = "Selected",
                                     colorFilter = ColorFilter.tint(seed),
                                     modifier = Modifier.size(32.dp),
@@ -3145,17 +3248,17 @@ fun DevLogInBottomSheet(
         Card(
             modifier = Modifier.fillMaxWidth().wrapContentHeight(),
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.background),
+            colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Spacer(modifier = Modifier.height(5.dp))
                 Card(
                     modifier = Modifier.width(60.dp).height(4.dp),
-                    colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.outline),
+                    colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
                     shape = RoundedCornerShape(50),
                 ) {}
                 Spacer(modifier = Modifier.height(10.dp))
-                Text(text = runBlocking { type.getTitle() }, style = typo().labelSmall, color = MaterialTheme.colorScheme.onBackground)
+                Text(text = runBlocking { type.getTitle() }, style = typo().labelSmall)
                 Spacer(modifier = Modifier.height(5.dp))
                 OutlinedTextField(
                     value = value,
@@ -3176,7 +3279,7 @@ fun DevLogInBottomSheet(
                     },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                 ) {
-                    Text(text = stringResource(Res.string.set), style = typo().labelSmall, color = MaterialTheme.colorScheme.onBackground)
+                    Text(text = stringResource(Res.string.set), style = typo().labelSmall)
                 }
                 Spacer(modifier = Modifier.height(5.dp))
                 EndOfModalBottomSheet()
@@ -3209,20 +3312,19 @@ fun DevCookieLogInBottomSheet(
         Card(
             modifier = Modifier.fillMaxWidth().wrapContentHeight(),
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.background),
+            colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Spacer(modifier = Modifier.height(5.dp))
                 Card(
                     modifier = Modifier.width(60.dp).height(4.dp),
-                    colors = CardDefaults.cardColors().copy(containerColor = MaterialTheme.colorScheme.outline),
+                    colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
                     shape = RoundedCornerShape(50),
                 ) {}
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     text = stringResource(Res.string.list_all_cookies_of_this_page),
                     style = typo().labelSmall,
-                    color = MaterialTheme.colorScheme.onBackground
                 )
                 cookies.forEach { cookie ->
                     Row(
@@ -3230,16 +3332,16 @@ fun DevCookieLogInBottomSheet(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.padding(12.dp),
                     ) {
-                        Text(text = cookie.first, style = typo().bodyMedium, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.weight(1f))
+                        Text(text = cookie.first, style = typo().bodyMedium, modifier = Modifier.weight(1f))
                         SelectionContainer(modifier = Modifier.weight(2f)) {
-                            Text(text = cookie.second ?: "", style = typo().bodyMedium, color = MaterialTheme.colorScheme.onBackground)
+                            Text(text = cookie.second ?: "", style = typo().bodyMedium)
                         }
                         val copied = stringResource(Res.string.copied_to_clipboard)
                         IconButton(onClick = {
                             copyToClipboard(cookie.first, cookie.second ?: "")
                             showToast(copied, ToastGravity.Bottom)
                         }) {
-                            Icon(imageVector = Icons.Default.ContentCopy, contentDescription = "Copy", tint = MaterialTheme.colorScheme.onBackground)
+                            Icon(imageVector = SimpIcons.ContentCopy, contentDescription = "Copy")
                         }
                     }
                 }

@@ -76,6 +76,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -90,6 +92,7 @@ import com.maxrave.domain.data.model.mood.Mood
 import com.maxrave.domain.extension.now
 import com.maxrave.domain.mediaservice.handler.PlaylistType
 import com.maxrave.domain.mediaservice.handler.QueueData
+import com.maxrave.domain.utils.toSongEntity
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.extension.angledGradientBackground
@@ -105,10 +108,15 @@ import com.maxrave.simpmusic.ui.component.HomeItemContentPlaylist
 import com.maxrave.simpmusic.ui.component.HomeShimmer
 import com.maxrave.simpmusic.ui.component.ItemArtistChart
 import com.maxrave.simpmusic.ui.component.MoodMomentAndGenreHomeItem
+import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
 import com.maxrave.simpmusic.ui.component.OfflineErrorState
 import com.maxrave.simpmusic.ui.component.QuickPicksItem
 import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.ShareSavedLyricsDialog
+import com.maxrave.simpmusic.ui.icon.History
+import com.maxrave.simpmusic.ui.icon.Notifications
+import com.maxrave.simpmusic.ui.icon.Settings
+import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.home.HomeDestination
 import com.maxrave.simpmusic.ui.navigation.destination.home.MoodDestination
 import com.maxrave.simpmusic.ui.navigation.destination.home.NotificationDestination
@@ -148,8 +156,6 @@ import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.all
-import simpmusic.composeapp.generated.resources.baseline_history_24
-import simpmusic.composeapp.generated.resources.baseline_settings_24
 import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.chart
 import simpmusic.composeapp.generated.resources.mono
@@ -168,7 +174,6 @@ import simpmusic.composeapp.generated.resources.let_s_pick_a_playlist_for_you
 import simpmusic.composeapp.generated.resources.let_s_start_with_a_radio
 import simpmusic.composeapp.generated.resources.log_in_warning
 import simpmusic.composeapp.generated.resources.moods_amp_moment
-import simpmusic.composeapp.generated.resources.outline_notifications_24
 import simpmusic.composeapp.generated.resources.party
 import simpmusic.composeapp.generated.resources.quick_picks
 import simpmusic.composeapp.generated.resources.relax
@@ -457,6 +462,7 @@ fun HomeScreen(
                                                         },
                                                     )
                                                 },
+                                                navController = navController,
                                                 viewModel = viewModel,
                                             )
                                         }
@@ -467,7 +473,6 @@ fun HomeScreen(
                             }
                         }
 
-                        // Independent sections - Moved out of PAGINATION_EXHAUST
                         items(newRelease, key = { "nr_" + it.hashCode() }) {
                             Box(modifier = Modifier.padding(horizontal = 15.dp)) {
                                 HomeItem(navController = navController, data = it)
@@ -602,8 +607,8 @@ fun HomeTopAppBar(navController: NavController, hasUpdate: Boolean) {
                     Text(
                         text = "Music",
                         style = typo().titleMedium.copy(
-                            fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold,
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif
+                            fontWeight = FontWeight.ExtraBold,
+                            fontFamily = FontFamily.SansSerif
                         ),
                         color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(bottom = 4.dp),
@@ -623,7 +628,7 @@ fun HomeTopAppBar(navController: NavController, hasUpdate: Boolean) {
         },
         actions = {
             Box {
-                RippleIconButton(resId = Res.drawable.outline_notifications_24) { navController.navigate(NotificationDestination) }
+                RippleIconButton(imageVector = SimpIcons.Notifications, tint = MaterialTheme.colorScheme.onBackground) { navController.navigate(NotificationDestination) }
                 if (hasUpdate) {
                     Box(
                         modifier = Modifier
@@ -634,8 +639,8 @@ fun HomeTopAppBar(navController: NavController, hasUpdate: Boolean) {
                     )
                 }
             }
-            RippleIconButton(resId = Res.drawable.baseline_history_24) { navController.navigate(RecentlySongsDestination) }
-            RippleIconButton(resId = Res.drawable.baseline_settings_24) { navController.navigate(SettingsDestination) }
+            RippleIconButton(imageVector = SimpIcons.History, tint = MaterialTheme.colorScheme.onBackground) { navController.navigate(RecentlySongsDestination) }
+            RippleIconButton(imageVector = SimpIcons.Settings, tint = MaterialTheme.colorScheme.onBackground) { navController.navigate(SettingsDestination) }
         },
         colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
     )
@@ -661,11 +666,26 @@ fun AccountLayout(accountName: String, url: String) {
 
 @ExperimentalFoundationApi
 @Composable
-fun QuickPicks(homeItem: HomeItem, viewModel: HomeViewModel = koinViewModel()) {
+fun QuickPicks(
+    homeItem: HomeItem,
+    navController: NavController,
+    viewModel: HomeViewModel = koinViewModel(),
+) {
     val lazyListState = rememberLazyGridState()
     val snapperFlingBehavior = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyGridState = lazyListState, snapPosition = SnapPosition.Start))
     val density = LocalDensity.current
     var widthDp by remember { mutableStateOf(0.dp) }
+    var bottomSheetShow by remember { mutableStateOf(false) }
+    var track by remember { mutableStateOf<Track?>(null) }
+
+    if (bottomSheetShow) {
+        NowPlayingBottomSheet(
+            onDismiss = { bottomSheetShow = false },
+            song = track?.toSongEntity(),
+            navController = navController,
+        )
+    }
+
     Column(
         Modifier.padding(vertical = 8.dp).onGloballyPositioned { coordinates ->
             with(density) { widthDp = (coordinates.size.width).toDp() }
@@ -702,6 +722,10 @@ fun QuickPicks(homeItem: HomeItem, viewModel: HomeViewModel = koinViewModel()) {
                             )
                             viewModel.loadMediaItem(firstQueue, type = Config.SONG_CLICK)
                         },
+                        onLongClick = {
+                            track = it.toTrack()
+                            bottomSheetShow = true
+                        },
                         data = it,
                         widthDp = widthDp,
                     )
@@ -712,46 +736,40 @@ fun QuickPicks(homeItem: HomeItem, viewModel: HomeViewModel = koinViewModel()) {
 }
 
 @Composable
-fun MoodMomentAndGenre(mood: Mood, navController: NavController) {
-    val lazyListState1 = rememberLazyGridState()
-    val snapperFlingBehavior1 = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyGridState = lazyListState1))
-    val lazyListState2 = rememberLazyGridState()
-    val snapperFlingBehavior2 = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyGridState = lazyListState2))
-
-    Column(Modifier.padding(vertical = 8.dp)) {
+fun MoodMomentAndGenre(
+    mood: Mood,
+    navController: NavController,
+) {
+    Column(
+        Modifier.padding(vertical = 8.dp),
+    ) {
         Text(text = stringResource(Res.string.let_s_pick_a_playlist_for_you), style = typo().bodyMedium, color = MaterialTheme.colorScheme.onBackground)
-        Text(
-            text = stringResource(Res.string.moods_amp_moment),
-            style = typo().headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
-            maxLines = 1,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
-        )
-        LazyHorizontalGrid(
-            rows = GridCells.Fixed(3),
-            modifier = Modifier.height(210.dp),
-            state = lazyListState1,
-            flingBehavior = snapperFlingBehavior1,
-        ) {
-            items(mood.moodsMoments, key = { it.title }) {
-                MoodMomentAndGenreHomeItem(title = it.title) { navController.navigate(MoodDestination(it.params)) }
-            }
-        }
-        Text(
-            text = stringResource(Res.string.genre),
-            style = typo().headlineMedium,
-            maxLines = 1,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
-        )
-        LazyHorizontalGrid(
-            rows = GridCells.Fixed(3),
-            modifier = Modifier.height(210.dp),
-            state = lazyListState2,
-            flingBehavior = snapperFlingBehavior2,
-        ) {
-            items(mood.genres, key = { it.title }) {
-                MoodMomentAndGenreHomeItem(title = it.title) { navController.navigate(MoodDestination(it.params)) }
+        mood.sections.forEach { section ->
+            val gridState = rememberLazyGridState()
+            val flingBehavior = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyGridState = gridState))
+            Text(
+                text = section.title,
+                style = typo().headlineMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
+            )
+            LazyHorizontalGrid(
+                rows = GridCells.Fixed(3),
+                modifier = Modifier.height(210.dp),
+                state = gridState,
+                flingBehavior = flingBehavior,
+            ) {
+                items(section.items, key = { it.params }) { item ->
+                    MoodMomentAndGenreHomeItem(
+                        title = item.title,
+                        stripeColor = item.stripeColor,
+                    ) {
+                        navController.navigate(
+                            MoodDestination(item.params),
+                        )
+                    }
+                }
             }
         }
     }

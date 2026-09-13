@@ -21,85 +21,85 @@ data class AccountSwitcherData(
 
 @Serializable
 data class AccountSwitcherAction(
-    val getMultiPageMenuAction: GetMultiPageMenuAction?,
+    val getMultiPageMenuAction: AccountSwitcherGetMultiPageMenuAction?,
 )
 
 @Serializable
-data class GetMultiPageMenuAction(
+data class AccountSwitcherGetMultiPageMenuAction(
     val menu: AccountSwitcherMenu?,
 )
 
 @Serializable
 data class AccountSwitcherMenu(
-    val multiPageMenuRenderer: MultiPageMenuRenderer?,
+    val multiPageMenuRenderer: AccountSwitcherMultiPageMenuRenderer?,
 )
 
 @Serializable
-data class MultiPageMenuRenderer(
+data class AccountSwitcherMultiPageMenuRenderer(
     val footer: AccountSwitcherFooter?,
-    val header: AccountSwitcherHeader?,
+    val header: AccountSwitcherMenuHeader?,
     val sections: List<AccountSwitcherSection?>?,
     val style: String?,
 )
 
 @Serializable
 data class AccountSwitcherFooter(
-    val multiPageMenuSectionRenderer: MultiPageMenuSectionRenderer?,
+    val multiPageMenuSectionRenderer: AccountSwitcherMultiPageMenuSectionRenderer?,
 )
 
 @Serializable
-data class MultiPageMenuSectionRenderer(
-    val items: List<AccountSwitcherItem?>?,
+data class AccountSwitcherMultiPageMenuSectionRenderer(
+    val items: List<AccountSwitcherMenuItem?>?,
 )
 
 @Serializable
-data class AccountSwitcherItem(
-    val compactLinkRenderer: CompactLinkRenderer?,
+data class AccountSwitcherMenuItem(
+    val compactLinkRenderer: AccountSwitcherCompactLinkRenderer?,
 )
 
 @Serializable
-data class CompactLinkRenderer(
-    val icon: AccountSwitcherIcon?,
-    val navigationEndpoint: AccountSwitcherNavigationEndpoint?,
+data class AccountSwitcherCompactLinkRenderer(
+    val icon: AccountSwitcherCompactLinkIcon?,
+    val navigationEndpoint: AccountSwitcherCompactLinkNavigationEndpoint?,
     val style: String?,
-    val title: AccountSwitcherTitle?,
+    val title: AccountSwitcherCompactLinkTitle?,
 )
 
 @Serializable
-data class AccountSwitcherIcon(
+data class AccountSwitcherCompactLinkIcon(
     val iconType: String?,
 )
 
 @Serializable
-data class AccountSwitcherNavigationEndpoint(
-    val signOutEndpoint: SignOutEndpoint?,
-    val urlEndpoint: UrlEndpoint?,
+data class AccountSwitcherCompactLinkNavigationEndpoint(
+    val signOutEndpoint: AccountSwitcherSignOutEndpoint?,
+    val urlEndpoint: AccountSwitcherUrlEndpoint?,
 )
 
 @Serializable
-data class SignOutEndpoint(
+data class AccountSwitcherSignOutEndpoint(
     val hack: Boolean?,
 )
 
 @Serializable
-data class UrlEndpoint(
+data class AccountSwitcherUrlEndpoint(
     val url: String?,
 )
 
 @Serializable
-data class AccountSwitcherTitle(
+data class AccountSwitcherCompactLinkTitle(
     val runs: List<Run?>?,
 )
 
 @Serializable
-data class AccountSwitcherHeader(
-    val simpleMenuHeaderRenderer: SimpleMenuHeaderRenderer?,
+data class AccountSwitcherMenuHeader(
+    val simpleMenuHeaderRenderer: AccountSwitcherSimpleMenuHeaderRenderer?,
 )
 
 @Serializable
-data class SimpleMenuHeaderRenderer(
+data class AccountSwitcherSimpleMenuHeaderRenderer(
     val backButton: AccountSwitcherBackButton?,
-    val title: AccountSwitcherTitle?,
+    val title: AccountSwitcherSimpleMenuTitle?,
 )
 
 @Serializable
@@ -109,27 +109,37 @@ data class AccountSwitcherBackButton(
 
 @Serializable
 data class AccountSwitcherButtonRenderer(
-    val accessibility: AccountSwitcherAccessibility?,
-    val accessibilityData: AccountSwitcherAccessibilityData?,
-    val icon: AccountSwitcherIcon?,
+    val accessibility: AccountSwitcherButtonAccessibility?,
+    val accessibilityData: AccountSwitcherButtonAccessibilityDataWrapper?,
+    val icon: AccountSwitcherButtonIcon?,
     val isDisabled: Boolean?,
     val size: String?,
     val style: String?,
 )
 
 @Serializable
-data class AccountSwitcherAccessibility(
+data class AccountSwitcherButtonAccessibility(
     val label: String?,
 )
 
 @Serializable
-data class AccountSwitcherAccessibilityData(
-    val accessibilityData: AccountSwitcherAccessibilityDataInner?,
+data class AccountSwitcherButtonAccessibilityDataWrapper(
+    val accessibilityData: AccountSwitcherButtonAccessibilityData?,
 )
 
 @Serializable
-data class AccountSwitcherAccessibilityDataInner(
+data class AccountSwitcherButtonAccessibilityData(
     val label: String?,
+)
+
+@Serializable
+data class AccountSwitcherButtonIcon(
+    val iconType: String?,
+)
+
+@Serializable
+data class AccountSwitcherSimpleMenuTitle(
+    val runs: List<Run?>?,
 )
 
 @Serializable
@@ -139,19 +149,19 @@ data class AccountSwitcherSection(
 
 @Serializable
 data class AccountSectionListRenderer(
-    val contents: List<AccountSwitcherContent?>?,
-    val header: AccountSwitcherSectionHeader?,
+    val contents: List<AccountSectionContent?>?,
+    val header: AccountSectionHeader?,
 )
 
 @Serializable
-data class AccountSwitcherContent(
+data class AccountSectionContent(
     val accountItemSectionRenderer: AccountItemSectionRenderer?,
 )
 
 @Serializable
 data class AccountItemSectionRenderer(
     val contents: List<AccountItemContent?>?,
-    val header: AccountItemSectionHeader?,
+    val header: AccountItemSectionHeaderWrapper?,
 )
 
 @Serializable
@@ -172,20 +182,20 @@ data class AccountItem(
     val isSelected: Boolean?,
     val mobileBanner: MobileBanner?,
     val serviceEndpoint: AccountItemServiceEndpoint?,
-    val unlimitedStatus: List<UnlimitedStatus?>?,
+    val unlimitedStatus: List<AccountItemUnlimitedStatus?>?,
 ) {
     fun toAccountInfo(email: String): AccountInfo? {
         return AccountInfo(
             name = accountName?.simpleText ?: return null,
             email = email,
             pageId =
-            onBehalfOfParameter
-                ?: serviceEndpoint
-                    ?.selectActiveIdentityEndpoint
-                    ?.supportedTokens
-                    ?.firstOrNull { it?.pageIdToken != null }
-                    ?.pageIdToken
-                    ?.pageId,
+                onBehalfOfParameter
+                    ?: serviceEndpoint
+                        ?.selectActiveIdentityEndpoint
+                        ?.supportedTokens
+                        ?.firstOrNull { it?.pageIdToken != null }
+                        ?.pageIdToken
+                        ?.pageId,
             thumbnails = accountPhoto?.thumbnails?.filterNotNull() ?: emptyList(),
         )
     }
@@ -222,49 +232,54 @@ data class AccountItemServiceEndpoint(
 )
 
 @Serializable
-data class UnlimitedStatus(
+data class AccountItemUnlimitedStatus(
     val runs: List<Run?>?,
 )
 
 @Serializable
-data class AccountItemSectionHeader(
+data class AccountItemSectionHeaderWrapper(
     val accountItemSectionHeaderRenderer: AccountItemSectionHeaderRenderer?,
 )
 
 @Serializable
 data class AccountItemSectionHeaderRenderer(
-    val title: AccountSwitcherTitle?,
+    val title: AccountItemSectionHeaderTitle?,
 )
 
 @Serializable
-data class AccountSwitcherSectionHeader(
+data class AccountItemSectionHeaderTitle(
+    val runs: List<Run?>?,
+)
+
+@Serializable
+data class AccountSectionHeader(
     val accountsDialogHeaderRenderer: AccountsDialogHeaderRenderer?,
     val googleAccountHeaderRenderer: GoogleAccountHeaderRenderer?,
 )
 
 @Serializable
 data class AccountsDialogHeaderRenderer(
-    val text: AccountSwitcherText?,
+    val text: AccountsDialogHeaderText?,
 )
 
 @Serializable
-data class AccountSwitcherText(
+data class AccountsDialogHeaderText(
     val runs: List<Run?>?,
 )
 
 @Serializable
 data class GoogleAccountHeaderRenderer(
-    val email: AccountSwitcherEmail?,
-    val name: AccountSwitcherName?,
+    val email: GoogleAccountEmail?,
+    val name: GoogleAccountName?,
 )
 
 @Serializable
-data class AccountSwitcherEmail(
+data class GoogleAccountEmail(
     val runs: List<Run?>?,
 )
 
 @Serializable
-data class AccountSwitcherName(
+data class GoogleAccountName(
     val runs: List<Run?>?,
 )
 
@@ -275,12 +290,12 @@ data class AccountSwitcherResponseContext(
 
 @Serializable
 data class AccountSwitcherServiceTrackingParam(
-    val params: List<AccountSwitcherParam?>?,
+    val params: List<AccountSwitcherTrackingParam?>?,
     val service: String?,
 )
 
 @Serializable
-data class AccountSwitcherParam(
+data class AccountSwitcherTrackingParam(
     val key: String?,
     val value: String?,
 )
@@ -346,8 +361,8 @@ fun AccountSwitcherEndpointResponse.toListAccountInfo(): List<AccountInfo> {
                     accountItem
                         .toAccountInfo(
                             email =
-                            accountItem.channelHandle
-                                ?.simpleText ?: "",
+                                accountItem.channelHandle
+                                    ?.simpleText ?: "",
                         )?.let {
                             list.add(it)
                         }

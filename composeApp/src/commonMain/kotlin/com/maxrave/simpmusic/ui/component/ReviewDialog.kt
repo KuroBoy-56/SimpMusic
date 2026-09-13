@@ -63,14 +63,14 @@ fun ReviewDialog(
         },
         title = {
             Text(
-                stringResource(Res.string.enjoying_KuroMusic),
+                stringResource(Res.string.enjoying_simpmusic),
                 style = typo().labelSmall,
             )
         },
         text = {
             Text(
                 buildAnnotatedString {
-                    append(stringResource(Res.string.if_you_enjoy_using_KuroMusic_star_KuroMusic_on_github_or_leave_a_review_on))
+                    append(stringResource(Res.string.if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on))
                     withLink(
                         LinkAnnotation.Url(
                             "https://www.producthunt.com/products/simpmusic",

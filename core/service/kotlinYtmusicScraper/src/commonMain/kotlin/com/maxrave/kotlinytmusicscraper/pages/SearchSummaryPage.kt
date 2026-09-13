@@ -57,6 +57,11 @@ data class SearchSummaryPage(
                             renderer.subtitleBadges?.find {
                                 it.musicInlineBadgeRenderer?.icon?.iconType == "MUSIC_EXPLICIT_BADGE"
                             } != null,
+                        musicVideoType =
+                            renderer.onTap.watchEndpoint
+                                .watchEndpointMusicSupportedConfigs
+                                ?.watchEndpointMusicConfig
+                                ?.musicVideoType,
                     )
                 }
 
@@ -129,7 +134,7 @@ data class SearchSummaryPage(
             return when {
                 renderer.isSong -> {
                     SongItem(
-                        id = renderer.playlistItemData?.videoId ?: return null,
+                        id = renderer.videoId ?: return null,
                         title =
                             renderer.flexColumns
                                 .firstOrNull()
@@ -163,6 +168,7 @@ data class SearchSummaryPage(
                             renderer.badges?.find {
                                 it.musicInlineBadgeRenderer?.icon?.iconType == "MUSIC_EXPLICIT_BADGE"
                             } != null,
+                        musicVideoType = renderer.musicVideoType,
                     )
                 }
 

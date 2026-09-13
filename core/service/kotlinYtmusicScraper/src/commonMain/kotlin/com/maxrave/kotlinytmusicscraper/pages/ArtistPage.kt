@@ -15,6 +15,7 @@ import com.maxrave.kotlinytmusicscraper.models.SongItem
 import com.maxrave.kotlinytmusicscraper.models.VideoItem
 import com.maxrave.kotlinytmusicscraper.models.YTItem
 import com.maxrave.kotlinytmusicscraper.models.oddElements
+import com.maxrave.kotlinytmusicscraper.models.splitBySeparator
 
 data class ArtistSection(
     val title: String,
@@ -86,7 +87,7 @@ data class ArtistPage(
                 return null
             } else {
                 return SongItem(
-                    id = renderer.playlistItemData?.videoId ?: return null,
+                    id = renderer.videoId ?: return null,
                     title =
                         renderer.flexColumns
                             .firstOrNull()
@@ -101,6 +102,10 @@ data class ArtistPage(
                             ?.musicResponsiveListItemFlexColumnRenderer
                             ?.text
                             ?.runs
+                            // The column reads "Artist • Album • 13M plays"; only the first group
+                            // is artists, so everything after the first " • " is dropped.
+                            ?.splitBySeparator()
+                            ?.firstOrNull()
                             ?.oddElements()
                             ?.map {
                                 Artist(
@@ -130,6 +135,7 @@ data class ArtistPage(
                         renderer.badges?.find {
                             it.musicInlineBadgeRenderer?.icon?.iconType == "MUSIC_EXPLICIT_BADGE"
                         } != null,
+                    musicVideoType = renderer.musicVideoType,
                 )
             }
         }
@@ -163,6 +169,7 @@ data class ArtistPage(
                             renderer.subtitleBadges?.find {
                                 it.musicInlineBadgeRenderer?.icon?.iconType == "MUSIC_EXPLICIT_BADGE"
                             } != null,
+                        musicVideoType = renderer.musicVideoType,
                     )
                 }
 
@@ -330,6 +337,7 @@ data class ArtistPage(
                                 ?.runs
                                 ?.lastOrNull()
                                 ?.text,
+                        musicVideoType = renderer.musicVideoType,
                     )
                 }
 

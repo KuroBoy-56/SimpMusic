@@ -6,6 +6,7 @@ import com.maxrave.kotlinytmusicscraper.models.MusicResponsiveListItemRenderer
 import com.maxrave.kotlinytmusicscraper.models.PlaylistItem
 import com.maxrave.kotlinytmusicscraper.models.SongItem
 import com.maxrave.kotlinytmusicscraper.models.oddElements
+import com.maxrave.kotlinytmusicscraper.models.splitBySeparator
 import com.maxrave.kotlinytmusicscraper.utils.parseTime
 
 data class PlaylistPage(
@@ -20,7 +21,7 @@ data class PlaylistPage(
                 return null
             } else {
                 return SongItem(
-                    id = renderer.playlistItemData?.videoId ?: return null,
+                    id = renderer.videoId ?: return null,
                     title =
                         renderer.flexColumns
                             .firstOrNull()
@@ -35,6 +36,10 @@ data class PlaylistPage(
                             ?.musicResponsiveListItemFlexColumnRenderer
                             ?.text
                             ?.runs
+                            // The column reads "Artist • Album • 13M plays"; only the first group
+                            // is artists, so everything after the first " • " is dropped.
+                            ?.splitBySeparator()
+                            ?.firstOrNull()
                             ?.oddElements()
                             ?.map {
                                 Artist(
@@ -71,6 +76,7 @@ data class PlaylistPage(
                             ?.playNavigationEndpoint
                             ?.watchEndpoint,
                     thumbnails = renderer.thumbnail.musicThumbnailRenderer.thumbnail,
+                    musicVideoType = renderer.musicVideoType,
                 )
             }
         }

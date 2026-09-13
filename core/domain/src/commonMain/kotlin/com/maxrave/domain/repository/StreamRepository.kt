@@ -21,7 +21,7 @@ interface StreamRepository {
         videoId: String,
         isDownloading: Boolean,
         isVideo: Boolean,
-        muxed: Boolean = false,
+        muxed: Boolean = false, // m3u8 or mp4 (both contain audio and video)
     ): Flow<String?>
 
     fun initPlayback(
@@ -53,5 +53,11 @@ interface StreamRepository {
 
     suspend fun invalidateFormat(videoId: String)
 
+    /**
+     * Which extractor and cipher decoder produced this video's stream URLs, for the info sheet.
+     *
+     * Null until the video has actually been extracted in this run — it is not persisted, because it
+     * describes one extraction rather than the format row, which outlives it in the cache.
+     */
     fun getExtractSource(videoId: String): String?
 }

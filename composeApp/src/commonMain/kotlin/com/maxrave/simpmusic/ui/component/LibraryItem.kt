@@ -55,6 +55,7 @@ import com.maxrave.domain.data.type.RecentlyType
 import com.maxrave.domain.mediaservice.handler.QueueData
 import com.maxrave.domain.utils.connectArtists
 import com.maxrave.domain.utils.toTrack
+import com.maxrave.simpmusic.ui.component.selection.SongSelectionState
 import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.LocalPlaylistDestination
@@ -70,7 +71,6 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
-import simpmusic.composeapp.generated.resources.holder
 import simpmusic.composeapp.generated.resources.most_played
 import simpmusic.composeapp.generated.resources.no_favorite_playlists
 import simpmusic.composeapp.generated.resources.no_playlists_downloaded
@@ -85,6 +85,9 @@ fun LibraryItem(
     viewModel: LibraryViewModel = koinViewModel(),
     sharedViewModel: SharedViewModel = koinInject(),
     navController: NavController,
+    // Null means this row does not take part in multi-selection; the selection bar lives on the
+    // hosting screen, so only a screen that shows one passes a state down.
+    selectionState: SongSelectionState? = null,
 ) {
     var showBottomSheet by remember { mutableStateOf(false) }
     var songEntity by remember { mutableStateOf<SongEntity?>(null) }
@@ -124,7 +127,7 @@ fun LibraryItem(
                 Text(
                     text = title,
                     style = typo().headlineMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     modifier =
                         Modifier
@@ -170,6 +173,12 @@ fun LibraryItem(
                                                     index = 0,
                                                 )
                                             },
+                                            selectionMode = selectionState?.isActive == true,
+                                            isSelected = selectionState?.isSelected(item.videoId) == true,
+                                            onLongClick =
+                                                selectionState?.let { sel -> { id: String -> sel.start(id) } },
+                                            onSelectToggle =
+                                                selectionState?.let { sel -> { id: String -> sel.toggle(id) } },
                                             onAddToQueue = { videoId ->
                                                 sharedViewModel.addListToQueue(
                                                     arrayListOf(item.toTrack()),
@@ -268,8 +277,8 @@ fun LibraryItem(
                                                 .diskCacheKey(item.canvasThumbUrl)
                                                 .crossfade(true)
                                                 .build(),
-                                        placeholder = painterResource(Res.drawable.holder),
-                                        error = painterResource(Res.drawable.holder),
+                                        placeholder = rememberHolderPainter(),
+                                        error = rememberHolderPainter(),
                                         contentDescription = null,
                                         contentScale = ContentScale.Crop,
                                         modifier =
@@ -313,7 +322,6 @@ fun LibraryItem(
                                             Text(
                                                 text = (song.artistName?.connectArtists() ?: ""),
                                                 style = typo().bodySmall,
-                                                color = Color.White,
                                                 maxLines = 1,
                                                 modifier =
                                                     Modifier
@@ -395,7 +403,7 @@ fun LibraryItem(
                                         .height(130.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Text(noPlaylistTitle, style = typo().bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(noPlaylistTitle, style = typo().bodyMedium)
                             }
                         }
                     }
@@ -424,6 +432,7 @@ sealed class LibraryItemType {
     ) : LibraryItemType()
 
     data class LocalPlaylist(
+        // Create new local playlist
         val onAddClick: (String) -> Unit,
     ) : LibraryItemType()
 

@@ -24,13 +24,10 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -47,18 +44,14 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -77,13 +70,14 @@ import com.maxrave.simpmusic.expect.ui.toImageBitmap
 import com.maxrave.simpmusic.extension.getColorFromPalette
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.rgbFactor
+import com.maxrave.simpmusic.extension.smoothScrimBrush
 import com.maxrave.simpmusic.extension.toSquareThumbnailUrl
-import com.maxrave.simpmusic.ui.theme.md_theme_dark_background
+import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
+import com.maxrave.simpmusic.ui.icon.SimpIcons
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import org.jetbrains.compose.resources.painterResource
 import simpmusic.composeapp.generated.resources.Res
-import simpmusic.composeapp.generated.resources.holder_video
 
 private val paddingMedium = 0.dp
 
@@ -102,17 +96,18 @@ fun CollapsingToolbarParallaxEffect(
     imageUrl: String? = null,
     onBack: () -> Unit,
     content:
-    @Composable()
-    ((color: Color) -> Unit) = {},
+        @Composable()
+        ((color: Color) -> Unit) = {},
 ) {
     val density = LocalDensity.current
     val toolbarHeight =
         TopAppBarDefaults.TopAppBarExpandedHeight + with(density) { WindowInsets.statusBars.getTop(this).toDp() * 2 }
 
     val scroll: ScrollState = rememberScrollState(0)
-// Portrait: square header (= screen width) so a squared artist image fills it exactly,
-// with no crop. Landscape: keep the original wide header (half screen height) and the
-// original (un-squared) image, which fits the wide frame better.
+
+    // Portrait: square header (= screen width) so a squared artist image fills it exactly,
+    // with no crop. Landscape: keep the original wide header (half screen height) and the
+    // original (un-squared) image, which fits the wide frame better.
     val screenSize = getScreenSizeInfo()
     val isPortraitHeader = screenSize.hDP >= screenSize.wDP
     val headerHeight =
@@ -127,14 +122,17 @@ fun CollapsingToolbarParallaxEffect(
     val toolbarHeightPx = with(density) { toolbarHeight.toPx() }
 
     val paletteState = rememberPaletteState()
-    var bitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-
-    val bgColor = MaterialTheme.colorScheme.background
-    var color by remember { mutableStateOf(bgColor) }
-    var showBackButton by rememberSaveable { mutableStateOf(true) }
+    var bitmap by remember {
+        mutableStateOf<ImageBitmap?>(null)
+    }
+    var color by remember { mutableStateOf(Color.Black) }
+    var showBackButton by rememberSaveable {
+        mutableStateOf(true)
+    }
 
     LaunchedEffect(bitmap) {
         val bm = bitmap
+        Logger.w("ArtistScreen", "Bitmap: $bm")
         if (bm != null) {
             paletteState.generate(bm)
         }
@@ -144,16 +142,10 @@ fun CollapsingToolbarParallaxEffect(
         snapshotFlow { paletteState.palette }
             .distinctUntilChanged()
             .collectLatest {
-                val paletteColor = it.getColorFromPalette()
-                if (paletteColor != Color.Transparent) {
-                    color = paletteColor
-                }
+                color = it.getColorFromPalette()
+                Logger.w("ArtistScreen", "Color: $color")
             }
     }
-
-    // LÓGICA DE CONTRASTE DINÁMICO PARA EL TÍTULO
-    val isLightPalette = color.luminance() > 0.5f
-    val dynamicTitleColor = if (isLightPalette) Color.Black else Color.White
 
     Box(modifier = modifier) {
         Header(
@@ -161,7 +153,10 @@ fun CollapsingToolbarParallaxEffect(
             headerHeightPx = headerHeightPx,
             imageUrl = headerImageUrl,
             backgroundColor = color,
-            modifier = Modifier.fillMaxWidth().height(headerHeight),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(headerHeight),
         ) { bm ->
             bitmap = bm
         }
@@ -187,7 +182,6 @@ fun CollapsingToolbarParallaxEffect(
             title = title,
             headerHeight = headerHeight,
             toolbarHeight = toolbarHeight,
-            textColor = dynamicTitleColor // Aplicamos el color inteligente
         )
         AnimatedVisibility(
             showBackButton,
@@ -195,21 +189,32 @@ fun CollapsingToolbarParallaxEffect(
             exit = fadeOut(),
         ) {
             Box(
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .wrapContentSize()
-                    .align(Alignment.TopStart)
-                    .padding(top = with(density) { WindowInsets.statusBars.getTop(this).toDp() })
-                    .padding(12.dp),
+                modifier =
+                    Modifier
+                        .clip(CircleShape)
+                        .wrapContentSize()
+                        .align(Alignment.TopStart)
+                        .padding(
+                            top = with(density) { WindowInsets.statusBars.getTop(this).toDp() },
+                        ).padding(
+                            12.dp,
+                        ),
             ) {
                 IconButton(
                     onClick = onBack,
-                    colors = IconButtonDefaults.iconButtonColors().copy(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                    ),
+                    colors =
+                        IconButtonDefaults.iconButtonColors().copy(
+                            containerColor =
+                                Color.DarkGray.copy(
+                                    alpha = 0.8f,
+                                ),
+                            contentColor =
+                                Color.White.copy(
+                                    alpha = 0.6f,
+                                ),
+                        ),
                 ) {
-                    Icon(Icons.Default.ArrowBackIosNew, "Back")
+                    Icon(SimpIcons.ArrowBackIosNew, "Back")
                 }
             }
         }
@@ -225,47 +230,50 @@ private fun Header(
     backgroundColor: Color,
     onImageLoaded: (ImageBitmap) -> Unit,
 ) {
-    val bgColor = MaterialTheme.colorScheme.background
-
     Box(
-        modifier = modifier
-            .graphicsLayer {
-                translationY = -scroll.value.toFloat() / 2f
-                alpha = (-1f / headerHeightPx) * scroll.value + 1
-            }
-            .background(backgroundColor.rgbFactor(0.5f)),
+        modifier =
+            modifier
+                .graphicsLayer {
+                    translationY = -scroll.value.toFloat() / 2f // Parallax effect
+                    alpha = (-1f / headerHeightPx) * scroll.value + 1
+                }.background(
+                    backgroundColor.rgbFactor(0.5f),
+                ),
     ) {
         AsyncImage(
-            model = ImageRequest.Builder(LocalPlatformContext.current)
-                .data(imageUrl)
-                .diskCachePolicy(CachePolicy.ENABLED)
-                .diskCacheKey(imageUrl)
-                .crossfade(true)
-                .build(),
-            onSuccess = { onImageLoaded(it.result.image.toImageBitmap()) },
-            placeholder = painterResource(Res.drawable.holder_video),
-            error = painterResource(Res.drawable.holder_video),
+            model =
+                ImageRequest
+                    .Builder(LocalPlatformContext.current)
+                    .data(imageUrl)
+                    .diskCachePolicy(CachePolicy.ENABLED)
+                    .diskCacheKey(imageUrl)
+                    .crossfade(true)
+                    .build(),
+            onSuccess = {
+                onImageLoaded(
+                    it.result.image.toImageBitmap(),
+                )
+            },
+            placeholder = rememberHolderPainter(isVideo = true),
+            error = rememberHolderPainter(isVideo = true),
             contentDescription = null,
             contentScale = ContentScale.FillWidth,
-            modifier = Modifier.fillMaxSize(),
+            modifier =
+                Modifier
+                    .fillMaxSize(),
         )
-
+        // YouTube Music style gradient - smooth fade from image to content
         Box(
             Modifier
                 .fillMaxSize()
                 .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color.Transparent,
-                            bgColor.copy(alpha = 0.3f),
-                            bgColor.copy(alpha = 0.6f),
-                            bgColor.copy(alpha = 0.85f),
-                            bgColor,
+                    brush =
+                        smoothScrimBrush(
+                            from = Color.Black.copy(alpha = 0f),
+                            to = Color.Black,
+                            startY = headerHeightPx / 2, // Start fade at middle of header
+                            endY = headerHeightPx, // Complete at bottom of header
                         ),
-                        startY = headerHeightPx / 2,
-                        endY = headerHeightPx,
-                    ),
                 ),
         )
     }
@@ -276,14 +284,22 @@ private fun Body(
     scroll: ScrollState,
     modifier: Modifier = Modifier,
     headerHeight: Dp,
-    content: @Composable (() -> Unit) = {},
+    content:
+        @Composable()
+        (() -> Unit) = {},
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier.verticalScroll(scroll),
+        modifier =
+            modifier
+                .verticalScroll(scroll),
     ) {
         Spacer(Modifier.height(headerHeight))
-        Box(Modifier.background(MaterialTheme.colorScheme.background)) {
+        Box(
+            Modifier.background(
+                Color.Black,
+            ),
+        ) {
             content()
         }
     }
@@ -296,14 +312,23 @@ private fun Toolbar(
     scroll: ScrollState,
     headerHeightPx: Float,
     toolbarHeightPx: Float,
-    backgroundColor: Color = MaterialTheme.colorScheme.background,
+    backgroundColor: Color = Color.Black,
     onShow: (Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
-    val toolbarBottom by remember { mutableFloatStateOf(headerHeightPx - toolbarHeightPx) }
-    val showToolbar by remember { derivedStateOf { scroll.value >= toolbarBottom } }
+    val toolbarBottom by remember {
+        mutableFloatStateOf(headerHeightPx - toolbarHeightPx)
+    }
 
-    LaunchedEffect(showToolbar) { onShow(showToolbar) }
+    val showToolbar by remember {
+        derivedStateOf {
+            scroll.value >= toolbarBottom
+        }
+    }
+
+    LaunchedEffect(showToolbar) {
+        onShow(showToolbar)
+    }
 
     AnimatedVisibility(
         modifier = modifier,
@@ -320,25 +345,35 @@ private fun Toolbar(
                 Modifier.background(
                     Brush.verticalGradient(
                         listOf(
-                            backgroundColor.rgbFactor(0.8f),
-                            backgroundColor.rgbFactor(0.6f),
+                            backgroundColor.rgbFactor(0.5f),
+                            backgroundColor.rgbFactor(0.3f),
                         ),
                     ),
                 ),
             navigationIcon = {
                 IconButton(
-                    onClick = onBack,
-                    modifier = Modifier.padding(16.dp).size(24.dp),
+                    onClick = {
+                        onBack.invoke()
+                    },
+                    modifier =
+                        Modifier
+                            .padding(16.dp)
+                            .size(24.dp),
                 ) {
                     Icon(
-                        imageVector = Icons.Default.ArrowBackIosNew,
+                        imageVector = SimpIcons.ArrowBackIosNew,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onBackground,
+                        tint = Color.White,
                     )
                 }
             },
             title = {},
-            colors = TopAppBarDefaults.topAppBarColors().copy(containerColor = Color.Transparent),
+            colors =
+                TopAppBarDefaults
+                    .topAppBarColors()
+                    .copy(
+                        containerColor = Color.Transparent,
+                    ),
         )
     }
 }
@@ -350,44 +385,81 @@ private fun Title(
     headerHeight: Dp,
     toolbarHeight: Dp,
     title: String,
-    textColor: Color
 ) {
     var titleHeightPx by remember { mutableFloatStateOf(0f) }
     var titleWidthPx by remember { mutableFloatStateOf(0f) }
 
     Text(
         text = title,
-        fontSize = 30.sp,
+        fontSize = 30.sp, // Reduced from 48.sp — still bold and prominent, fits longer names
         fontWeight = FontWeight.Bold,
-        color = textColor,
+        color = Color.White,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        style = TextStyle(
-            shadow = Shadow(
-                color = Color.Black.copy(alpha = 0.5f), // Pequeña sombra para asegurar legibilidad
-                offset = Offset(0f, 4f),
-                blurRadius = 8f
-            )
-        ),
-        modifier = modifier
-            .graphicsLayer {
-                val collapseRange: Float = (headerHeight.toPx() - toolbarHeight.toPx())
-                val collapseFraction: Float = (scroll.value / collapseRange).coerceIn(0f, 1f)
+        modifier =
+            modifier
+                .graphicsLayer {
+                    val collapseRange: Float = (headerHeight.toPx() - toolbarHeight.toPx())
+                    val collapseFraction: Float = (scroll.value / collapseRange).coerceIn(0f, 1f)
 
-                val scaleXY = lerp(TITLE_FONT_SCALE_START.dp, TITLE_FONT_SCALE_END.dp, collapseFraction)
-                val titleExtraStartPadding = titleWidthPx.toDp() * (1 - scaleXY.value) / 2f
-                val titleYFirstInterpolatedPoint = lerp(headerHeight - titleHeightPx.toDp() - paddingMedium, headerHeight / 2, collapseFraction)
-                val titleXFirstInterpolatedPoint = lerp(titlePaddingStart, (titlePaddingEnd - titleExtraStartPadding) * 5 / 4, collapseFraction)
-                val titleYSecondInterpolatedPoint = lerp(headerHeight / 2, toolbarHeight / 2 - titleHeightPx.toDp() / 2, collapseFraction)
-                val titleXSecondInterpolatedPoint = lerp((titlePaddingEnd - titleExtraStartPadding) * 5 / 4, titlePaddingEnd - titleExtraStartPadding, collapseFraction)
+                    val scaleXY =
+                        lerp(
+                            TITLE_FONT_SCALE_START.dp,
+                            TITLE_FONT_SCALE_END.dp,
+                            collapseFraction,
+                        )
 
-                translationY = lerp(titleYFirstInterpolatedPoint, titleYSecondInterpolatedPoint, collapseFraction).toPx()
-                translationX = lerp(titleXFirstInterpolatedPoint, titleXSecondInterpolatedPoint, collapseFraction).toPx()
-                scaleX = scaleXY.value
-                scaleY = scaleXY.value
-            }.onGloballyPositioned {
-                titleHeightPx = it.size.height.toFloat()
-                titleWidthPx = it.size.width.toFloat()
-            },
+                    val titleExtraStartPadding = titleWidthPx.toDp() * (1 - scaleXY.value) / 2f
+
+                    val titleYFirstInterpolatedPoint =
+                        lerp(
+                            headerHeight - titleHeightPx.toDp() - paddingMedium,
+                            headerHeight / 2,
+                            collapseFraction,
+                        )
+
+                    val titleXFirstInterpolatedPoint =
+                        lerp(
+                            titlePaddingStart,
+                            (titlePaddingEnd - titleExtraStartPadding) * 5 / 4,
+                            collapseFraction,
+                        )
+
+                    val titleYSecondInterpolatedPoint =
+                        lerp(
+                            headerHeight / 2,
+                            toolbarHeight / 2 - titleHeightPx.toDp() / 2,
+                            collapseFraction,
+                        )
+
+                    val titleXSecondInterpolatedPoint =
+                        lerp(
+                            (titlePaddingEnd - titleExtraStartPadding) * 5 / 4,
+                            titlePaddingEnd - titleExtraStartPadding,
+                            collapseFraction,
+                        )
+
+                    val titleY =
+                        lerp(
+                            titleYFirstInterpolatedPoint,
+                            titleYSecondInterpolatedPoint,
+                            collapseFraction,
+                        )
+
+                    val titleX =
+                        lerp(
+                            titleXFirstInterpolatedPoint,
+                            titleXSecondInterpolatedPoint,
+                            collapseFraction,
+                        )
+
+                    translationY = titleY.toPx()
+                    translationX = titleX.toPx()
+                    scaleX = scaleXY.value
+                    scaleY = scaleXY.value
+                }.onGloballyPositioned {
+                    titleHeightPx = it.size.height.toFloat()
+                    titleWidthPx = it.size.width.toFloat()
+                },
     )
 }

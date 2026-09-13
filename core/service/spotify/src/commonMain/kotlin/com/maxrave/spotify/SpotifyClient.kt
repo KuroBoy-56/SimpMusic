@@ -1,5 +1,6 @@
 package com.maxrave.spotify
 
+import com.maxrave.ktorext.curl.CurlLogger
 import com.maxrave.ktorext.encoding.brotli
 import com.maxrave.ktorext.getEngine
 import com.maxrave.spotify.model.body.CanvasBody
@@ -58,6 +59,9 @@ class SpotifyClient {
             install(Logging) {
                 logger = Logger.DEFAULT
                 level = LogLevel.ALL
+            }
+            install(CurlLogger) {
+                logger = { Logger.DEFAULT.log(it) }
             }
             install(HttpSend) {
                 maxSendCount = 100

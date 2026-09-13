@@ -40,17 +40,24 @@ import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.pagination.PagingActions
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.singleOrNull
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDateTime
@@ -197,6 +204,30 @@ class LocalPlaylistViewModel(
             PagingData.empty(),
         )
     val tracksPagingState: StateFlow<PagingData<Pair<SongEntity, PairSongLocalPlaylist>>> get() = _tracksPagingState
+
+    // --- ACTUALIZACIÓN LÓGICA ---
+    // Motor de búsqueda interna para playlists locales con debounce
+    private val _searchQuery: MutableStateFlow<String> = MutableStateFlow("")
+    val searchQuery: StateFlow<String> get() = _searchQuery
+
+    fun setSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+
+    @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
+    val searchResults: StateFlow<List<Pair<SongEntity, PairSongLocalPlaylist>>> =
+        _searchQuery
+            .debounce(250)
+            .distinctUntilChanged()
+            .flatMapLatest { raw ->
+                val query = raw.trim()
+                if (query.length < 2) {
+                    flowOf(emptyList())
+                } else {
+                    localPlaylistRepository.searchTracks(uiState.value.id, query)
+                }
+            }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     private val lazyTrackPagingItems: MutableStateFlow<LazyPagingItems<Pair<SongEntity, PairSongLocalPlaylist>>?> = MutableStateFlow(null)
 
     fun setLazyTrackPagingItems(lazyPagingItems: LazyPagingItems<Pair<SongEntity, PairSongLocalPlaylist>>) {
@@ -368,46 +399,6 @@ class LocalPlaylistViewModel(
 
     val listJob: MutableStateFlow<ArrayList<SongEntity>> = MutableStateFlow(arrayListOf())
 
-//        var downloadState: StateFlow<List<Download?>>
-//        viewModelScope.launch {
-//            downloadState = downloadUtils.getAllDownloads().stateIn(viewModelScope)
-//            downloadState.collectLatest { down ->
-//                if (down.isNotEmpty()){
-//                    var count = 0
-//                    down.forEach { downloadItem ->
-//                        if (downloadItem?.state == Download.STATE_COMPLETED) {
-//                            count++
-//                        }
-//                        else if (downloadItem?.state == Download.STATE_FAILED) {
-//                            updatePlaylistDownloadState(id, DownloadState.STATE_DOWNLOADING)
-//                        }
-//                    }
-//                    if (count == down.size) {
-//                        mainRepository.getLocalPlaylist(id).collect{ playlist ->
-//                            mainRepository.getSongsByListVideoId(playlist.tracks!!).collect{ tracks ->
-//                                tracks.forEach { track ->
-//                                    if (track.downloadState != DownloadState.STATE_DOWNLOADED) {
-//                                        mainRepository.updateDownloadState(track.videoId, DownloadState.STATE_NOT_DOWNLOADED)
-//                                        Toast.makeText(getApplication(), "Download Failed", Toast.LENGTH_SHORT).show()
-//                                    }
-//                                }
-//                            }
-//                        }
-//                        Logger.d("Check Downloaded", "Downloaded")
-//                        updatePlaylistDownloadState(id, DownloadState.STATE_DOWNLOADED)
-//                        Toast.makeText(getApplication(), "Download Completed", Toast.LENGTH_SHORT).show()
-//                    }
-//                    else {
-//                        updatePlaylistDownloadState(id, DownloadState.STATE_DOWNLOADING)
-//                    }
-//                }
-//                else {
-//                    updatePlaylistDownloadState(id, DownloadState.STATE_NOT_DOWNLOADED)
-//                }
-//            }
-//        }
-//    }
-
     fun updatePlaylistTitle(
         title: String,
         id: Long,
@@ -502,36 +493,26 @@ class LocalPlaylistViewModel(
         }
     }
 
+    // --- ACTUALIZACIÓN LÓGICA ---
+    // Versión robusta del manejo de estados de descarga por lotes
     fun downloadFullPlaylistState(
         id: Long,
         listJob: List<String>,
     ) {
+        if (listJob.isEmpty()) return
         viewModelScope.launch {
             downloadUtils.downloadTask.collect { download ->
-                _uiState.update { ui ->
-                    ui.copy(
-                        downloadState =
-                            if (listJob.all { download[it] == STATE_DOWNLOADED }) {
-                                localPlaylistRepository.updateLocalPlaylistDownloadState(
-                                    STATE_DOWNLOADED,
-                                    id,
-                                )
-                                STATE_DOWNLOADED
-                            } else if (listJob.any { download[it] == STATE_DOWNLOADING }) {
-                                localPlaylistRepository.updateLocalPlaylistDownloadState(
-                                    STATE_DOWNLOADING,
-                                    id,
-                                )
-                                STATE_DOWNLOADING
-                            } else {
-                                localPlaylistRepository.updateLocalPlaylistDownloadState(
-                                    STATE_NOT_DOWNLOADED,
-                                    id,
-                                )
-                                STATE_NOT_DOWNLOADED
-                            },
-                    )
-                }
+                val states = listJob.map { download[it] }
+                val resolved =
+                    when {
+                        states.any { it == STATE_DOWNLOADING } -> STATE_DOWNLOADING
+                        states.all { it == STATE_DOWNLOADED } -> STATE_DOWNLOADED
+                        states.any { it == null } -> null
+                        else -> STATE_NOT_DOWNLOADED
+                    }
+                if (resolved == null || resolved == uiState.value.downloadState) return@collect
+                localPlaylistRepository.updateLocalPlaylistDownloadState(resolved, id)
+                _uiState.update { it.copy(downloadState = resolved) }
             }
         }
     }
@@ -571,37 +552,6 @@ class LocalPlaylistViewModel(
                         hideLoadingDialog()
                     },
                 )
-//            mainRepository.createYouTubePlaylist(playlist).collect {
-//                if (it != null) {
-//                    val ytId = "VL$it"
-//                    mainRepository.updateLocalPlaylistYouTubePlaylistId(playlist.id, ytId)
-//                    mainRepository.updateLocalPlaylistYouTubePlaylistSynced(playlist.id, 1)
-//                    mainRepository.getLocalPlaylistByYoutubePlaylistId(ytId).collect { yt ->
-//                        if (yt != null) {
-//                            mainRepository.updateLocalPlaylistYouTubePlaylistSyncState(
-//                                yt.id,
-//                                LocalPlaylistEntity.YouTubeSyncState.Synced,
-//                            )
-//                            mainRepository.getLocalPlaylist(playlist.id).collect { last ->
-//                                _localPlaylist.emit(last)
-//                                Toast
-//                                    .makeText(
-//                                        application,
-//                                        application.getString(Res.string.synced),
-//                                        Toast.LENGTH_SHORT,
-//                                    ).show()
-//                            }
-//                        }
-//                    }
-//                } else {
-//                    Toast
-//                        .makeText(
-//                            application,
-//                            application.getString(Res.string.error),
-//                            Toast.LENGTH_SHORT,
-//                        ).show()
-//                }
-//            }
         }
     }
 
