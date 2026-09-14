@@ -34,7 +34,7 @@ fun EndOfPage(withoutCredit: Boolean = false) {
                     stringResource(
                         Res.string.version_format,
                         VersionManager.getVersionName(),
-                    ) + "\ngarevyn-dev",
+                    ) + "\nGarevyn-dev",
                 style = typo().bodySmall,
                 textAlign = TextAlign.Center,
                 modifier =
