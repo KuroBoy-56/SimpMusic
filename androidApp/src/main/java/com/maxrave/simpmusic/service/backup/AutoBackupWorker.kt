@@ -40,33 +40,24 @@ class AutoBackupWorker(
         try {
             Logger.i(TAG, "Starting auto backup...")
 
-            // Check if auto backup is still enabled
             val enabled = dataStoreManager.autoBackupEnabled.first()
             if (enabled != DataStoreManager.TRUE) {
                 Logger.i(TAG, "Auto backup is disabled, skipping...")
                 return@withContext Result.success()
             }
 
-            // Get backup settings
             val backupDownloaded = dataStoreManager.backupDownloaded.first() == DataStoreManager.TRUE
             val maxFiles = dataStoreManager.autoBackupMaxFiles.first()
 
-            // Create temp backup file
             val tempBackupFile = createBackupFile(backupDownloaded)
 
-            // Save to Downloads/SimpMusic folder
             val success = saveToDownloads(tempBackupFile)
 
-            // Delete temp file
             tempBackupFile.delete()
 
             if (success) {
-                // Cleanup old backups
                 cleanupOldBackups(maxFiles)
-
-                // Update last backup time
                 dataStoreManager.setAutoBackupLastTime(System.currentTimeMillis())
-
                 Logger.i(TAG, "Auto backup completed successfully")
                 Result.success()
             } else {
@@ -85,7 +76,6 @@ class AutoBackupWorker(
 
         FileOutputStream(tempFile).buffered().use { bufferedOutput ->
             ZipOutputStream(bufferedOutput).use { zipOutputStream ->
-                // Backup DataStore preferences
                 val dataStoreFile = File(context.filesDir, "datastore/$SETTINGS_FILENAME.preferences_pb")
                 if (dataStoreFile.exists()) {
                     zipOutputStream.putNextEntry(ZipEntry("$SETTINGS_FILENAME.preferences_pb"))
@@ -95,7 +85,6 @@ class AutoBackupWorker(
                     zipOutputStream.closeEntry()
                 }
 
-                // Checkpoint and backup database
                 commonRepository.databaseDaoCheckpoint()
                 val dbPath = commonRepository.getDatabasePath()
                 FileInputStream(dbPath).use { inputStream ->
@@ -104,9 +93,7 @@ class AutoBackupWorker(
                     zipOutputStream.closeEntry()
                 }
 
-                // Backup downloaded data if enabled
                 if (backupDownloaded) {
-                    // Backup ExoPlayer database
                     val exoPlayerDb = context.getDatabasePath(EXOPLAYER_DB_NAME)
                     if (exoPlayerDb.exists()) {
                         zipOutputStream.putNextEntry(ZipEntry(EXOPLAYER_DB_NAME))
@@ -116,7 +103,6 @@ class AutoBackupWorker(
                         zipOutputStream.closeEntry()
                     }
 
-                    // Backup download folder
                     val downloadFolder = File(context.filesDir, DOWNLOAD_EXOPLAYER_FOLDER)
                     if (downloadFolder.exists() && downloadFolder.isDirectory) {
                         backupFolder(downloadFolder, DOWNLOAD_EXOPLAYER_FOLDER, zipOutputStream)
@@ -124,7 +110,6 @@ class AutoBackupWorker(
                 }
             }
         }
-
         return tempFile
     }
 
@@ -151,31 +136,49 @@ class AutoBackupWorker(
 
     private fun saveToDownloads(backupFile: File): Boolean {
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        val fileName = "simpmusic_backup_$timestamp.zip"
+        val fileName = "ytmusic_backup_$timestamp.zip"
 
         return try {
-            val contentValues = ContentValues().apply {
-                put(MediaStore.Downloads.DISPLAY_NAME, fileName)
-                put(MediaStore.Downloads.MIME_TYPE, "application/zip")
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    put(MediaStore.Downloads.RELATIVE_PATH, "Download/SimpMusic")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Método moderno para Android 10+
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                    put(MediaStore.Downloads.MIME_TYPE, "application/zip")
+                    put(MediaStore.Downloads.RELATIVE_PATH, "Download/YT Music")
                 }
-            }
 
-            val uri = context.contentResolver.insert(
-                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                contentValues
-            )
+                val uri = context.contentResolver.insert(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    contentValues
+                )
 
-            uri?.let { outputUri ->
-                context.contentResolver.openOutputStream(outputUri)?.use { output ->
+                uri?.let { outputUri ->
+                    context.contentResolver.openOutputStream(outputUri)?.use { output ->
+                        backupFile.inputStream().use { input ->
+                            input.copyTo(output)
+                        }
+                    }
+                    Logger.i(TAG, "Backup saved to Downloads/YT Music/$fileName")
+                    true
+                } ?: false
+            } else {
+                // Método clásico para Android 8 y 9
+                @Suppress("DEPRECATION")
+                val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                val ytMusicDir = File(downloadsDir, "YT Music")
+                if (!ytMusicDir.exists()) {
+                    ytMusicDir.mkdirs()
+                }
+                val outputFile = File(ytMusicDir, fileName)
+
+                FileOutputStream(outputFile).use { output ->
                     backupFile.inputStream().use { input ->
                         input.copyTo(output)
                     }
                 }
-                Logger.i(TAG, "Backup saved to Downloads/SimpMusic/$fileName")
+                Logger.i(TAG, "Backup saved to Downloads/YT Music/$fileName")
                 true
-            } ?: false
+            }
         } catch (e: Exception) {
             Logger.e(TAG, "Error saving to Downloads: ${e.message}")
             false
@@ -184,56 +187,66 @@ class AutoBackupWorker(
 
     private fun cleanupOldBackups(maxFiles: Int) {
         try {
-            val projection = arrayOf(
-                MediaStore.Downloads._ID,
-                MediaStore.Downloads.DISPLAY_NAME,
-                MediaStore.Downloads.DATE_ADDED
-            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Limpieza en Android 10+
+                val projection = arrayOf(
+                    MediaStore.Downloads._ID,
+                    MediaStore.Downloads.DISPLAY_NAME,
+                    MediaStore.Downloads.DATE_ADDED
+                )
 
-            val selection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                "${MediaStore.Downloads.RELATIVE_PATH} = ? AND ${MediaStore.Downloads.DISPLAY_NAME} LIKE ?"
-            } else {
-                "${MediaStore.Downloads.DISPLAY_NAME} LIKE ?"
-            }
+                val selection = "${MediaStore.Downloads.RELATIVE_PATH} = ? AND ${MediaStore.Downloads.DISPLAY_NAME} LIKE ?"
+                val selectionArgs = arrayOf("Download/YT Music/", "ytmusic_backup_%.zip")
+                val sortOrder = "${MediaStore.Downloads.DATE_ADDED} DESC"
 
-            val selectionArgs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                arrayOf("Download/SimpMusic/", "simpmusic_backup_%.zip")
-            } else {
-                arrayOf("simpmusic_backup_%.zip")
-            }
+                context.contentResolver.query(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    projection,
+                    selection,
+                    selectionArgs,
+                    sortOrder
+                )?.use { cursor ->
+                    val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Downloads._ID)
+                    val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Downloads.DISPLAY_NAME)
 
-            val sortOrder = "${MediaStore.Downloads.DATE_ADDED} DESC"
+                    val backupFiles = mutableListOf<Pair<Long, String>>()
 
-            context.contentResolver.query(
-                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                projection,
-                selection,
-                selectionArgs,
-                sortOrder
-            )?.use { cursor ->
-                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Downloads._ID)
-                val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Downloads.DISPLAY_NAME)
+                    while (cursor.moveToNext()) {
+                        val id = cursor.getLong(idColumn)
+                        val name = cursor.getString(nameColumn)
+                        if (name.startsWith("ytmusic_backup_") && name.endsWith(".zip")) {
+                            backupFiles.add(id to name)
+                        }
+                    }
 
-                val backupFiles = mutableListOf<Pair<Long, String>>()
-
-                while (cursor.moveToNext()) {
-                    val id = cursor.getLong(idColumn)
-                    val name = cursor.getString(nameColumn)
-                    if (name.startsWith("simpmusic_backup_") && name.endsWith(".zip")) {
-                        backupFiles.add(id to name)
+                    if (backupFiles.size > maxFiles) {
+                        val filesToDelete = backupFiles.drop(maxFiles)
+                        filesToDelete.forEach { (id, name) ->
+                            val deleteUri = android.content.ContentUris.withAppendedId(
+                                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                                id
+                            )
+                            context.contentResolver.delete(deleteUri, null, null)
+                            Logger.i(TAG, "Deleted old backup: $name")
+                        }
                     }
                 }
+            } else {
+                // Limpieza en Android 8 y 9
+                @Suppress("DEPRECATION")
+                val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                val ytMusicDir = File(downloadsDir, "YT Music")
+                if (ytMusicDir.exists() && ytMusicDir.isDirectory) {
+                    val backupFiles = ytMusicDir.listFiles { file ->
+                        file.isFile && file.name.startsWith("ytmusic_backup_") && file.name.endsWith(".zip")
+                    }?.sortedByDescending { it.lastModified() } ?: return
 
-                // Delete old files if exceeding maxFiles
-                if (backupFiles.size > maxFiles) {
-                    val filesToDelete = backupFiles.drop(maxFiles)
-                    filesToDelete.forEach { (id, name) ->
-                        val deleteUri = android.content.ContentUris.withAppendedId(
-                            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                            id
-                        )
-                        context.contentResolver.delete(deleteUri, null, null)
-                        Logger.i(TAG, "Deleted old backup: $name")
+                    if (backupFiles.size > maxFiles) {
+                        val filesToDelete = backupFiles.drop(maxFiles)
+                        filesToDelete.forEach { file ->
+                            file.delete()
+                            Logger.i(TAG, "Deleted old backup: ${file.name}")
+                        }
                     }
                 }
             }
