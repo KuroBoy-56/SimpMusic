@@ -29,10 +29,12 @@ val databaseModule =
             Converters()
         }
         // Database
+        // Database
         single(createdAtStart = true) {
             getDatabaseBuilder(
                 get<Converters>()
             )
+                .fallbackToDestructiveMigration(dropAllTables = true) // <--- Aquí le decimos que sí, que borre todo si hay error
                 .setDriver(BundledSQLiteDriver())
                 .setQueryCoroutineContext(Dispatchers.IO)
                 .build()
