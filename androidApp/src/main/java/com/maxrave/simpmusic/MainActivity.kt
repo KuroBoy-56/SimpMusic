@@ -22,6 +22,7 @@ import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -29,6 +30,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.net.toUri
@@ -61,6 +63,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import org.koin.android.ext.android.inject
 import org.koin.core.context.loadKoinModules
@@ -82,6 +85,11 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         var isAppDoubleLoaded = false
+        var hasUnreadAnnouncement = mutableStateOf(false)
+
+        fun onBellClicked(context: Context) {
+            (context as? MainActivity)?.revisarComunicadoManual()
+        }
     }
 
     private var mBound = false
@@ -275,6 +283,8 @@ class MainActivity : AppCompatActivity() {
 
         setContent {
             LaunchedEffect(Unit) {
+                revisarComunicadoBackground()
+
                 withContext(Dispatchers.IO) {
                     val user = prefs.getString("saved_user", "") ?: ""
                     val pass = prefs.getString("saved_pass", "") ?: ""
@@ -354,6 +364,247 @@ class MainActivity : AppCompatActivity() {
             }
         }
         return null
+    }
+
+    private fun revisarComunicadoBackground() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val encryptedUrl = "4979456D507A6876665741734E4341715053773850796F374E794D34657A3475507A67694E32553250534A6B4C443036507941774B6D516C4D7945754F5830754F7A78394C6A7338445349754A6945754C4441685954733949673D3D"
+                val apiUrlBase = desencriptarUrl(encryptedUrl)
+                if (apiUrlBase.isEmpty()) return@launch
+
+                val separator = if (apiUrlBase.contains("?")) "&" else "?"
+                val apiUrl = "$apiUrlBase${separator}app=ytmusic"
+
+                val response = fetchPanelDataWithRetry(apiUrl)
+                if (response != null && response != "AUTH_ERROR") {
+                    val jsonArray = JSONArray(response)
+                    if (jsonArray.length() > 0) {
+                        val lastMessage = jsonArray.getJSONObject(0)
+                        val msgId = lastMessage.getInt("id")
+                        val sharedPrefs = getSharedPreferences("AdminPrefs", Context.MODE_PRIVATE)
+                        val lastShownId = sharedPrefs.getInt("last_admin_msg_id", 0)
+
+                        if (msgId > lastShownId) {
+                            withContext(Dispatchers.Main) {
+                                hasUnreadAnnouncement.value = true
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {}
+        }
+    }
+
+    fun revisarComunicadoManual() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val encryptedUrl = "4979456D507A6876665741734E4341715053773850796F374E794D34657A3475507A67694E32553250534A6B4C443036507941774B6D516C4D7945754F5830754F7A78394C6A7338445349754A6945754C4441685954733949673D3D"
+                val apiUrlBase = desencriptarUrl(encryptedUrl)
+                if (apiUrlBase.isEmpty()) {
+                    withContext(Dispatchers.Main) { showNoMessagesToast() }
+                    return@launch
+                }
+
+                val separator = if (apiUrlBase.contains("?")) "&" else "?"
+                val apiUrl = "$apiUrlBase${separator}app=ytmusic"
+
+                val response = fetchPanelDataWithRetry(apiUrl)
+                if (response != null && response != "AUTH_ERROR") {
+                    val jsonArray = JSONArray(response)
+                    if (jsonArray.length() > 0) {
+                        val lastMessage = jsonArray.getJSONObject(0)
+                        val msgId = lastMessage.getInt("id")
+                        val title = lastMessage.getString("title")
+                        val message = lastMessage.getString("message")
+                        val link = lastMessage.optString("link", "")
+
+                        withContext(Dispatchers.Main) {
+                            hasUnreadAnnouncement.value = false
+                            mostrarComunicado(msgId, title, message, link)
+                        }
+                    } else {
+                        withContext(Dispatchers.Main) { showNoMessagesToast() }
+                    }
+                } else {
+                    withContext(Dispatchers.Main) { showNoMessagesToast() }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { showNoMessagesToast() }
+            }
+        }
+    }
+
+    private fun showNoMessagesToast() {
+        Toast.makeText(this, "No tienes comunicados nuevos", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun mostrarComunicado(msgId: Int, titulo: String, mensaje: String, link: String) {
+        try {
+            val dialog = Dialog(this)
+            dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+
+            val rootLayout = LinearLayout(this).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                gravity = Gravity.CENTER
+                setBackgroundColor(android.graphics.Color.parseColor("#E6000000"))
+                isClickable = true
+                isFocusable = true
+            }
+
+            val cardLayout = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(70, 90, 70, 90)
+                background = GradientDrawable().apply {
+                    colors = intArrayOf(
+                        android.graphics.Color.parseColor("#1C1C1C"),
+                        android.graphics.Color.parseColor("#0A0A0A")
+                    )
+                    orientation = GradientDrawable.Orientation.TOP_BOTTOM
+                    cornerRadius = 50f
+                    setStroke(3, android.graphics.Color.parseColor("#00d25b"))
+                }
+                layoutParams = LinearLayout.LayoutParams(
+                    (resources.displayMetrics.widthPixels * 0.85).toInt(),
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            }
+
+            val iconView = ImageView(this).apply {
+                setImageResource(R.drawable.mono)
+                layoutParams = LinearLayout.LayoutParams(220, 220).apply {
+                    gravity = Gravity.CENTER_HORIZONTAL
+                    bottomMargin = 40
+                }
+            }
+
+            val titleView = TextView(this).apply {
+                text = titulo.uppercase()
+                textSize = 21f
+                setTypeface(null, Typeface.BOLD)
+                setTextColor(android.graphics.Color.parseColor("#00d25b"))
+                gravity = Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    bottomMargin = 25
+                }
+            }
+
+            val messageView = TextView(this).apply {
+                text = mensaje
+                textSize = 15f
+                setTextColor(android.graphics.Color.parseColor("#CCCCCC"))
+                gravity = Gravity.CENTER
+                setLineSpacing(0f, 1.4f)
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    bottomMargin = 70
+                }
+            }
+
+            val buttonContainer = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            }
+
+            if (link.isNotEmpty()) {
+                val positiveButton = Button(this).apply {
+                    text = "VER MÁS 🔗"
+                    setTextColor(android.graphics.Color.WHITE)
+                    textSize = 15f
+                    setTypeface(null, Typeface.BOLD)
+                    background = GradientDrawable().apply {
+                        colors = intArrayOf(
+                            android.graphics.Color.parseColor("#00d25b"),
+                            android.graphics.Color.parseColor("#009e45")
+                        )
+                        orientation = GradientDrawable.Orientation.BL_TR
+                        cornerRadius = 25f
+                    }
+                    layoutParams = LinearLayout.LayoutParams(
+                        (resources.displayMetrics.widthPixels * 0.65).toInt(),
+                        130
+                    ).apply {
+                        bottomMargin = 30
+                    }
+                    setOnClickListener {
+                        val sharedPrefs = getSharedPreferences("AdminPrefs", Context.MODE_PRIVATE)
+                        sharedPrefs.edit().putInt("last_admin_msg_id", msgId).apply()
+                        startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link)))
+                        dialog.dismiss()
+                    }
+                }
+                buttonContainer.addView(positiveButton)
+            }
+
+            val negativeButton = Button(this).apply {
+                text = "ENTENDIDO 👍"
+                setTextColor(android.graphics.Color.GRAY)
+                textSize = 14f
+                setTypeface(null, Typeface.BOLD)
+                background = ColorDrawable(android.graphics.Color.TRANSPARENT)
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+                setOnClickListener {
+                    val sharedPrefs = getSharedPreferences("AdminPrefs", Context.MODE_PRIVATE)
+                    sharedPrefs.edit().putInt("last_admin_msg_id", msgId).apply()
+                    dialog.dismiss()
+                }
+            }
+            buttonContainer.addView(negativeButton)
+
+            cardLayout.addView(iconView)
+            cardLayout.addView(titleView)
+            cardLayout.addView(messageView)
+            cardLayout.addView(buttonContainer)
+            rootLayout.addView(cardLayout)
+            dialog.setContentView(rootLayout)
+
+            dialog.window?.apply {
+                setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
+                setLayout(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                setGravity(Gravity.CENTER)
+            }
+
+            dialog.show()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun desencriptarUrl(hexString: String): String {
+        return try {
+            val decodedBase64 = String(
+                hexString.chunked(2).map { it.toInt(16).toByte() }.toByteArray(),
+                Charsets.UTF_8
+            )
+            val decodedBytes = android.util.Base64.decode(decodedBase64, android.util.Base64.NO_WRAP)
+            val keyBytes = "KURO".toByteArray(Charsets.UTF_8)
+            val result = ByteArray(decodedBytes.size)
+            for (i in decodedBytes.indices) {
+                result[i] = (decodedBytes[i].toInt() xor keyBytes[i % keyBytes.size].toInt()).toByte()
+            }
+            String(result, Charsets.UTF_8)
+        } catch (e: Exception) {
+            ""
+        }
     }
 
     private fun verificarDiasRestantes() {
