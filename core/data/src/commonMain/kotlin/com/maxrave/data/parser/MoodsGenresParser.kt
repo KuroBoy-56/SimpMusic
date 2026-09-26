@@ -114,7 +114,7 @@ internal fun parseMoodsMomentObject(data: BrowseResponse?): MoodsMomentObject? {
                                     )
                                 }
                             } else if (content.musicTwoRowItemRenderer != null) {
-                                // Playlist
+                                // Playlist or Video Card
                                 val thumbnails =
                                     content.musicTwoRowItemRenderer
                                         ?.thumbnailRenderer
@@ -140,12 +140,19 @@ internal fun parseMoodsMomentObject(data: BrowseResponse?): MoodsMomentObject? {
                                         ?.navigationEndpoint
                                         ?.browseEndpoint
                                         ?.browseId
+                                // FIX: Extract videoId directly from the endpoint so the UI knows it's an audio/video track
+                                val videoId =
+                                    content.musicTwoRowItemRenderer
+                                        ?.navigationEndpoint
+                                        ?.watchEndpoint
+                                        ?.videoId
                                 listContent.add(
                                     Content(
                                         playlistBrowseId = playlistBrowseId ?: "",
                                         subtitle = subtitle,
                                         thumbnails = thumbnails ?: listOf(),
                                         title = contentTitle ?: "",
+                                        videoId = videoId,
                                     ),
                                 )
                             }
@@ -166,7 +173,7 @@ internal fun parseMoodsMomentObject(data: BrowseResponse?): MoodsMomentObject? {
                     if (!contents.isNullOrEmpty()) {
                         for (content in contents) {
                             if (content.musicTwoRowItemRenderer != null) {
-                                // Playlist
+                                // Playlist or Video Card
                                 val thumbnails =
                                     content.musicTwoRowItemRenderer
                                         ?.thumbnailRenderer
@@ -192,12 +199,19 @@ internal fun parseMoodsMomentObject(data: BrowseResponse?): MoodsMomentObject? {
                                         ?.navigationEndpoint
                                         ?.browseEndpoint
                                         ?.browseId
+                                // FIX: Extract videoId here as well
+                                val videoId =
+                                    content.musicTwoRowItemRenderer
+                                        ?.navigationEndpoint
+                                        ?.watchEndpoint
+                                        ?.videoId
                                 listContent.add(
                                     Content(
                                         playlistBrowseId = playlistBrowseId ?: "",
                                         subtitle = subtitle,
                                         thumbnails = thumbnails ?: listOf(),
                                         title = contentTitle ?: "",
+                                        videoId = videoId,
                                     ),
                                 )
                             }

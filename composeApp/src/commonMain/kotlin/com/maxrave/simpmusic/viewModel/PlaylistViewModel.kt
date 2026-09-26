@@ -21,6 +21,7 @@ import com.maxrave.domain.repository.PlaylistRepository
 import com.maxrave.domain.repository.SongRepository
 import com.maxrave.domain.utils.Resource
 import com.maxrave.domain.utils.collectLatestResource
+import com.maxrave.domain.utils.isRadioPlaylistId
 import com.maxrave.domain.utils.toListVideoId
 import com.maxrave.domain.utils.toPlaylistEntity
 import com.maxrave.domain.utils.toSongEntity
@@ -43,6 +44,10 @@ import kotlinx.coroutines.flow.singleOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
 import org.koin.core.component.inject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.auto_created_by_youtube_music
@@ -183,7 +188,7 @@ class PlaylistViewModel(
         resetData()
         viewModelScope.launch {
             // Check radio
-            if (id.matches(Regex("(RDAMVM|RDEM|RDAT).*"))) {
+            if (id.isRadioPlaylistId()) {
                 playlistRepository
                     .getRadio(
                         id,
@@ -213,6 +218,7 @@ class PlaylistViewModel(
                                             ),
                                     )
                                 _tracks.value = data.first.tracks
+                                enrichTracksWithITunesArtwork(data.first.tracks)
                                 _continuation.value = data.second
                                 if (data.second.isNullOrEmpty()) _tracksListState.value = ListState.PAGINATION_EXHAUST
                                 playlistRepository.insertRadioPlaylist(data.first.toPlaylistEntity())
@@ -253,6 +259,7 @@ class PlaylistViewModel(
                                             ),
                                     )
                                 _tracks.value = data.first.tracks
+                                enrichTracksWithITunesArtwork(data.first.tracks)
                                 _continuation.value = data.second
                                 if (data.second.isNullOrEmpty()) _tracksListState.value = ListState.PAGINATION_EXHAUST
                                 getPlaylistEntity(id = data.first.id, playlistBrowse = data.first)
@@ -383,6 +390,7 @@ class PlaylistViewModel(
                             .singleOrNull()
                             ?.let { song ->
                                 _tracks.value = song.map { it.toTrack() }
+                                enrichTracksWithITunesArtwork(_tracks.value)
                             }
                     }
                     _tracksListState.value = ListState.PAGINATION_EXHAUST
@@ -408,6 +416,99 @@ class PlaylistViewModel(
                     _uiState.value = Error("Empty response")
                 }
             }
+    }
+
+    private fun cleanArtworkTitle(title: String): String {
+        var clean = title
+        clean = clean.replace(
+            Regex("(?i)[\\[\\(]?(official|official video|audio|music video|lyric video|lyric|live|remix|visualizer).*?[\\]\\)]?"),
+            "",
+        )
+        clean = clean.replace(Regex("(?i)\\s+(ft\\.|feat\\.?|featuring).*"), "")
+        return clean.trim().ifEmpty { title }
+    }
+
+    private fun normalizeArtworkText(value: String?): String =
+        value
+            ?.replace(Regex("(?i)\\s*[-–—]\\s*topic\\b"), "")
+            ?.replace(Regex("(?i)\\b(official|official video|official audio|music video|lyric video|lyrics|visualizer|remastered)\\b"), "")
+            ?.replace(Regex("[^a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ]+"), " ")
+            ?.trim()
+            ?.lowercase()
+            .orEmpty()
+
+    private fun enrichTracksWithITunesArtwork(sourceTracks: List<Track>) {
+        if (sourceTracks.isEmpty()) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val client = HttpClient(CIO)
+            try {
+                sourceTracks.forEachIndexed { index, track ->
+                    val artist = track.artists.orEmpty()
+                        .joinToString(" ") { it.name }
+                        .replace(Regex("(?i)-\\s*topic\\b"), "")
+                        .trim()
+                    val cleanTitle = cleanArtworkTitle(track.title)
+                    val query = "$cleanTitle $artist".trim().replace(Regex("\\s+"), "+")
+
+                    try {
+                        val body =
+                            client
+                                .get("https://itunes.apple.com/search?term=$query&entity=song&limit=10")
+                                .bodyAsText()
+
+                        val trackNames = Regex("\\\"trackName\\\":\\\"([^\\\"]*)\\\"").findAll(body).map { it.groupValues[1] }.toList()
+                        val artistNames = Regex("\\\"artistName\\\":\\\"([^\\\"]*)\\\"").findAll(body).map { it.groupValues[1] }.toList()
+                        val artworks = Regex("\\\"artworkUrl100\\\":\\\"([^\\\"]+)\\\"").findAll(body).map { it.groupValues[1] }.toList()
+
+                        val normalizedTitle = normalizeArtworkText(cleanTitle)
+                        val normalizedArtist = normalizeArtworkText(artist)
+                        val count = minOf(trackNames.size, artistNames.size, artworks.size)
+                        var bestIndex = -1
+                        var bestScore = Int.MIN_VALUE
+
+                        for (resultIndex in 0 until count) {
+                            val resultTitle = normalizeArtworkText(trackNames[resultIndex])
+                            val resultArtist = normalizeArtworkText(artistNames[resultIndex])
+                            var score = 0
+                            if (resultTitle == normalizedTitle) score += 100
+                            else if (resultTitle.contains(normalizedTitle) || normalizedTitle.contains(resultTitle)) score += 45
+                            if (normalizedArtist.isNotBlank()) {
+                                if (resultArtist == normalizedArtist) score += 120
+                                else if (resultArtist.contains(normalizedArtist) || normalizedArtist.contains(resultArtist)) score += 65
+                                else score -= 35
+                            }
+                            if (score > bestScore) {
+                                bestScore = score
+                                bestIndex = resultIndex
+                            }
+                        }
+
+                        if (bestIndex >= 0 && bestScore >= 80) {
+                            val artwork = artworks[bestIndex].replace("100x100bb", "600x600bb")
+                            val current = _tracks.value
+                            if (index < current.size && current[index].videoId == track.videoId) {
+                                _tracks.value = current.toMutableList().apply {
+                                    this[index] = track.copy(
+                                        thumbnails =
+                                            track.thumbnails
+                                                ?.firstOrNull()
+                                                ?.let { thumb ->
+                                                    listOf(thumb.copy(height = 600, url = artwork, width = 600))
+                                                }
+                                                ?: track.thumbnails,
+                                    )
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {
+                        // Mantiene la miniatura de YouTube para esta canción.
+                    }
+                }
+            } finally {
+                client.close()
+            }
+        }
     }
 
     fun setBrush(listColors: List<Color>) {
@@ -692,14 +793,14 @@ sealed class PlaylistUIState(
     class Success(
         data: PlaylistState,
     ) : PlaylistUIState(
-            data = data,
-        )
+        data = data,
+    )
 
     class Error(
         message: String? = null,
     ) : PlaylistUIState(
-            message = message,
-        )
+        message = message,
+    )
 }
 
 sealed class PlaylistUIEvent {

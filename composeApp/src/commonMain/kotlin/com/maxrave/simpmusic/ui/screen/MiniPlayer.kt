@@ -1,6 +1,5 @@
 package com.maxrave.simpmusic.ui.screen
 
-import androidx.compose.animation.Animatable
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -54,6 +53,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -86,6 +86,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
@@ -153,6 +155,7 @@ import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 import kotlin.time.Duration.Companion.seconds
 
+// Nuevas importaciones necesarias
 import com.maxrave.simpmusic.ui.screen.player.cleanMusicTitle
 import com.maxrave.simpmusic.ui.screen.player.rememberHighResArtwork
 
@@ -176,16 +179,36 @@ fun MiniPlayer(
 
     val useGlassSurface = isLiquidGlassEnabled == DataStoreManager.TRUE || getPlatform() == Platform.Desktop
 
-    val isDarkTheme = LocalIsDarkTheme.current
+    // 1. Estados para la paleta de colores de la carátula
+    val paletteState = rememberPaletteState()
+    var dominantColor by remember { mutableStateOf(Color.DarkGray) }
+    var bitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+
+    // Generar paleta cuando cambia la imagen
+    LaunchedEffect(bitmap) {
+        bitmap?.let { paletteState.generate(it) }
+    }
+
+    // Actualizar el color dominante
+    LaunchedEffect(paletteState.palette) {
+        paletteState.palette?.let {
+            dominantColor = it.getColorFromPalette()
+        }
+    }
+
+    // Color de fondo animado para la tarjeta/cápsula
+    val backgroundColor by animateColorAsState(
+        targetValue = dominantColor,
+        animationSpec = tween(500),
+        label = "MiniPlayerBackgroundColor"
+    )
+
+    // 2. Contraste inteligente: Si el fondo es muy claro, usar texto oscuro. Si no, blanco.
+    val isLightBackground = backgroundColor.luminance() > 0.5f
+    val adaptiveTextColor = if (isLightBackground) Color(0xFF222222) else Color.White
+
     val textColor by animateColorAsState(
-        targetValue =
-            if (useGlassSurface) {
-                if (isDarkTheme) Color.White else Color.Black
-            } else if (luminanceAnimation.value > 0.6f) {
-                Color.Black
-            } else {
-                Color.White
-            },
+        targetValue = if (useGlassSurface) adaptiveTextColor else MaterialTheme.colorScheme.onSurface,
         label = "MiniPlayerTextColor",
         animationSpec = tween(500),
     )
@@ -247,37 +270,11 @@ fun MiniPlayer(
         label = "",
     )
 
-    // Palette state
-    val paletteState = rememberPaletteState()
-    val background =
-        remember {
-            Animatable(Color.DarkGray)
-        }
-
     val offsetX = remember { Animatable(initialValue = 0f) }
     val offsetY = remember { Animatable(0f) }
 
     var loading by rememberSaveable {
         mutableStateOf(true)
-    }
-
-    var bitmap by remember {
-        mutableStateOf<ImageBitmap?>(null)
-    }
-
-    LaunchedEffect(bitmap) {
-        val bm = bitmap
-        if (bm != null) {
-            paletteState.generate(bm)
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        snapshotFlow { paletteState.palette }
-            .distinctUntilChanged()
-            .collectLatest {
-                background.animateTo(it.getColorFromPalette())
-            }
     }
 
     LaunchedEffect(key1 = true) {
@@ -315,6 +312,7 @@ fun MiniPlayer(
         job4.join()
     }
 
+    // 3. Obtener carátula en alta definición
     val highResThumbnail = rememberHighResArtwork(
         title = songEntity?.title,
         artist = songEntity?.artistName?.connectArtists(),
@@ -324,12 +322,22 @@ fun MiniPlayer(
     if (getPlatform() == Platform.Android) {
         val miniPlayerShape =
             if (isLiquidGlassEnabled == DataStoreManager.TRUE) CircleShape else RoundedCornerShape(12.dp)
+
+        // El color del Card toma la paleta pero le aplica transparencia para el blur
+        val cardColor =
+            if (isLiquidGlassEnabled == DataStoreManager.TRUE) {
+                backgroundColor.copy(alpha = 0.4f)
+            } else {
+                backgroundColor.copy(alpha = 0.85f)
+            }
+
+        val isFlat = isLiquidGlassEnabled != DataStoreManager.TRUE
         Card(
             shape = miniPlayerShape,
             colors =
                 CardDefaults.cardColors(
-                    containerColor = if (isLiquidGlassEnabled == DataStoreManager.TRUE) Color.Transparent else background.value,
-                    disabledContainerColor = if (isLiquidGlassEnabled == DataStoreManager.TRUE) Color.Transparent else background.value,
+                    containerColor = cardColor,
+                    disabledContainerColor = cardColor,
                 ),
             modifier =
                 modifier
@@ -428,29 +436,46 @@ fun MiniPlayer(
                                         )
                                     },
                         ) {
-                            AsyncImage(
-                                model =
-                                    ImageRequest
-                                        .Builder(LocalPlatformContext.current)
-                                        .data(highResThumbnail)
-                                        .crossfade(550)
-                                        .build(),
-                                placeholder = rememberHolderPainter(),
-                                error = rememberHolderPainter(),
-                                contentDescription = null,
-                                contentScale = ContentScale.FillWidth,
-                                onSuccess = {
-                                    bitmap =
-                                        it.result.image.toImageBitmap()
-                                },
+                            Box(
                                 modifier =
                                     Modifier
                                         .size(40.dp)
-                                        .align(Alignment.CenterVertically)
-                                        .clip(
-                                            RoundedCornerShape(4.dp),
-                                        ),
-                            )
+                                        .align(Alignment.CenterVertically),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (isFlat) {
+                                    val ringStroke = Stroke(width = with(LocalDensity.current) { 3.dp.toPx() }, cap = StrokeCap.Round)
+                                    CircularWavyProgressIndicator(
+                                        progress = { animatedProgress },
+                                        modifier = Modifier.fillMaxSize(),
+                                        color = textColor,
+                                        trackColor = textColor.copy(alpha = 0.2f),
+                                        stroke = ringStroke,
+                                        trackStroke = ringStroke,
+                                        amplitude = { p -> if (p > 0f && isPlaying) 1f else 0f },
+                                    )
+                                }
+                                AsyncImage(
+                                    model =
+                                        ImageRequest
+                                            .Builder(LocalPlatformContext.current)
+                                            .data(highResThumbnail) // Usamos miniatura HD
+                                            .crossfade(550)
+                                            .build(),
+                                    placeholder = rememberHolderPainter(),
+                                    error = rememberHolderPainter(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop, // Siempre cuadrado perfecto
+                                    onSuccess = { state ->
+                                        bitmap = state.result.image.toImageBitmap()
+                                    },
+                                    modifier =
+                                        Modifier
+                                            .size(if (isFlat) 26.dp else 40.dp)
+                                            .aspectRatio(1f)
+                                            .clip(if (isFlat) CircleShape else RoundedCornerShape(4.dp)),
+                                )
+                            }
                             Spacer(modifier = Modifier.width(10.dp))
                             AnimatedContent(
                                 targetState = songEntity,
@@ -486,7 +511,7 @@ fun MiniPlayer(
                                     ) {
                                         Text(
                                             text = (songEntity?.title ?: "").toString().cleanMusicTitle(),
-                                            style = typo().labelSmall,
+                                            style = if (isFlat) typo().titleSmall else typo().labelSmall,
                                             color = textColor,
                                             maxLines = 1,
                                             modifier =
@@ -511,9 +536,9 @@ fun MiniPlayer(
                                             }
                                             Text(
                                                 text = (songEntity?.artistName?.connectArtists() ?: ""),
-                                                style = typo().bodySmall,
+                                                style = if (isFlat) typo().bodySmall.copy(fontSize = 10.sp) else typo().bodySmall,
                                                 maxLines = 1,
-                                                color = textColor,
+                                                color = if (isFlat) MaterialTheme.colorScheme.onSurfaceVariant else textColor.copy(alpha = 0.8f),
                                                 modifier =
                                                     Modifier
                                                         .weight(1f)
@@ -530,58 +555,81 @@ fun MiniPlayer(
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.width(15.dp))
-                    HeartCheckBox(checked = liked, size = 30, tint = textColor) {
-                        sharedViewModel.onUIEvent(UIEvent.ToggleLike)
+                    val controlSize = if (isFlat) 40.dp else 48.dp
+                    val playColor = if (isFlat) MaterialTheme.colorScheme.onPrimary else textColor
+                    Spacer(modifier = Modifier.width(if (isFlat) 8.dp else 15.dp))
+                    Box(
+                        modifier =
+                            if (isFlat) {
+                                Modifier
+                                    .size(controlSize)
+                                    .background(MaterialTheme.colorScheme.surfaceContainerHighest, CircleShape)
+                            } else {
+                                Modifier
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        HeartCheckBox(checked = liked, size = 30, tint = textColor) {
+                            sharedViewModel.onUIEvent(UIEvent.ToggleLike)
+                        }
                     }
-                    Spacer(modifier = Modifier.width(15.dp))
-                    Crossfade(targetState = loading, label = "") {
-                        if (it) {
-                            Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    color = textColor,
-                                    strokeWidth = 3.dp,
-                                )
-                            }
-                        } else {
-                            PlayPauseButton(isPlaying = isPlaying, modifier = Modifier.size(48.dp), tint = textColor) {
-                                sharedViewModel.onUIEvent(UIEvent.PlayPause)
+                    Spacer(modifier = Modifier.width(if (isFlat) 8.dp else 15.dp))
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(controlSize)
+                                .then(if (isFlat) Modifier.background(MaterialTheme.colorScheme.primary, CircleShape) else Modifier),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Crossfade(targetState = loading, label = "") {
+                            if (it) {
+                                Box(modifier = Modifier.size(controlSize), contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        color = playColor,
+                                        strokeWidth = 3.dp,
+                                    )
+                                }
+                            } else {
+                                PlayPauseButton(isPlaying = isPlaying, modifier = Modifier.size(controlSize), tint = playColor) {
+                                    sharedViewModel.onUIEvent(UIEvent.PlayPause)
+                                }
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.width(15.dp))
+                    Spacer(modifier = Modifier.width(if (isFlat) 8.dp else 15.dp))
                 }
-                Box(
-                    modifier =
-                        Modifier
-                            .wrapContentSize(Alignment.Center)
-                            .padding(
-                                horizontal = 10.dp,
-                            ).align(Alignment.BottomCenter),
-                ) {
-                    LinearProgressIndicator(
-                        progress = { animatedProgress },
+                if (!isFlat) {
+                    Box(
                         modifier =
                             Modifier
-                                .fillMaxWidth()
-                                .height(1.dp)
-                                .background(
-                                    color = Color.Transparent,
-                                    shape = RoundedCornerShape(4.dp),
-                                ),
-                        color = textColor,
-                        trackColor = Color.Transparent,
-                        strokeCap = StrokeCap.Round,
-                        drawStopIndicator = {},
-                    )
+                                .wrapContentSize(Alignment.Center)
+                                .padding(
+                                    horizontal = 10.dp,
+                                ).align(Alignment.BottomCenter),
+                    ) {
+                        LinearProgressIndicator(
+                            progress = { animatedProgress },
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .background(
+                                        color = Color.Transparent,
+                                        shape = RoundedCornerShape(4.dp),
+                                    ),
+                            color = textColor,
+                            trackColor = Color.Transparent,
+                            strokeCap = StrokeCap.Round,
+                            drawStopIndicator = {},
+                        )
+                    }
                 }
             }
         }
     } else {
-        val textColor = MaterialTheme.colorScheme.onBackground
-
+        // En Desktop, el texto usa el color adaptado automáticamente gracias al bloque superior
         val sweepTransition = rememberInfiniteTransition(label = "miniPlayerCrossfadeSweep")
         val crossfadeSweep by sweepTransition.animateFloat(
             initialValue = 0f,
@@ -626,6 +674,7 @@ fun MiniPlayer(
         Box(
             modifier
                 .liquidGlass(backdrop, layer, luminanceAnimation.value, capsuleShape, blurScale = 1.2f)
+                .background(backgroundColor.copy(alpha = 0.4f), capsuleShape) // Tinte del color de carátula manteniendo cristal en Desktop
                 .clip(capsuleShape)
                 .clickable {
                     onClick()
@@ -644,7 +693,7 @@ fun MiniPlayer(
                         isSmallSize = true,
                         plainPlayPause = true,
                         horizontalPadding = 0.dp,
-                        activeColor = if (isDarkTheme) com.maxrave.simpmusic.ui.theme.seed else MaterialTheme.colorScheme.primary,
+                        activeColor = textColor,
                         contentColor = textColor,
                     ) {
                         sharedViewModel.onUIEvent(it)
@@ -689,20 +738,20 @@ fun MiniPlayer(
                             model =
                                 ImageRequest
                                     .Builder(LocalPlatformContext.current)
-                                    .data(highResThumbnail)
+                                    .data(highResThumbnail) // Usamos miniatura HD
                                     .crossfade(550)
                                     .build(),
                             placeholder = rememberHolderPainter(),
                             error = rememberHolderPainter(),
                             contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            onSuccess = {
-                                bitmap =
-                                    it.result.image.toImageBitmap()
+                            contentScale = ContentScale.Crop, // Cuadrado perfecto
+                            onSuccess = { state ->
+                                bitmap = state.result.image.toImageBitmap()
                             },
                             modifier =
                                 Modifier
                                     .size(32.dp)
+                                    .aspectRatio(1f) // Siempre cuadrado
                                     .clip(
                                         RoundedCornerShape(6.dp),
                                     ),
@@ -736,7 +785,7 @@ fun MiniPlayer(
                                 Text(
                                     text = (songEntity?.artistName?.connectArtists() ?: ""),
                                     style = typo().bodySmall,
-                                    color = textColor.copy(alpha = 0.7f),
+                                    color = textColor.copy(alpha = 0.8f),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f, fill = false),
@@ -823,7 +872,7 @@ fun MiniPlayer(
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-                        HeartCheckBox(checked = controllerState.isLiked, size = 32) {
+                        HeartCheckBox(checked = controllerState.isLiked, size = 32, tint = textColor) {
                             sharedViewModel.onUIEvent(UIEvent.ToggleLike)
                         }
                     }
@@ -914,7 +963,7 @@ fun MiniPlayer(
                                             .width(44.dp)
                                             .height(VOLUME_POPUP_HEIGHT)
                                             .clip(RoundedCornerShape(14.dp))
-                                            .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.96f))
+                                            .background(backgroundColor.copy(alpha = 0.96f)) // Fondo del popup dinámico también
                                             .padding(vertical = 10.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.spacedBy(8.dp),

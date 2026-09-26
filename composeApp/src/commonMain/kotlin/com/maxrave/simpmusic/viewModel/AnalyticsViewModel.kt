@@ -18,6 +18,7 @@ import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.utils.LocalResource
 import com.maxrave.domain.utils.Resource
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -47,6 +48,19 @@ class AnalyticsViewModel(
         MutableStateFlow(AnalyticsUiState())
     val analyticsUIState: StateFlow<AnalyticsUiState> get() = _analyticsUIState.asStateFlow()
 
+    // One job per top list, cancelled before its replacement starts. Each loader collects a flow
+    // inside its own launch, and nothing used to stop the previous one: step back two periods
+    // quickly and the first load could land after the second and overwrite it, putting the wrong
+    // period's list on screen. Replacing the job makes the latest request the only one that writes.
+    private var topTracksJob: Job? = null
+    private var topArtistsJob: Job? = null
+    private var topAlbumsJob: Job? = null
+
+    // Set by [showRange]. A view model opened for one fixed range must not have its lists replaced
+    // by the navigator's own "latest period" load, which [init] starts asynchronously and which can
+    // therefore arrive after the range was set.
+    private var rangePinned = false
+
     init {
         getScrobblesCount()
         getArtistCount()
@@ -66,8 +80,16 @@ class AnalyticsViewModel(
         private const val ANALYTICS_DAY_RANGE_KEY = "analytics_day_range"
     }
 
-    // --- ACTUALIZACIÓN LÓGICA ---
-    // Motor dinámico para calcular el inicio y fin de las estadísticas permitiendo "Viaje en el tiempo"
+    /**
+     * The span the screen is showing, as [start, end].
+     *
+     * [offset] counts periods BACKWARDS from now: 0 is the current one, 1 the one before it. The
+     * whole navigator and every delta on the screen are this one function called twice — the range
+     * queries underneath already existed and were only ever used for "this year".
+     *
+     * Ends are inclusive-by-day: `end` is the last moment of its day, so a play at 23:59 belongs to
+     * the period it happened in rather than to the next one.
+     */
     private fun rangeFor(
         dayRange: AnalyticsUiState.DayRange,
         offset: Int,
@@ -76,6 +98,7 @@ class AnalyticsViewModel(
         return if (dayRange == AnalyticsUiState.DayRange.THIS_YEAR) {
             val year = today.year - offset
             val start = LocalDate(year, 1, 1)
+            // The current year stops at today; an earlier one runs to its own 31 December.
             val end = if (offset == 0) today else LocalDate(year, 12, 31)
             start.atTime(0, 0) to end.atTime(23, 59, 59)
         } else {
@@ -89,16 +112,27 @@ class AnalyticsViewModel(
     private fun loadPeriod() {
         val state = _analyticsUIState.value
         val (start, end) = rangeFor(state.dayRange, state.periodOffset)
-        _analyticsUIState.update {
-            it.copy(periodStart = start.date, periodEnd = end.date)
+        // Pinned means the span was chosen by whoever opened this screen; the navigator's own
+        // latest period must not replace it, neither the lists nor the dates that describe them.
+        if (!rangePinned) {
+            _analyticsUIState.update {
+                it.copy(periodStart = start.date, periodEnd = end.date)
+            }
+            getTopTracks(start, end)
+            getTopArtists(start, end)
+            getTopAlbums(start, end)
         }
-        getTopTracks(start, end)
-        getTopArtists(start, end)
-        getTopAlbums(start, end)
         getScrobblesLineChart(state.dayRange, end.date)
         getPeriodStats(state.dayRange, state.periodOffset)
     }
 
+    /**
+     * This period and the one before it, fetched as a matched pair.
+     *
+     * The previous one is what turns every number on the screen from a quantity into a change. It
+     * is deliberately not shown when it is empty: a first-week user comparing against zero would
+     * see the same "+∞%" against every single figure.
+     */
     private fun getPeriodStats(
         dayRange: AnalyticsUiState.DayRange,
         offset: Int,
@@ -118,6 +152,27 @@ class AnalyticsViewModel(
         }
     }
 
+    /**
+     * Shows the top lists for one fixed span, for a screen opened on a period the user picked
+     * elsewhere — the Analytics screen hands its visible period to the playlist it opens.
+     *
+     * Days are inclusive at both ends, the same rule [rangeFor] uses, so a play at 23:59 on the last
+     * day is counted in this span and not dropped.
+     */
+    fun showRange(
+        start: LocalDate,
+        end: LocalDate,
+    ) {
+        rangePinned = true
+        _analyticsUIState.update { it.copy(periodStart = start, periodEnd = end) }
+        val startTime = start.atTime(0, 0)
+        val endTime = end.atTime(23, 59, 59)
+        getTopTracks(startTime, endTime)
+        getTopArtists(startTime, endTime)
+        getTopAlbums(startTime, endTime)
+    }
+
+    /** Step the window back ([delta] = -1) or forward ([delta] = +1). Never past the present. */
     fun stepPeriod(delta: Int) {
         val next = (_analyticsUIState.value.periodOffset - delta).coerceAtLeast(0)
         if (next == _analyticsUIState.value.periodOffset) return
@@ -180,7 +235,8 @@ class AnalyticsViewModel(
         start: LocalDateTime,
         end: LocalDateTime,
     ) {
-        viewModelScope.launch {
+        topTracksJob?.cancel()
+        topTracksJob = viewModelScope.launch {
             _analyticsUIState.update { it.copy(topTracks = LocalResource.Loading()) }
             analyticsRepository
                 .queryTopPlayedSongsInRange(startTimestamp = start, endTimestamp = end)
@@ -200,7 +256,8 @@ class AnalyticsViewModel(
         start: LocalDateTime,
         end: LocalDateTime,
     ) {
-        viewModelScope.launch {
+        topArtistsJob?.cancel()
+        topArtistsJob = viewModelScope.launch {
             _analyticsUIState.update { it.copy(topArtists = LocalResource.Loading()) }
             analyticsRepository
                 .queryTopArtistsInRange(startTimestamp = start, endTimestamp = end)
@@ -244,7 +301,8 @@ class AnalyticsViewModel(
         start: LocalDateTime,
         end: LocalDateTime,
     ) {
-        viewModelScope.launch {
+        topAlbumsJob?.cancel()
+        topAlbumsJob = viewModelScope.launch {
             _analyticsUIState.update { it.copy(topAlbums = LocalResource.Loading()) }
             analyticsRepository
                 .queryTopAlbumsInRange(startTimestamp = start, endTimestamp = end)
@@ -305,8 +363,7 @@ class AnalyticsViewModel(
                     }
 
                     AnalyticsUiState.DayRange.LAST_30_DAYS -> {
-                        // --- ACTUALIZACIÓN LÓGICA ---
-                        // Agrupa 30 días en 4 semanas para que la gráfica no sea un bloque ilegible
+                        // Newest week first, matching how the day buckets above are ordered.
                         (0 until 4).map { week ->
                             AnalyticsUiState.ChartType.Week(
                                 start = endDate.minus(DatePeriod(days = week * 7 + 6)),
@@ -357,6 +414,7 @@ class AnalyticsViewModel(
                         is AnalyticsUiState.ChartType.Week -> {
                             val startTimestamp =
                                 it.start.atStartOfDayIn(currentTimeZone).toLocalDateTime(currentTimeZone)
+                            // `end` is inclusive, so the range runs to the start of the day after it.
                             val endTimestamp =
                                 it.end
                                     .plus(DatePeriod(days = 1))
@@ -412,6 +470,8 @@ class AnalyticsViewModel(
     }
 
     fun setDayRange(dayRange: AnalyticsUiState.DayRange) {
+        // A different range length makes the old offset meaningless — three periods back at
+        // 7 days is not three periods back at 90 — so switching always returns to the present.
         _analyticsUIState.update {
             it.copy(
                 dayRange = dayRange,
@@ -430,10 +490,12 @@ data class AnalyticsUiState(
     val artistCount: LocalResource<Long> = LocalResource.Loading(),
     val totalListenTimeInSeconds: LocalResource<Long> = LocalResource.Loading(),
     val dayRange: DayRange = DayRange.LAST_7_DAYS,
+    /** Periods back from now: 0 is the present one, 1 the one before it. */
     val periodOffset: Int = 0,
     val periodStart: LocalDate? = null,
     val periodEnd: LocalDate? = null,
     val stats: LocalResource<AnalyticsPeriodStats> = LocalResource.Loading(),
+    /** Null when the previous period held nothing — the screen then shows no deltas at all. */
     val previousStats: AnalyticsPeriodStats? = null,
     val recentlyRecord: LocalResource<List<Pair<PlaybackEventEntity, SongEntity>>> = LocalResource.Loading(),
     val topTracks: LocalResource<List<Pair<TopPlayedTracks, SongEntity>>> = LocalResource.Loading(),
@@ -441,6 +503,7 @@ data class AnalyticsUiState(
     val topAlbums: LocalResource<List<Pair<TopPlayedAlbum, AlbumEntity>>> = LocalResource.Loading(),
     val scrobblesLineChart: LocalResource<List<Pair<ChartType, Long>>> = LocalResource.Loading(),
 ) {
+    /** True while the window is in the past, so the forward arrow has somewhere to go. */
     val canStepForward: Boolean get() = periodOffset > 0
 
     enum class DayRange(
@@ -449,6 +512,8 @@ data class AnalyticsUiState(
         LAST_7_DAYS(7),
         LAST_30_DAYS(30),
         LAST_90_DAYS(90),
+
+        /** Length is unused — a year steps by calendar years, see rangeFor. */
         THIS_YEAR(365),
     }
 
@@ -457,6 +522,14 @@ data class AnalyticsUiState(
             val day: LocalDate,
         ) : ChartType()
 
+        /**
+         * Seven days, inclusive at both ends.
+         *
+         * Thirty rows is not a chart, it is a list nobody reads to the end — so the 30-day range
+         * buckets by week. Four buckets of exactly seven days, rather than four-and-a-bit covering
+         * all thirty: an uneven last bucket would carry more days than the others and draw a
+         * longer bar for it, which is the one thing a bar chart must not do.
+         */
         data class Week(
             val start: LocalDate,
             val end: LocalDate,

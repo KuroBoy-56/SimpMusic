@@ -78,6 +78,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -90,6 +92,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import com.kmpalette.loader.rememberNetworkLoader
 import com.kmpalette.rememberDominantColorState
 import com.maxrave.common.CHART_SUPPORTED_COUNTRY
@@ -104,29 +111,37 @@ import com.maxrave.domain.mediaservice.handler.QueueData
 import com.maxrave.domain.utils.toSongEntity
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.logger.Logger
+import com.maxrave.simpmusic.Platform
+import com.maxrave.simpmusic.expect.ui.HorizontalScrollBar
 import com.maxrave.simpmusic.extension.angledGradientBackground
+import com.maxrave.simpmusic.extension.artworkScrimBrush
+import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.isScrollingUp
 import com.maxrave.simpmusic.extension.rgbFactor
+import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.Chip
-import com.maxrave.simpmusic.ui.component.CoreIntegrityValidator
 import com.maxrave.simpmusic.ui.component.DropdownButton
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.HomeItem
 import com.maxrave.simpmusic.ui.component.HomeItemContentPlaylist
 import com.maxrave.simpmusic.ui.component.HomeShimmer
 import com.maxrave.simpmusic.ui.component.ItemArtistChart
+import com.maxrave.simpmusic.ui.component.ListenTogetherIconButton
 import com.maxrave.simpmusic.ui.component.MoodMomentAndGenreHomeItem
 import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
 import com.maxrave.simpmusic.ui.component.OfflineErrorState
 import com.maxrave.simpmusic.ui.component.QuickPicksItem
 import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.ShareSavedLyricsDialog
+import com.maxrave.simpmusic.ui.component.rememberHolderPainter
+import com.maxrave.simpmusic.ui.icon.Groups
 import com.maxrave.simpmusic.ui.icon.History
 import com.maxrave.simpmusic.ui.icon.Notifications
 import com.maxrave.simpmusic.ui.icon.Settings
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.home.HomeDestination
+import com.maxrave.simpmusic.ui.navigation.destination.home.ListenTogetherDestination
 import com.maxrave.simpmusic.ui.navigation.destination.home.MoodDestination
 import com.maxrave.simpmusic.ui.navigation.destination.home.NotificationDestination
 import com.maxrave.simpmusic.ui.navigation.destination.home.RecentlySongsDestination
@@ -136,6 +151,7 @@ import com.maxrave.simpmusic.ui.screen.library.LibraryDynamicPlaylistType
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.LoginDestination
+import com.maxrave.simpmusic.ui.theme.desktopPanelDark
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.HomeViewModel
 import com.maxrave.simpmusic.viewModel.HomeViewModel.Companion.HOME_PARAMS_COMMUTE
@@ -150,10 +166,9 @@ import com.maxrave.simpmusic.viewModel.HomeViewModel.Companion.HOME_PARAMS_SLEEP
 import com.maxrave.simpmusic.viewModel.HomeViewModel.Companion.HOME_PARAMS_WORKOUT
 import com.maxrave.simpmusic.viewModel.ListState
 import com.maxrave.simpmusic.viewModel.SharedViewModel
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.rememberHazeState
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -172,6 +187,7 @@ import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.all
+import simpmusic.composeapp.generated.resources.app_name
 import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.chart
 import simpmusic.composeapp.generated.resources.mono
@@ -236,7 +252,7 @@ private fun desencriptarUrl(hexString: String): String {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @ExperimentalFoundationApi
 @Composable
 fun HomeScreen(
@@ -267,15 +283,23 @@ fun HomeScreen(
     val shouldShowLogInAlert by viewModel.showLogInAlert.collectAsStateWithLifecycle()
     val openAppTime by sharedViewModel.openAppTime.collectAsStateWithLifecycle()
     val shareLyricsPermissions by sharedViewModel.shareSavedLyrics.collectAsStateWithLifecycle()
-    val bgColor = MaterialTheme.colorScheme.background
+    val backgroundColor = MaterialTheme.colorScheme.background
+    val isLightTheme = backgroundColor.luminance() > 0.5f
 
-    var topHeaderColor by remember { mutableStateOf(bgColor) }
+    val pageBackground =
+        if (getPlatform() == Platform.Desktop) {
+            if (isLightTheme) MaterialTheme.colorScheme.surfaceContainer else desktopPanelDark
+        } else {
+            backgroundColor
+        }
+
+    var topHeaderColor by remember { mutableStateOf(backgroundColor) }
     val animatedColor by animateColorAsState(topHeaderColor, tween(500))
     val mainHomeThumbnail by viewModel.mainHomeThumbnail.collectAsStateWithLifecycle()
     val networkLoader = rememberNetworkLoader(HttpClient(CIO))
     val dominantColorState = rememberDominantColorState(
-        defaultColor = bgColor,
-        defaultOnColor = bgColor,
+        defaultColor = backgroundColor,
+        defaultOnColor = backgroundColor,
         loader = networkLoader,
     )
 
@@ -287,15 +311,15 @@ fun HomeScreen(
         }
     }
 
-    LaunchedEffect(dominantColorState) {
+    LaunchedEffect(dominantColorState, isLightTheme) {
         snapshotFlow { dominantColorState.color }.collect {
-            topHeaderColor = it.rgbFactor(0.3f)
+            topHeaderColor = if (isLightTheme) lerp(it, Color.White, 0.85f) else it.rgbFactor(0.3f)
         }
     }
 
     var showRequestShareLyricsPermissions by rememberSaveable { mutableStateOf(false) }
     var topAppBarHeightPx by rememberSaveable { mutableIntStateOf(0) }
-    val hazeState = rememberHazeState(blurEnabled = true)
+    val hazeState = rememberHazeState()
 
     LaunchedEffect(scrollState) {
         snapshotFlow { scrollState.firstVisibleItemIndex }
@@ -401,10 +425,6 @@ fun HomeScreen(
         )
     }
 
-    CoreIntegrityValidator(currentCode = 50) {
-        hasSystemUpdate = true
-    }
-
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         PullToRefreshBox(
             modifier = Modifier.hazeSource(hazeState),
@@ -441,7 +461,7 @@ fun HomeScreen(
                     }
                     LazyColumn(
                         state = scrollState,
-                        verticalArrangement = Arrangement.spacedBy(28.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         itemsIndexed(homeData, key = { _, item ->
                             item.hashCode().toString() + (mainHomeThumbnail ?: "nothumb")
@@ -450,24 +470,15 @@ fun HomeScreen(
                                 if (index == 0) {
                                     Box(
                                         modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(300.dp)
-                                            .angledGradientBackground(listOf(animatedColor, MaterialTheme.colorScheme.background), 25f),
+                                            .matchParentSize()
+                                            .angledGradientBackground(listOf(animatedColor, pageBackground), 25f),
                                     ) {
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .height(180.dp)
                                                 .align(Alignment.BottomCenter)
-                                                .background(
-                                                    brush = Brush.verticalGradient(
-                                                        listOf(
-                                                            Color.Transparent,
-                                                            MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
-                                                            MaterialTheme.colorScheme.background,
-                                                        ),
-                                                    ),
-                                                ),
+                                                .background(artworkScrimBrush(pageBackground)),
                                         )
                                     }
                                 }
@@ -508,46 +519,6 @@ fun HomeScreen(
                             }
                         }
 
-                        items(newRelease, key = { "nr_" + it.hashCode() }) {
-                            Box(modifier = Modifier.padding(horizontal = 15.dp)) {
-                                HomeItem(navController = navController, data = it)
-                            }
-                        }
-
-                        item(key = "moods_moments") {
-                            AnimatedVisibility(visible = moodMomentAndGenre != null) {
-                                Box(modifier = Modifier.padding(horizontal = 15.dp)) {
-                                    moodMomentAndGenre?.let { MoodMomentAndGenre(mood = it, navController = navController) }
-                                }
-                            }
-                        }
-
-                        item(key = "charts") {
-                            Column(
-                                Modifier.padding(vertical = 10.dp).padding(horizontal = 15.dp),
-                                verticalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                ChartTitle()
-                                Spacer(modifier = Modifier.height(5.dp))
-                                Crossfade(targetState = regionChart) {
-                                    if (it != null) {
-                                        DropdownButton(
-                                            items = CHART_SUPPORTED_COUNTRY.itemsData.toList(),
-                                            defaultSelected = CHART_SUPPORTED_COUNTRY.itemsData.getOrNull(CHART_SUPPORTED_COUNTRY.items.indexOf(it)) ?: CHART_SUPPORTED_COUNTRY.itemsData[1],
-                                        ) { viewModel.exploreChart(CHART_SUPPORTED_COUNTRY.items[CHART_SUPPORTED_COUNTRY.itemsData.indexOf(it)]) }
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(5.dp))
-                                Crossfade(targetState = chartLoading, label = "Chart") { loading ->
-                                    if (!loading) {
-                                        chart?.let { ChartData(chart = it, navController = navController) }
-                                    } else {
-                                        CenterLoadingBox(modifier = Modifier.fillMaxWidth().height(400.dp))
-                                    }
-                                }
-                            }
-                        }
-
                         item {
                             AnimatedVisibility(
                                 homeListState == ListState.PAGINATING,
@@ -557,7 +528,51 @@ fun HomeScreen(
                                 CenterLoadingBox(modifier = Modifier.fillMaxWidth().height(200.dp))
                             }
                         }
-                        item { EndOfPage() }
+
+                        if (homeListState == ListState.PAGINATION_EXHAUST) {
+                            items(newRelease, key = { "nr_" + it.hashCode() }) {
+                                AnimatedVisibility(visible = newRelease.isNotEmpty()) {
+                                    Box(modifier = Modifier.padding(horizontal = 15.dp)) {
+                                        HomeItem(navController = navController, data = it)
+                                    }
+                                }
+                            }
+
+                            item(key = "moods_moments") {
+                                AnimatedVisibility(visible = moodMomentAndGenre != null) {
+                                    Box(modifier = Modifier.padding(horizontal = 15.dp)) {
+                                        moodMomentAndGenre?.let { MoodMomentAndGenre(mood = it, navController = navController) }
+                                    }
+                                }
+                            }
+
+                            item(key = "charts") {
+                                Column(
+                                    Modifier.padding(vertical = 10.dp).padding(horizontal = 15.dp),
+                                    verticalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    ChartTitle()
+                                    Spacer(modifier = Modifier.height(5.dp))
+                                    Crossfade(targetState = regionChart) {
+                                        if (it != null) {
+                                            DropdownButton(
+                                                items = CHART_SUPPORTED_COUNTRY.itemsData.toList(),
+                                                defaultSelected = CHART_SUPPORTED_COUNTRY.itemsData.getOrNull(CHART_SUPPORTED_COUNTRY.items.indexOf(it)) ?: CHART_SUPPORTED_COUNTRY.itemsData[1],
+                                            ) { viewModel.exploreChart(CHART_SUPPORTED_COUNTRY.items[CHART_SUPPORTED_COUNTRY.itemsData.indexOf(it)]) }
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(5.dp))
+                                    Crossfade(targetState = chartLoading, label = "Chart") { loading ->
+                                        if (!loading) {
+                                            chart?.let { ChartData(chart = it, navController = navController) }
+                                        } else {
+                                            CenterLoadingBox(modifier = Modifier.fillMaxWidth().height(400.dp))
+                                        }
+                                    }
+                                }
+                            }
+                            item { EndOfPage() }
+                        }
                     }
                 } else {
                     Column {
@@ -574,7 +589,7 @@ fun HomeScreen(
             Column(
                 modifier = Modifier.align(Alignment.TopCenter).then(
                     if (target) Modifier.background(Color.Transparent)
-                    else Modifier.hazeEffect(hazeState, style = HazeMaterials.ultraThin()) { blurEnabled = true }
+                    else Modifier.hazeBlur(HazeInput.Sources(hazeState))
                 ).onGloballyPositioned { coordinates -> topAppBarHeightPx = coordinates.size.height },
             ) {
                 AnimatedVisibility(visible = isScrollingUp, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
@@ -759,9 +774,11 @@ fun HomeTopAppBar(navController: NavController, hasUpdate: Boolean, sharedViewMo
                 Column {
                     Text(
                         text = "Music",
-                        style = typo().titleMedium.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            fontFamily = FontFamily.SansSerif
+                        style = androidx.compose.ui.text.TextStyle(
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            fontSize = 24.sp,
+                            letterSpacing = (-1).sp
                         ),
                         color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(bottom = 4.dp),
@@ -802,6 +819,7 @@ fun HomeTopAppBar(navController: NavController, hasUpdate: Boolean, sharedViewMo
                 }
             }
             RippleIconButton(imageVector = SimpIcons.History, tint = MaterialTheme.colorScheme.onBackground) { navController.navigate(RecentlySongsDestination) }
+            ListenTogetherIconButton { navController.navigate(ListenTogetherDestination) }
             RippleIconButton(imageVector = SimpIcons.Settings, tint = MaterialTheme.colorScheme.onBackground) { navController.navigate(SettingsDestination) }
         },
         colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
@@ -821,7 +839,20 @@ fun AccountLayout(accountName: String, url: String) {
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(horizontal = 5.dp, vertical = 5.dp),
         ) {
-            Text(text = accountName, style = typo().headlineMedium, color = MaterialTheme.colorScheme.onBackground)
+            AsyncImage(
+                model = ImageRequest.Builder(LocalPlatformContext.current)
+                    .data(url)
+                    .diskCachePolicy(CachePolicy.ENABLED)
+                    .diskCacheKey(url)
+                    .crossfade(true)
+                    .build(),
+                placeholder = rememberHolderPainter(),
+                error = rememberHolderPainter(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(40.dp).clip(CircleShape)
+            )
+            Text(text = accountName, style = typo().headlineMedium, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.padding(start = 8.dp))
         }
     }
 }

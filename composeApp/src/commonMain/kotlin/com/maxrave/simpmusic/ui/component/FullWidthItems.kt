@@ -85,8 +85,6 @@ import com.maxrave.simpmusic.ui.icon.MoreVert
 import com.maxrave.simpmusic.ui.icon.PushPin
 import com.maxrave.simpmusic.ui.icon.QueueMusic
 import com.maxrave.simpmusic.ui.icon.SimpIcons
-import com.maxrave.simpmusic.ui.screen.player.cleanMusicTitle
-import com.maxrave.simpmusic.ui.screen.player.rememberHighResArtwork
 import com.maxrave.simpmusic.ui.theme.LocalForceDarkText
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
@@ -136,28 +134,17 @@ fun SongFullWidthItems(
     val maxOffset = 360f
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
-
-    val itemVideoId = track?.videoId ?: songEntity?.videoId ?: ""
     val songRepository: SongRepository = koinInject<SongRepository>()
-
-    // Corregido el error del Flow
-    val downloadStateFlow = remember(itemVideoId) {
-        songRepository.getSongAsFlow(itemVideoId).mapNotNull { it?.downloadState }
-    }
-    val downloadState by downloadStateFlow.collectAsState(initial = DownloadState.STATE_NOT_DOWNLOADED)
-
+    val downloadState by songRepository
+        .getSongAsFlow(songEntity?.videoId ?: track?.videoId ?: "")
+        .mapNotNull { it?.downloadState }
+        .collectAsState(initial = DownloadState.STATE_NOT_DOWNLOADED)
     val offsetX = remember { Animatable(initialValue = 0f) }
     var heightDp by remember { mutableStateOf(0.dp) }
 
-    // Obtenemos título y artista limpios y buscamos la carátula
-    val rawTitle = track?.title ?: songEntity?.title ?: ""
-    val rawArtist = track?.artists?.toListName()?.connectArtists() ?: songEntity?.artistName?.connectArtists() ?: ""
-    val fallbackThumb = track?.thumbnails?.lastOrNull()?.url ?: songEntity?.thumbnails
-    val highResThumb = rememberHighResArtwork(title = rawTitle, artist = rawArtist, fallbackThumbnail = fallbackThumb)
-
     Box(
         modifier =
-            modifier,
+        modifier,
     ) {
         Crossfade(
             offsetX.value >= maxOffset / 2,
@@ -180,7 +167,7 @@ fun SongFullWidthItems(
                 }
             }
         }
-
+        val itemVideoId = track?.videoId ?: songEntity?.videoId ?: ""
         Box(
             modifier =
                 modifier
@@ -202,6 +189,8 @@ fun SongFullWidthItems(
                                 null
                             },
                     ).animateContentSize()
+                    // Keyed on selectionMode so the swipe detector is torn down when selection
+                    // starts — keyed on Unit it would keep running with the stale flag captured.
                     .pointerInput(selectionMode) {
                         if (!isPlaying && onAddToQueue != null && !selectionMode) {
                             detectHorizontalDragGestures(
@@ -217,7 +206,9 @@ fun SongFullWidthItems(
                                 },
                                 onDragEnd = {
                                     if (offsetX.value == maxOffset) {
-                                        onAddToQueue(itemVideoId)
+                                        onAddToQueue(
+                                            track?.videoId ?: songEntity?.videoId ?: "",
+                                        )
                                     }
                                     coroutineScope.launch {
                                         offsetX.animateTo(0f)
@@ -279,7 +270,7 @@ fun SongFullWidthItems(
                                 modifier = Modifier.fillMaxSize(),
                             )
                         } else if (index == null) {
-                            val thumb = highResThumb
+                            val thumb = track?.thumbnails?.lastOrNull()?.url ?: songEntity?.thumbnails
                             AsyncImage(
                                 model =
                                     ImageRequest
@@ -316,7 +307,7 @@ fun SongFullWidthItems(
                     verticalArrangement = Arrangement.SpaceEvenly,
                 ) {
                     Text(
-                        text = rawTitle.cleanMusicTitle(),
+                        text = track?.title ?: songEntity?.title ?: "",
                         style = typo().titleSmall,
                         maxLines = 1,
                         color = contentColor,
@@ -361,7 +352,11 @@ fun SongFullWidthItems(
                             }
                         }
                         Text(
-                            text = rawArtist,
+                            text =
+                                (
+                                    track?.artists?.toListName()?.connectArtists()
+                                        ?: songEntity?.artistName?.connectArtists()
+                                ) ?: "",
                             style = typo().bodySmall,
                             maxLines = 1,
                             color = subtitleColor,
@@ -379,6 +374,8 @@ fun SongFullWidthItems(
                 if (rightView != null) {
                     rightView()
                 }
+                // Hidden while selecting: the per-item menu moves up to the selection app bar,
+                // so one tap cannot mean both "act on this song" and "pick this song".
                 if (onMoreClickListener != null && !selectionMode) {
                     RippleIconButton(imageVector = SimpIcons.MoreVert, fillMaxSize = false, tint = contentColor) {
                         if (itemVideoId.isNotBlank()) onMoreClickListener.invoke(itemVideoId)
@@ -411,12 +408,6 @@ fun SuggestItems(
 ) {
     val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
-
-    val rawTitle = track.title
-    val rawArtist = track.artists?.toListName()?.connectArtists() ?: ""
-    val fallbackThumb = track.thumbnails?.lastOrNull()?.url
-    val highResThumb = rememberHighResArtwork(title = rawTitle, artist = rawArtist, fallbackThumbnail = fallbackThumb)
-
     Box(
         modifier =
             Modifier
@@ -439,7 +430,7 @@ fun SuggestItems(
                             modifier = Modifier.fillMaxSize(),
                         )
                     } else {
-                        val thumb = highResThumb
+                        val thumb = track.thumbnails?.lastOrNull()?.url
                         AsyncImage(
                             model =
                                 ImageRequest
@@ -469,7 +460,7 @@ fun SuggestItems(
                     .align(Alignment.CenterVertically),
             ) {
                 Text(
-                    text = rawTitle.cleanMusicTitle(),
+                    text = track.title,
                     style = typo().titleSmall,
                     maxLines = 1,
                     color = contentColor,
@@ -483,7 +474,10 @@ fun SuggestItems(
                             ).focusable(),
                 )
                 Text(
-                    text = rawArtist,
+                    text =
+                        (
+                            track.artists?.toListName()?.connectArtists()
+                        ) ?: "",
                     style = typo().bodySmall,
                     maxLines = 1,
                     color = subtitleColor,

@@ -12,6 +12,4 @@ actual fun PlatformCastButton(
     // No-op: desktop has no Google Cast sender.
 }
 
-actual fun isPlatformCastAvailable(): Boolean {
-    TODO("Not yet implemented")
-}
+actual fun isPlatformCastAvailable(): Boolean = false

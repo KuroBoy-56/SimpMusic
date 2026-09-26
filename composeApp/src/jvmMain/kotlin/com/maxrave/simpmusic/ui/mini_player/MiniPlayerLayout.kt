@@ -33,18 +33,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeOff
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -62,19 +60,26 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.maxrave.domain.data.model.streams.TimeLine
+import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.ControlState
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
 import com.maxrave.simpmusic.extension.parseRichSyncWords
 import com.maxrave.simpmusic.ui.component.PlayPauseButton
 import com.maxrave.simpmusic.ui.component.RichSyncLyricsLineItem
 import com.maxrave.simpmusic.ui.component.RippleIconButton
+import com.maxrave.simpmusic.ui.icon.Favorite
+import com.maxrave.simpmusic.ui.icon.FavoriteBorder
+import com.maxrave.simpmusic.ui.icon.SimpIcons
+import com.maxrave.simpmusic.ui.icon.SkipNext
+import com.maxrave.simpmusic.ui.icon.SkipPrevious
+import com.maxrave.simpmusic.ui.icon.VolumeOff
+import com.maxrave.simpmusic.ui.icon.VolumeUp
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.NowPlayingScreenData
 import com.maxrave.simpmusic.viewModel.UIEvent
 import org.jetbrains.compose.resources.painterResource
+import org.koin.compose.koinInject
 import simpmusic.composeapp.generated.resources.Res
-import simpmusic.composeapp.generated.resources.baseline_skip_next_24
-import simpmusic.composeapp.generated.resources.baseline_skip_previous_24
 
 @Composable
 private fun MiniPlayerSeekBar(
@@ -196,7 +201,7 @@ fun CompactMiniLayout(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     RippleIconButton(
-                        resId = Res.drawable.baseline_skip_previous_24,
+                        imageVector = SimpIcons.SkipPrevious,
                         modifier = Modifier.size(28.dp),
                         tint = if (controllerState.isPreviousAvailable) Color.White else Color.Gray,
                         onClick = {
@@ -213,7 +218,7 @@ fun CompactMiniLayout(
                     )
 
                     RippleIconButton(
-                        resId = Res.drawable.baseline_skip_next_24,
+                        imageVector = SimpIcons.SkipNext,
                         modifier = Modifier.size(28.dp),
                         tint = if (controllerState.isNextAvailable) Color.White else Color.Gray,
                         onClick = {
@@ -312,9 +317,9 @@ fun MediumMiniLayout(
                                 Icon(
                                     imageVector =
                                         if (controllerState.isLiked) {
-                                            Icons.Filled.Favorite
+                                            SimpIcons.Favorite
                                         } else {
-                                            Icons.Outlined.FavoriteBorder
+                                            SimpIcons.FavoriteBorder
                                         },
                                     contentDescription = "Like",
                                     tint =
@@ -329,7 +334,7 @@ fun MediumMiniLayout(
                         }
 
                         RippleIconButton(
-                            resId = Res.drawable.baseline_skip_previous_24,
+                            imageVector = SimpIcons.SkipPrevious,
                             modifier = Modifier.size(28.dp),
                             tint = if (controllerState.isPreviousAvailable) Color.White else Color.Gray,
                             onClick = {
@@ -346,7 +351,7 @@ fun MediumMiniLayout(
                         )
 
                         RippleIconButton(
-                            resId = Res.drawable.baseline_skip_next_24,
+                            imageVector = SimpIcons.SkipNext,
                             modifier = Modifier.size(28.dp),
                             tint = if (controllerState.isNextAvailable) Color.White else Color.Gray,
                             onClick = {
@@ -362,10 +367,11 @@ fun MediumMiniLayout(
                             enter = scaleIn() + fadeIn(),
                             exit = scaleOut() + fadeOut(),
                         ) {
+                            val previousVolume = rememberPreviousVolume(controllerState.volume)
                             IconButton(
                                 onClick = {
                                     // Toggle mute/unmute
-                                    val newVolume = if (controllerState.volume > 0f) 0f else 1f
+                                    val newVolume = if (controllerState.volume > 0f) 0f else previousVolume.coerceIn(0.1f, 1f)
                                     onUIEvent(UIEvent.UpdateVolume(newVolume))
                                 },
                                 modifier = Modifier.size(28.dp),
@@ -373,9 +379,9 @@ fun MediumMiniLayout(
                                 Icon(
                                     imageVector =
                                         if (controllerState.volume > 0f) {
-                                            Icons.AutoMirrored.Filled.VolumeUp
+                                            SimpIcons.VolumeUp
                                         } else {
-                                            Icons.AutoMirrored.Filled.VolumeOff
+                                            SimpIcons.VolumeOff
                                         },
                                     contentDescription = if (controllerState.volume > 0f) "Mute" else "Unmute",
                                     tint = Color.White.copy(alpha = 0.7f),
@@ -388,10 +394,11 @@ fun MediumMiniLayout(
 
                 // Lyrics display (if available)
                 if (lyricsData != null && !lyricsData.lyrics.error && lyricsData.lyrics.lines != null) {
+                    val lyricsNowMs = rememberLyricsNowMs(timeline)
                     val currentLine =
-                        remember(timeline.current) {
+                        remember(lyricsNowMs) {
                             lyricsData.lyrics.lines?.findLast { line ->
-                                line.startTimeMs.toLongOrNull()?.let { it <= timeline.current } ?: false
+                                line.startTimeMs.toLongOrNull()?.let { it <= lyricsNowMs } ?: false
                             }
                         }
 
@@ -414,7 +421,7 @@ fun MediumMiniLayout(
                                     RichSyncLyricsLineItem(
                                         parsedLine = parsedLine,
                                         translatedWords = null,
-                                        currentTimeMs = timeline.current,
+                                        currentTimeMs = lyricsNowMs,
                                         isCurrent = true,
                                         customFontSize = typo().bodySmall.fontSize,
                                         modifier = Modifier,
@@ -541,10 +548,11 @@ fun SquareMiniLayout(
 
             // Lyrics display (if available)
             if (lyricsData != null && !lyricsData.lyrics.error && lyricsData.lyrics.lines != null) {
+                val lyricsNowMs = rememberLyricsNowMs(timeline)
                 val currentLine =
-                    remember(timeline.current) {
+                    remember(lyricsNowMs) {
                         lyricsData.lyrics.lines?.findLast { line ->
-                            line.startTimeMs.toLongOrNull()?.let { it <= timeline.current } ?: false
+                            line.startTimeMs.toLongOrNull()?.let { it <= lyricsNowMs } ?: false
                         }
                     }
 
@@ -560,7 +568,7 @@ fun SquareMiniLayout(
                             RichSyncLyricsLineItem(
                                 parsedLine = parsedLine,
                                 translatedWords = null,
-                                currentTimeMs = timeline.current,
+                                currentTimeMs = lyricsNowMs,
                                 isCurrent = true,
                                 customFontSize = typo().bodySmall.fontSize,
                                 modifier = Modifier.padding(horizontal = 8.dp),
@@ -616,9 +624,9 @@ fun SquareMiniLayout(
                     Icon(
                         imageVector =
                             if (controllerState.isLiked) {
-                                Icons.Filled.Favorite
+                                SimpIcons.Favorite
                             } else {
-                                Icons.Outlined.FavoriteBorder
+                                SimpIcons.FavoriteBorder
                             },
                         contentDescription = "Like",
                         tint =
@@ -633,7 +641,7 @@ fun SquareMiniLayout(
 
                 // Previous
                 RippleIconButton(
-                    resId = Res.drawable.baseline_skip_previous_24,
+                    imageVector = SimpIcons.SkipPrevious,
                     modifier = Modifier.size(36.dp),
                     tint = if (controllerState.isPreviousAvailable) Color.White else Color.Gray,
                     onClick = {
@@ -652,7 +660,7 @@ fun SquareMiniLayout(
 
                 // Next
                 RippleIconButton(
-                    resId = Res.drawable.baseline_skip_next_24,
+                    imageVector = SimpIcons.SkipNext,
                     modifier = Modifier.size(36.dp),
                     tint = if (controllerState.isNextAvailable) Color.White else Color.Gray,
                     onClick = {
@@ -663,10 +671,11 @@ fun SquareMiniLayout(
                 )
 
                 // Volume/Mute button
+                val previousVolume = rememberPreviousVolume(controllerState.volume)
                 IconButton(
                     onClick = {
                         // Toggle mute/unmute
-                        val newVolume = if (controllerState.volume > 0f) 0f else 1f
+                        val newVolume = if (controllerState.volume > 0f) 0f else previousVolume.coerceIn(0.1f, 1f)
                         onUIEvent(UIEvent.UpdateVolume(newVolume))
                     },
                     modifier = Modifier.size(32.dp),
@@ -674,9 +683,9 @@ fun SquareMiniLayout(
                     Icon(
                         imageVector =
                             if (controllerState.volume > 0f) {
-                                Icons.AutoMirrored.Filled.VolumeUp
+                                SimpIcons.VolumeUp
                             } else {
-                                Icons.AutoMirrored.Filled.VolumeOff
+                                SimpIcons.VolumeOff
                             },
                         contentDescription = if (controllerState.volume > 0f) "Mute" else "Unmute",
                         tint = Color.White.copy(alpha = 0.7f),
@@ -814,9 +823,9 @@ fun ExpandedMiniLayout(
                             Icon(
                                 imageVector =
                                     if (controllerState.isLiked) {
-                                        Icons.Filled.Favorite
+                                        SimpIcons.Favorite
                                     } else {
-                                        Icons.Outlined.FavoriteBorder
+                                        SimpIcons.FavoriteBorder
                                     },
                                 contentDescription = "Like",
                                 tint =
@@ -830,7 +839,7 @@ fun ExpandedMiniLayout(
                         }
 
                         RippleIconButton(
-                            resId = Res.drawable.baseline_skip_previous_24,
+                            imageVector = SimpIcons.SkipPrevious,
                             modifier = Modifier.size(28.dp),
                             tint = if (controllerState.isPreviousAvailable) Color.White else Color.Gray,
                             onClick = {
@@ -849,7 +858,7 @@ fun ExpandedMiniLayout(
                         )
 
                         RippleIconButton(
-                            resId = Res.drawable.baseline_skip_next_24,
+                            imageVector = SimpIcons.SkipNext,
                             modifier = Modifier.size(32.dp),
                             tint = if (controllerState.isNextAvailable) Color.White else Color.Gray,
                             onClick = {
@@ -860,10 +869,11 @@ fun ExpandedMiniLayout(
                         )
 
                         // Volume button
+                        val previousVolume = rememberPreviousVolume(controllerState.volume)
                         IconButton(
                             onClick = {
                                 // Toggle mute/unmute
-                                val newVolume = if (controllerState.volume > 0f) 0f else 1f
+                                val newVolume = if (controllerState.volume > 0f) 0f else previousVolume.coerceIn(0.1f, 1f)
                                 onUIEvent(UIEvent.UpdateVolume(newVolume))
                             },
                             modifier = Modifier.size(28.dp),
@@ -871,9 +881,9 @@ fun ExpandedMiniLayout(
                             Icon(
                                 imageVector =
                                     if (controllerState.volume > 0f) {
-                                        Icons.AutoMirrored.Filled.VolumeUp
+                                        SimpIcons.VolumeUp
                                     } else {
-                                        Icons.AutoMirrored.Filled.VolumeOff
+                                        SimpIcons.VolumeOff
                                     },
                                 contentDescription = if (controllerState.volume > 0f) "Mute" else "Unmute",
                                 tint = Color.White.copy(alpha = 0.7f),
@@ -886,10 +896,11 @@ fun ExpandedMiniLayout(
 
             // Lyrics display below thumbnail row
             if (lyricsData != null && !lyricsData.lyrics.error && lyricsData.lyrics.lines != null) {
+                val lyricsNowMs = rememberLyricsNowMs(timeline)
                 val currentLine =
-                    remember(timeline.current) {
+                    remember(lyricsNowMs) {
                         lyricsData.lyrics.lines?.findLast { line ->
-                            line.startTimeMs.toLongOrNull()?.let { it <= timeline.current } ?: false
+                            line.startTimeMs.toLongOrNull()?.let { it <= lyricsNowMs } ?: false
                         }
                     }
 
@@ -911,7 +922,7 @@ fun ExpandedMiniLayout(
                                 RichSyncLyricsLineItem(
                                     parsedLine = parsedLine,
                                     translatedWords = null,
-                                    currentTimeMs = timeline.current,
+                                    currentTimeMs = lyricsNowMs,
                                     isCurrent = true,
                                     customFontSize = typo().bodySmall.fontSize,
                                     customPadding = 4.dp,
@@ -954,4 +965,30 @@ fun ExpandedMiniLayout(
             }
         }
     }
+}
+
+/**
+ * The volume to come back to when unmuting. The in-app player got this fix first
+ * (MiniPlayer.kt); the detached window kept a raw 0f/1f toggle, so unmuting from
+ * 60% jumped to 100%. Muted-from-the-start has nothing to restore, so full volume
+ * stays the fallback.
+ */
+@Composable
+private fun rememberPreviousVolume(volume: Float): Float {
+    var previous by rememberSaveable { mutableFloatStateOf(volume.takeIf { it > 0f } ?: 1f) }
+    LaunchedEffect(volume) {
+        if (volume > 0f) previous = volume
+    }
+    return previous
+}
+
+/**
+ * The moment the listener is actually HEARING, which is what a lyric line answers to. Bluetooth
+ * buffers, so the ear trails the player by the stored offset. The mini player's own seek bar keeps
+ * reading [TimeLine.current] untouched: that one reports where the player is, not what is heard.
+ */
+@Composable
+private fun rememberLyricsNowMs(timeline: TimeLine): Long {
+    val offsetMs by koinInject<DataStoreManager>().lyricsOffsetMs.collectAsState(0)
+    return timeline.current - offsetMs
 }

@@ -126,7 +126,7 @@
     <string name="developer_blog">Blog des Développeurs</string>
     <string name="developer_blog_tagline">Lisez les notes des développeurs, les tutoriels &amp; les coulisses du projet</string>
     <string name="blog_promo_title">Une nouveauté du développeur</string>
-    <string name="blog_promo_message">Je viens de lancer mon blog personnel sur maxrave.dev — j'y partage l'histoire deYT Music Mod, des analyses approfondies sur les technologies musicales et des notes d'ingénierie. N'hésitez pas à y jeter un œil si ça vous intéresse. ✨</string>
+    <string name="blog_promo_message">Je viens de lancer mon blog personnel sur maxrave.dev — j'y partage l'histoire de YT Music Mod , des analyses approfondies sur les technologies musicales et des notes d'ingénierie. N'hésitez pas à y jeter un œil si ça vous intéresse. ✨</string>
     <string name="visit_blog">Consultez le blog</string>
     <string name="paypal">PayPal</string>
     <string name="title">Titre</string>
@@ -163,6 +163,9 @@
     <string name="balance_media_loudness">Équilibrer le volume des médias</string>
     <string name="normalize_volume">Égaliser le volume</string>
     <string name="audio">Audio</string>
+    <string name="no_equalizer">Votre appareil n'a pas d'égaliseur</string>
+    <string name="open_system_equalizer">Ouvrir l'égaliseur du système</string>
+    <string name="use_your_system_equalizer">Utilisez votre égaliseur système</string>
     <string name="streaming_data_provider_piped">Fournisseur de données de streaming (Piped)</string>
     <string name="itag">Itag</string>
     <string name="extract_source">Extraire la source</string>
@@ -203,12 +206,12 @@
     <string name="save">Sauvegarder</string>
     <string name="crop_cover">Couverture végétale</string>
     <string name="saved">Sauvegarde</string>
-    <string name="sponsor_block_intro">SponsorBlock est un système qui permet de sauter les parties gênantes des vidéos YouTube.\nPlus d'informations : https://sponsor.ajay.app/\nDansYT Music Mod, SponsorBlock n'est disponible que lorsque l'appareil est en ligne.</string>
+    <string name="sponsor_block_intro">SponsorBlock est un système qui permet de sauter les parties gênantes des vidéos YouTube.\nPlus d'informations : https://sponsor.ajay.app/\nDans YT Music Mod , SponsorBlock n'est disponible que lorsque l'appareil est en ligne.</string>
     <string name="skip_sponsor_part_of_video">Ignorer la partie sponsorisée de la vidéo</string>
     <string name="customactivityoncrash_error_activity_error_occurred_explanation">Une erreur inattendue s'est produite. Veuillez nous excuser pour ce désagrément.</string>
     <string name="customactivityoncrash_error_activity_restart_app">Redémarrer l'application</string>
-    <string name="help_build_lyrics_database">AidezYT Music Mod à enrichir sa base de données de paroles</string>
-    <string name="help_build_lyrics_database_description">Envoyez vos paroles enregistrées à la base de données de paroles deYT Music Mod</string>
+    <string name="help_build_lyrics_database">Aidez  YT Music Mod à enrichir sa base de données de paroles</string>
+    <string name="help_build_lyrics_database_description">Envoyez vos paroles enregistrées à la base de données de paroles de YT Music Mod </string>
     <string name="customactivityoncrash_error_activity_close_app">Fermer l'application</string>
     <string name="customactivityoncrash_error_activity_error_details">Détails de l'erreur</string>
     <string name="customactivityoncrash_error_activity_error_details_title">Détails de l'erreur</string>
@@ -261,7 +264,7 @@
     <string name="email">E-mail</string>
     <string name="password">Mot de passe</string>
     <string name="please_enter_your_email_and_password">Veuillez entrer votre e-mail et votre mot de passe.</string>
-    <string name="translation_language_message">Saisissez le code de langue (par exemple : en) (2 lettres). Si vous souhaitez définir la même langue que celle deYT Music Mod, veuillez laisser la zone d'édition vide.</string>
+    <string name="translation_language_message">Saisissez le code de langue (par exemple : en) (2 lettres). Si vous souhaitez définir la même langue que celle de YT Music Mod , veuillez laisser la zone d'édition vide.</string>
     <string name="invalid_language_code">Code de langue invalide</string>
     <string name="lyrics_provider_youtube">Paroles fournies par YouTube</string>
     <string name="lyrics_provider_betterlyrics">Paroles fournies par BetterLyrics</string>
@@ -280,7 +283,7 @@
     <string name="older_first">Les plus anciens d'abord</string>
     <string name="newer_first">Les plus récents d'abord</string>
     <string name="added_date">Date d'ajout</string>
-    <string name="credit_app">Une application musicale simple utilisant YouTube Music pour le backend \n\nYT Music Mod est un projet open source pour diffuser de la musique à partir de YouTube et YouTube Music sans publicité ni suivi.YT Music Mod offre de nombreuses fonctionnalités :\n\n - Streaming de musique \n - Paroles synchronisées\n - Personnaliser les données\n - etc… \n\nYT Music Mod est toujours gratuit et sans publicité\n\nConstruit avec ❤️ de Tuan Minh Nguyen Duc (maxrave-dev)</string>
+    <string name="credit_app">Une application musicale simple utilisant YouTube Music pour le backend \n\n YT Music Mod est un projet open source pour diffuser de la musique à partir de YouTube et YouTube Music sans publicité ni suivi.  YT Music Mod offre de nombreuses fonctionnalités :\n\n - Streaming de musique \n - Paroles synchronisées\n - Personnaliser les données\n - etc… \n\n YT Music Mod est toujours gratuit et sans publicité\n\nConstruit avec ❤️ de Tuan Minh Nguyen Duc (maxrave-dev)</string>
     <string name="issue_tracker">Suivi des problèmes</string>
     <string name="featured_playlists">Playlists en Vedette</string>
     <string name="featured_inArtist">En vedette sur</string>
@@ -328,7 +331,7 @@
     <string name="reverb_help_hall">Une salle de concert. Un son long mais net, typique des enregistrements au tempo ralenti et avec réverbération.</string>
     <string name="reverb_help_plate">Une plaque de studio. Pas de vide avant la réverbération, un son brillant et dense, qui s'accorde bien avec les voix.</string>
     <string name="reverb_help_cathedral">Une cathédrale. Très longue et sombre, le son se perd dans l'espace.</string>
-    <string name="sync_follow_to_youtube_description">Suivre un artiste surYT Music Mod revient également à s'abonner à sa chaîne depuis votre compte YouTube</string>
+    <string name="sync_follow_to_youtube_description">Suivre un artiste sur  YT Music Mod revient également à s'abonner à sa chaîne depuis votre compte YouTube</string>
     <string name="sync_follow_failed">Impossible de mettre à jour votre abonnement YouTube</string>
     <string name="subscribed_on_youtube">Abonné sur YouTube</string>
     <string name="unsubscribed_on_youtube">Désabonné sur YouTube</string>
@@ -349,7 +352,7 @@
     <string name="enable_spotify_lyrics">Activer les paroles Spotify</string>
     <string name="spotify_lyrícs_info">Plus de paroles sans traduction</string>
     <string name="enable_canvas">Activer la toile</string>
-    <string name="canvas_info">Afficher la toile Spotify dansYT Music Mod</string>
+    <string name="canvas_info">Afficher la toile Spotify dans YT Music Mod </string>
     <string name="enable_animated_artwork">Illustrations animées</string>
     <string name="animated_artwork_info">Lancez la pochette animée de l'album à la place d'un Canvas. Aucun compte n'est nécessaire. Les albums qui n'en ont pas conservent leur pochette statique.</string>
     <string name="spotify_lyrics_provider">Paroles fournies par Spotify</string>
@@ -399,8 +402,6 @@
     <string name="theme_color_wallpaper">Fond d'écran</string>
     <string name="theme_color_custom">Personnalisé</string>
     <string name="custom_color">Couleur personnalisée</string>
-    <string name="translucent_bottom_navigation_bar">Barre de navigation inférieure translucide</string>
-    <string name="you_can_see_the_content_below_the_bottom_bar">Vous pouvez voir le contenu en dessous de la barre inférieure</string>
     <string name="donation">Si vous aimez mon travail, offrez-moi un café ! ☕</string>
     <string name="relax">Détente</string>
     <string name="sleep">Sommeil</string>
@@ -419,7 +420,7 @@
     <string name="loading">Chargement</string>
     <string name="updating">Mise à jour</string>
     <string name="go_to_log_in_page">Accéder à la page de connexion</string>
-    <string name="log_in_warning">YouTube Music nécessite désormais que vous vous connectiez pour diffuser de la musique. Piped Instance ne peut parfois pas fonctionner non plus. Vous devez vous connecter à YouTube pour bénéficier d'une meilleure expérience avecYT Music Mod.</string>
+    <string name="log_in_warning">YouTube Music nécessite désormais que vous vous connectiez pour diffuser de la musique. Piped Instance ne peut parfois pas fonctionner non plus. Vous devez vous connecter à YouTube pour bénéficier d'une meilleure expérience avec YT Music Mod .</string>
     <string name="spotify_canvas_cache">Cache de la toile Spotify</string>
     <string name="clear_canvas_cache">Vider le cache de la toile</string>
     <string name="listening_history">Historique d'écoute</string>
@@ -466,8 +467,8 @@
     <string name="other_version">Autre version</string>
     <string name="later">Plus tard</string>
     <string name="give_a_star">Donner une étoile</string>
-    <string name="enjoying_simpmusic">Vous appréciezYT Music Mod</string>
-    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">Si vous aimez utiliserYT Music Mod, donnez une étoile àYT Music Mod sur GitHub ou laissez un avis sur</string>
+    <string name="enjoying_simpmusic">Vous appréciez YT Music Mod </string>
+    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">Si vous aimez utiliser YT Music Mod , donnez une étoile à  YT Music Mod sur GitHub ou laissez un avis sur</string>
     <string name="if_you_love_my_work_consider">"Si vous aimez mon travail, considérez "</string>
     <string name="buying_me_a_coffee">m'offrir un café.</string>
     <string name="footguns_promo_title">Tous les pièges dans lesquels je suis tombé</string>
@@ -527,8 +528,8 @@
     <string name="contributor_name">Nom du contributeur</string>
     <string name="contributor_email">Email du contributeur</string>
     <string name="anonymous">Anonyme</string>
-    <string name="simpmusic_lyrics">Paroles deYT Music Mod</string>
-    <string name="lyrics_provider_simpmusic">Paroles fournies parYT Music Mod</string>
+    <string name="simpmusic_lyrics">Paroles de YT Music Mod </string>
+    <string name="lyrics_provider_simpmusic">Paroles fournies par YT Music Mod </string>
     <string name="backup_in_progress">Sauvegarde en cours</string>
     <string name="restore_in_progress">Restauration en cours</string>
     <string name="backup_downloaded">Sauvegarder les données téléchargées</string>
@@ -574,7 +575,7 @@
     <string name="intro_login_to_lastfm">Connectez-vous pour enregistrer ce que vous écoutez</string>
     <string name="enable_scrobbling">Activer le scrobbling</string>
     <string name="scrobbling_info">Envoyez ce que vous écoutez sur votre profil Last.fm</string>
-    <string name="lastfm_login_step_1">Ouvrez la page Last.fm et autorisezYT Music Mod à accéder à votre compte.</string>
+    <string name="lastfm_login_step_1">Ouvrez la page Last.fm et autorisez  YT Music Mod à accéder à votre compte.</string>
     <string name="lastfm_login_step_2">YT Music Mod se relance automatiquement dès que vous lui avez accordé l'accès.</string>
     <string name="lastfm_open_authorize_page">Ouvrir Last.fm</string>
     <string name="lastfm_login_failed">Impossible de se connecter à Last.fm. Veuillez réessayer.</string>
@@ -583,8 +584,6 @@
     <string name="lastfm_paste_callback_confirm">Cliquez sur ce lien pour continuer</string>
     <string name="logged_in_as">Connecté en tant que %1$s</string>
     <string name="youtube_liked_music">Musique aimée par YouTube</string>
-    <string name="keep_service_alive">Maintenir le service en vie</string>
-    <string name="keep_service_alive_description">Maintenez le service du lecteur de musique actif pour éviter qu'il ne soit arrêté par le système</string>
     <string name="keep_your_youtube_playlist_offline">Continuer à afficher votre playlist YouTube lorsque vous êtes hors ligne</string>
     <string name="keep_your_youtube_playlist_offline_description">Enregistrez votre playlist YouTube en local et conservez-la pour la visionner hors ligne</string>
     <string name="combine_local_and_youtube_liked_songs">Remplacer « Favori » par « J’aime » sur YouTube lors de la connexion</string>
@@ -650,7 +649,7 @@
     <string name="downvote">Vote négatif</string>
     <string name="vote_submitted">Merci d'avoir voté pour ces paroles !</string>
     <string name="vote_error">Échec de la soumission</string>
-    <string name="open_app">OuvrirYT Music Mod</string>
+    <string name="open_app">Ouvrir YT Music Mod </string>
     <string name="close_miniplayer">Fermer le mini-lecteur</string>
     <string name="open_miniplayer">Ouvrir le mini-lecteur</string>
     <string name="quit_app">Quitter l'application</string>
@@ -658,7 +657,7 @@
     <string name="local_tracking_description">Enregistrez votre historique d'écoute dans une base de données locale</string>
     <string name="blog_notification_title">Notifications relatives aux articles de blog</string>
     <string name="blog_notification_description">Recevez une notification dès qu'un nouvel article de blog est publié</string>
-    <string name="simpmusic_charts">ClassementsYT Music Mod</string>
+    <string name="simpmusic_charts">Classements YT Music Mod </string>
     <string name="crossfading">Fondu enchaîné</string>
     <string name="your_320kbps_url">Votre URL 320 kbps</string>
     <string name="your_320kbps_url_description">Laissez ce champ vide pour que le vérificateur de disponibilité sélectionne automatiquement une URL valide.</string>
@@ -674,13 +673,13 @@
     <string name="not_available_while_casting">Indisponible pendant le casting</string>
     <string name="import_data">Importer des playlists</string>
     <string name="import_playlists_from_other_apps">Importer des playlists depuis une autre application</string>
-    <string name="import_data_intro">La fonction d'importation permet d'importer des playlists converties depuis Spotify ou une autre application cliente de YouTube Music.\nOutil de conversion : https://www.YT Music Mod.org/tools\nDansYT Music Mod, seules les playlists au format propre à l'application peuvent être importées</string>
+    <string name="import_data_intro">La fonction d'importation permet d'importer des playlists converties depuis Spotify ou une autre application cliente de YouTube Music.\nOutil de conversion : https://www.simpmusic.org/tools\nDans YT Music Mod , seules les playlists au format propre à l'application peuvent être importées</string>
     <string name="import_reading_file">Lecture du fichier…</string>
     <string name="import_progress_songs">%1$d sur %2$d titres</string>
     <string name="import_result">%1$d playlists ont été créées et %2$d titres ont été importés.</string>
     <string name="import_result_skipped">%1$d entrées ont été ignorées car le titre correspondant était absente du fichier.</string>
     <string name="import_failed">Échec de l'importation</string>
-    <string name="import_invalid_file">Ce fichier n'est pas un fichier d'importationYT Music Mod valide. Commencez par convertir votre bibliothèque surYT Music Mod.org.</string>
+    <string name="import_invalid_file">Ce fichier n'est pas un fichier d'importation  YT Music Mod valide. Commencez par convertir votre bibliothèque sur YT Music Mod .org.</string>
     <string name="analytics">Analyse</string>
     <string name="select_all">Tout sélectionner</string>
     <string name="n_selected">%1$d sélectionnés</string>
@@ -750,7 +749,7 @@
     <string name="wrapped_share">Partager</string>
     <string name="wrapped_save">Enregistrer</string>
     <string name="wrapped_opening_title">Votre année musicale</string>
-    <string name="wrapped_opening_lead">Vous avez ouvertYT Music Mod le</string>
+    <string name="wrapped_opening_lead">Vous avez ouvert  YT Music Mod le</string>
     <string name="wrapped_opening_days">%1$s sur %2$s jours</string>
     <string name="wrapped_opening_tracks">%1$s titres se sont succédé.</string>
     <string name="wrapped_minutes_title">Vous avez passé tout ce temps cette année à écouter</string>

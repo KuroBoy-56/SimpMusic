@@ -55,7 +55,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -67,6 +66,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -84,6 +84,7 @@ import coil3.request.crossfade
 import coil3.toBitmap
 import com.kyant.backdrop.highlight.Highlight
 import com.kmpalette.rememberPaletteState
+import com.maxrave.simpmusic.extension.barBlurStyle
 import com.maxrave.simpmusic.ui.component.DownloadingIndicator
 import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.model.browse.album.Track
@@ -116,6 +117,7 @@ import com.maxrave.simpmusic.ui.component.selection.SelectedSongsBottomSheet
 import com.maxrave.simpmusic.ui.component.selection.SongSelectionTopAppBar
 import com.maxrave.simpmusic.ui.component.selection.rememberSongSelectionState
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
+import com.maxrave.simpmusic.ui.icon.Close
 import com.maxrave.simpmusic.ui.icon.DownloadForOffline
 import com.maxrave.simpmusic.ui.icon.MoreVert
 import com.maxrave.simpmusic.ui.icon.Pause
@@ -123,8 +125,8 @@ import com.maxrave.simpmusic.ui.icon.PlayArrow
 import com.maxrave.simpmusic.ui.icon.Search
 import com.maxrave.simpmusic.ui.icon.Shuffle
 import com.maxrave.simpmusic.ui.icon.SimpIcons
-import com.maxrave.simpmusic.ui.icon.Close
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
+import com.maxrave.simpmusic.ui.theme.LocalIsDarkTheme
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.ListState
@@ -134,10 +136,9 @@ import com.maxrave.simpmusic.viewModel.PlaylistViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.SongSelectionViewModel
 import com.maxrave.simpmusic.viewModel.UIEvent
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.collectLatest
@@ -158,7 +159,7 @@ import simpmusic.composeapp.generated.resources.radio
 import simpmusic.composeapp.generated.resources.search
 import simpmusic.composeapp.generated.resources.unlimited
 
-@OptIn(ExperimentalCoroutinesApi::class, ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalCoroutinesApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun PlaylistScreen(
     viewModel: PlaylistViewModel = koinViewModel(),
@@ -167,22 +168,19 @@ fun PlaylistScreen(
     isYourYouTubePlaylist: Boolean,
     navController: NavController,
 ) {
-    // Home shelves navigate with the browseEndpoint id, which is "VL" + the playlist id
-    // (HomeParser reads title.runs[0].navigationEndpoint.browseEndpoint.browseId). Every radio
-    // prefix check and the watch endpoint expect the bare id, so normalize once on the way in
-    // rather than stripping "VL" again at each consumer.
     val id = playlistId.removePrefix("VL")
     val tag = "PlaylistScreen"
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val continuation by viewModel.continuation.collectAsStateWithLifecycle()
+    val listColors by viewModel.listColors.collectAsStateWithLifecycle()
     val downloadState by viewModel.downloadState.collectAsStateWithLifecycle()
     val liked by viewModel.liked.collectAsStateWithLifecycle()
     val tracks by viewModel.tracks.collectAsStateWithLifecycle()
     val tracksListState by viewModel.tracksListState.collectAsStateWithLifecycle()
 
     var showSearchBar by rememberSaveable { mutableStateOf(false) }
-    var searchBarHeightPx by remember { mutableIntStateOf(0) }
+    var searchBarHeightPx by remember { mutableStateOf(0) }
 
     val lazyState = rememberLazyListState()
     val firstItemVisible by remember {
@@ -254,15 +252,12 @@ fun PlaylistScreen(
         }
     }
 
-    val nowPlayingStateFlow by sharedViewModel.nowPlayingState.collectAsStateWithLifecycle()
-    val playingTrack by remember {
-        derivedStateOf { nowPlayingStateFlow?.songEntity }
-    }
+    // CORRECCIÓN: Coleccionar estado limpiamente sin operadores Flow en Composable
+    val nowPlayingState by sharedViewModel.nowPlayingState.collectAsStateWithLifecycle()
+    val playingTrack = nowPlayingState?.songEntity
 
-    val currentControllerState by sharedViewModel.controllerState.collectAsStateWithLifecycle()
-    val isPlaying by remember {
-        derivedStateOf { currentControllerState.isPlaying }
-    }
+    val controllerState by sharedViewModel.controllerState.collectAsStateWithLifecycle()
+    val isPlaying = controllerState.isPlaying
 
     var currentItem by remember {
         mutableStateOf<Track?>(null)
@@ -303,15 +298,11 @@ fun PlaylistScreen(
     }
     val paletteState = rememberPaletteState()
     val hazeState =
-        rememberHazeState(
-            blurEnabled = true,
-        )
+        rememberHazeState()
     var bitmap by remember {
         mutableStateOf<ImageBitmap?>(null)
     }
-    // Track which thumbnail URL we've already extracted a palette from.
-    // Prevents palette flash when LazyColumn recycles the header item on scroll —
-    // AsyncImage re-mount fires onSuccess again, but we skip the regenerate.
+
     var paletteGeneratedFor by remember {
         mutableStateOf<String?>(null)
     }
@@ -333,18 +324,11 @@ fun PlaylistScreen(
             }
     }
 
-    // Apple Music-inspired immersive treatment. Which header is used depends on the window's
-    // aspect ratio alone, not on the platform: a portrait window (a phone held upright, or a
-    // narrow desktop window) gets the edge-to-edge artwork header, a landscape one gets the
-    // side-by-side header. Everything else on the page — the palette background, the row
-    // dividers, the blurred top bar — is shared by both.
     val screenInfo = getScreenSizeInfo()
     val isPortrait = screenInfo.wDP < screenInfo.hDP
-
-    // Apple Music-style page background from the artwork's dominant tone.
+    val dominantColor = listColors.firstOrNull() ?: Color.Black
     val mutedPaletteBg = paletteState.palette.toImmersiveBackground()
 
-    // Loading dialog
     val showLoadingDialog by viewModel.showLoadingDialog.collectAsStateWithLifecycle()
     if (showLoadingDialog.first) {
         LoadingDialog(
@@ -362,7 +346,8 @@ fun PlaylistScreen(
                 val data = state.data
                 Logger.d(tag, "data: $data")
                 if (data == null) return@Crossfade
-
+                val hazeState =
+                    rememberHazeState()
                 LazyColumn(
                     modifier =
                         Modifier
@@ -389,17 +374,13 @@ fun PlaylistScreen(
                                         horizontalAlignment = Alignment.Start,
                                     ) {
                                         if (isPortrait) {
-                                            // Apple Music-style: edge-to-edge artwork + liquid glass buttons.
-                                            // Glass buttons MUST be siblings of the backdrop source (not children)
-                                            // to avoid render feedback loop / RuntimeShader crash.
                                             val artworkBackdrop = rememberBackdrop(Color.Black)
                                             Box(
                                                 modifier =
                                                     Modifier
                                                         .fillMaxWidth()
-                                                        .height((screenInfo.hDP / 2).dp),
+                                                        .height((screenInfo.wDP).dp),
                                             ) {
-                                                // Inner Box — backdrop SOURCE (artwork + overlays only, NO glass)
                                                 Box(modifier = Modifier.fillMaxSize().layerBackdrop(artworkBackdrop)) {
                                                     AsyncImage(
                                                         model =
@@ -415,15 +396,15 @@ fun PlaylistScreen(
                                                         placeholder = rememberHolderPainter(),
                                                         error = rememberHolderPainter(),
                                                         contentDescription = null,
-                                                        contentScale = ContentScale.Crop,
+                                                        contentScale = ContentScale.Crop, // FUERZA RECORTE
                                                         onSuccess = {
                                                             bitmap = it.result.image.toImageBitmap()
                                                         },
-                                                        modifier = Modifier.fillMaxSize(),
+                                                        modifier = Modifier
+                                                            .fillMaxSize()
+                                                            .aspectRatio(1f), // ASPECTO CUADRADO PERFECTO
                                                     )
-                                                    // Scrim spans 70% of the artwork (not a fixed 200dp): the
-                                                    // shorter the ramp, the steeper the alpha, and a steep ramp
-                                                    // is what makes the fade read as an edge.
+
                                                     Box(
                                                         modifier =
                                                             Modifier
@@ -491,7 +472,6 @@ fun PlaylistScreen(
                                                         )
                                                     }
                                                 }
-                                                // Back + Heart + Search button overlays on artwork top — liquid glass
                                                 Row(
                                                     modifier =
                                                         Modifier
@@ -552,9 +532,6 @@ fun PlaylistScreen(
                                                 }
                                             }
                                         } else {
-                                            // Apple Music desktop header: back and the overlay actions on
-                                            // their own top row, then a square artwork with the text column
-                                            // and the action cluster laid out beside it rather than under it.
                                             val headerBackdrop = rememberBackdrop(mutedPaletteBg)
                                             Box(modifier = Modifier.fillMaxWidth()) {
                                                 Column(
@@ -565,7 +542,6 @@ fun PlaylistScreen(
                                                             .windowInsetsPadding(WindowInsets.statusBars)
                                                             .padding(horizontal = 32.dp, vertical = 16.dp),
                                                 ) {
-                                                    // Reserves the strip the sibling glass buttons are drawn over.
                                                     Spacer(modifier = Modifier.height(48.dp))
                                                     Spacer(modifier = Modifier.height(16.dp))
                                                     Row(
@@ -587,13 +563,14 @@ fun PlaylistScreen(
                                                             placeholder = rememberHolderPainter(),
                                                             error = rememberHolderPainter(),
                                                             contentDescription = null,
-                                                            contentScale = ContentScale.Crop,
+                                                            contentScale = ContentScale.Crop, // FUERZA RECORTE 1:1
                                                             onSuccess = {
                                                                 bitmap = it.result.image.toImageBitmap()
                                                             },
                                                             modifier =
                                                                 Modifier
                                                                     .size(280.dp)
+                                                                    .aspectRatio(1f) // CUADRADO PERFECTO
                                                                     .clip(RoundedCornerShape(8.dp)),
                                                         )
                                                         Column(
@@ -775,7 +752,6 @@ fun PlaylistScreen(
                                                         }
                                                     }
                                                 }
-                                                // Glass overlays — siblings of the source, over the strip the column reserved.
                                                 Box(Modifier.padding(start = 12.dp)) {
                                                     LiquidGlassIconButton(
                                                         backdrop = headerBackdrop,
@@ -1156,12 +1132,7 @@ fun PlaylistScreen(
                         Modifier
                             .fillMaxWidth()
                             .onGloballyPositioned { searchBarHeightPx = it.size.height }
-                            .hazeEffect(hazeState) {
-                                blurEnabled = true
-                                blurRadius = 24.dp
-                                backgroundColor = mutedPaletteBg
-                                tints = listOf(HazeTint(mutedPaletteBg.copy(alpha = 0.55f)))
-                            },
+                            .hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
                     ) {
                         Row(
                             modifier =
@@ -1231,12 +1202,7 @@ fun PlaylistScreen(
                         },
                         onOpenActions = { showSelectionSheet = true },
                         modifier =
-                            Modifier.hazeEffect(hazeState) {
-                                blurEnabled = true
-                                blurRadius = 24.dp
-                                backgroundColor = mutedPaletteBg
-                                tints = listOf(HazeTint(mutedPaletteBg.copy(alpha = 0.55f)))
-                            },
+                            Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
                     )
                 }
                 if (showSelectionSheet) {
@@ -1366,12 +1332,7 @@ fun PlaylistScreen(
                                 containerColor = Color.Transparent,
                             ),
                         modifier =
-                            Modifier.hazeEffect(hazeState) {
-                                blurEnabled = true
-                                blurRadius = 24.dp
-                                backgroundColor = mutedPaletteBg
-                                tints = listOf(HazeTint(mutedPaletteBg.copy(alpha = 0.55f)))
-                            },
+                            Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
                     )
                 }
             }

@@ -160,6 +160,9 @@
     <string name="balance_media_loudness">تعادل بلندی صدا</string>
     <string name="normalize_volume">نرمال‌سازی صدا</string>
     <string name="audio">صدا</string>
+    <string name="no_equalizer">دستگاه شما اکولایزر ندارد</string>
+    <string name="open_system_equalizer">اکولایزر سامانه را باز کنید</string>
+    <string name="use_your_system_equalizer">از اکولایزر سامانه خود استفاده کنید</string>
     <string name="streaming_data_provider_piped">تأمین‌کننده داده‌های استریم (Piped)</string>
     <string name="itag">آی‌تگ</string>
     <string name="mime_type">نوع MIME</string>
@@ -200,14 +203,14 @@
     <string name="save">نگه‌داری</string>
     <string name="saved">نگه‌داری شد</string>
     <string name="sponsor_block_intro">SponsorBlock یک سامانه جمع‌سپاری شده برای رد کردن بخش‌های
-    آزاردهنده ویدیوهای یوتیوب است.\nریزگان بیشتر: https://sponsor.ajay.app/\nدرYT Music Mod،
+    آزاردهنده ویدیوهای یوتیوب است.\nریزگان بیشتر: https://sponsor.ajay.app/\nدر YT Music Mod ،
     SponsorBlock فقط زمانی موجود است که دستگاه آنلاین باشد</string>
     <string name="skip_sponsor_part_of_video">رد کردن بخش حامی ویدیو</string>
     <string name="customactivityoncrash_error_activity_error_occurred_explanation">یک خطای غیرمنتظره
     رخ داده است. از بابت ناراحتی عذرخواهی می‌کنیم.</string>
     <string name="customactivityoncrash_error_activity_restart_app">برنامه را دوباره راه‌اندازی کنید</string>
-    <string name="help_build_lyrics_database">بهYT Music Mod کمک کنید تا پایگاه داده متن ترانه را بسازد</string>
-    <string name="help_build_lyrics_database_description">متن ترانه‌های ذخیره شده خود را به پایگاه داده متنYT Music Mod ارسال کنید</string>
+    <string name="help_build_lyrics_database">به  YT Music Mod کمک کنید تا پایگاه داده متن ترانه را بسازد</string>
+    <string name="help_build_lyrics_database_description">متن ترانه‌های ذخیره شده خود را به پایگاه داده متن  YT Music Mod ارسال کنید</string>
     <string name="customactivityoncrash_error_activity_close_app">برنامه را ببندید</string>
     <string name="customactivityoncrash_error_activity_error_details">ریزگان خطا</string>
     <string name="customactivityoncrash_error_activity_error_details_title">ریزگان خطا</string>
@@ -263,7 +266,7 @@
     <string name="password">گذرواژه</string>
     <string name="please_enter_your_email_and_password">لطفاً رایانامه و گذرواژه خود را وارد کنید</string>
     <string name="translation_language_message">کد زبان را وارد کنید (مثلاً: en) (2 حرف). اگر
-    می‌خواهید همان زبانYT Music Mod باشد، لطفاً کادر ویرایش را خالی بگذارید.</string>
+    می‌خواهید همان زبان  YT Music Mod باشد، لطفاً کادر ویرایش را خالی بگذارید.</string>
     <string name="invalid_language_code">کد زبان نامعتبر است</string>
     <string name="lyrics_provider_youtube">متن ترانه ارائه شده توسط یوتیوب</string>
     <string name="limit_player_cache">محدود کردن نهان‌گاه(Cache) پخش‌کننده</string>
@@ -281,7 +284,7 @@
     <string name="older_first">ابتدا قدیمی تر</string>
     <string name="newer_first">ابتدا جدیدتر</string>
     <string name="added_date">تاریخ افزوده شدن</string>
-    <string name="credit_app">یک برنامه موسیقی ساده که از هسته یوتیوب موزیک بهره میبرد\n\nYT Music Mod یک پروژه متن‌باز برای پخش موسیقی از یوتیوب و یوتیوب موزیک بدون آگهی و ردیابی است.YT Music Mod ویژگی‌های زیادی ارائه می‌دهد:\n\n - پخش موسیقی \n - متن ترانه همگام‌سازی شده\n - داده‌های شخصی‌سازی شده\n - و غیره… \n\nYT Music Mod همیشه رایگان و بدون آگهی است\n\nساخته شده با ❤️ از Tuan Minh Nguyen Duc (maxrave-dev)</string>
+    <string name="credit_app">یک برنامه موسیقی ساده که از هسته یوتیوب موزیک بهره میبرد\n\n YT Music Mod یک پروژه متن‌باز برای پخش موسیقی از یوتیوب و یوتیوب موزیک بدون آگهی و ردیابی است.  YT Music Mod ویژگی‌های زیادی ارائه می‌دهد:\n\n - پخش موسیقی \n - متن ترانه همگام‌سازی شده\n - داده‌های شخصی‌سازی شده\n - و غیره… \n\n YT Music Mod همیشه رایگان و بدون آگهی است\n\nساخته شده با ❤️ از Tuan Minh Nguyen Duc (maxrave-dev)</string>
     <string name="issue_tracker">ردیاب مشکلات</string>
     <string name="featured_playlists">فهرست‌های پخش ویژه</string>
     <string name="featured_inArtist">ویژه در</string>
@@ -323,7 +326,7 @@
     <string name="enable_spotify_lyrics">به‌کارگیری متن ترانه اسپاتیفای</string>
     <string name="spotify_lyrícs_info">متن‌های بیشتری بدون ترجمه</string>
     <string name="enable_canvas">به‌کارگیری بوم</string>
-    <string name="canvas_info">نمایش بوم اسپاتیفای درYT Music Mod</string>
+    <string name="canvas_info">نمایش بوم اسپاتیفای در YT Music Mod </string>
     <string name="spotify_lyrics_provider">متن ترانه ارائه شده توسط اسپاتیفای</string>
     <string name="offline_mode">حالت آفلاین</string>
     <string name="added_to_youtube_liked">به فهرست پسندیده‌های یوتیوب افزوده شد</string>
@@ -352,8 +355,6 @@
     <string name="repeat_off">تکرار خاموش</string>
     <string name="youtube_transcript">متن ویدیو یوتیوب</string>
     <string name="user_interface">رابط کاربری</string>
-    <string name="translucent_bottom_navigation_bar">نوار ناوبری پایینی نیمه شفاف</string>
-    <string name="you_can_see_the_content_below_the_bottom_bar">شما می‌توانید محتوا را زیر نوار پایینی ببینید</string>
     <string name="donation">اگر از کار من خوشتان می‌آید، یک قهوه به من بدهید</string>
     <string name="relax">آرامش</string>
     <string name="sleep">خواب</string>
@@ -372,7 +373,7 @@
     <string name="loading">درحال بارگذاری</string>
     <string name="updating">در حال بروز رسانی</string>
     <string name="go_to_log_in_page">به صفحه ورود به سیستم بروید</string>
-    <string name="log_in_warning">YouTube Music اکنون از شما می خواهد که برای پخش موسیقی وارد شوید، Piped Instance گاهی اوقات نیز نمی تواند کار کند. برای کسب تجربه بهتر باYT Music Mod باید وارد YouTube شوید.</string>
+    <string name="log_in_warning">YouTube Music اکنون از شما می خواهد که برای پخش موسیقی وارد شوید، Piped Instance گاهی اوقات نیز نمی تواند کار کند. برای کسب تجربه بهتر با  YT Music Mod باید وارد YouTube شوید.</string>
     <string name="spotify_canvas_cache">کش Spotify Canvas</string>
     <string name="clear_canvas_cache">پاکسازی کش canvas</string>
     <string name="proxy">پروکسی</string>
@@ -407,8 +408,8 @@
     <string name="other_version">نسخه دیگر</string>
     <string name="later">بعدا</string>
     <string name="give_a_star">ستاره بدید</string>
-    <string name="enjoying_simpmusic">ازYT Music Mod لذت می‌بری</string>
-    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">اگر از استفاده ازYT Music Mod لذت می‌برید، بهYT Music Mod در GitHub ستاره دهید یا نظر خود را درباره آن بنویسید</string>
+    <string name="enjoying_simpmusic">از  YT Music Mod لذت می‌بری</string>
+    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">اگر از استفاده از  YT Music Mod لذت می‌برید، به  YT Music Mod در GitHub ستاره دهید یا نظر خود را درباره آن بنویسید</string>
     <string name="if_you_love_my_work_consider">"اگر از کار من خوشتان می‌آید، لطفاً "</string>
     <string name="buying_me_a_coffee">یک قهوه برایم بخرید.</string>
     <string name="fade_audio_effect">افکت محو صدا</string>
@@ -453,8 +454,8 @@
     <string name="contributor_name">اسم مشارکت کننده</string>
     <string name="contributor_email">ایمیل مشارکت کننده</string>
     <string name="anonymous">ناشناس</string>
-    <string name="simpmusic_lyrics">متن ترانه‌هایYT Music Mod</string>
-    <string name="lyrics_provider_simpmusic">متن ترانه‌ها ارائه شده توسط سرویس متن ترانه‌هایYT Music Mod</string>
+    <string name="simpmusic_lyrics">متن ترانه‌های YT Music Mod </string>
+    <string name="lyrics_provider_simpmusic">متن ترانه‌ها ارائه شده توسط سرویس متن ترانه‌های YT Music Mod </string>
     <string name="backup_in_progress">پشتیبان گیری در حال انجام است</string>
     <!-- Listen Together -->
 </resources>

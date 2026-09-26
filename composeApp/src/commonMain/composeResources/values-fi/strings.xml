@@ -151,6 +151,9 @@
     <string name="balance_media_loudness">Tasapainota äänenvoimakkuus</string>
     <string name="normalize_volume">Normalisoi äänenvoimakkuus</string>
     <string name="audio">Ääni</string>
+    <string name="no_equalizer">Laitteessasi ei ole taajuuskorjainta</string>
+    <string name="open_system_equalizer">Avaa järjestelmän taajuuskorjain</string>
+    <string name="use_your_system_equalizer">Käytä järjestelmän taajuuskorjainta</string>
     <string name="streaming_data_provider_piped">Suoratoiston tarjoaja (Piped)</string>
     <string name="itag">Itag</string>
     <string name="mime_type">Mime-tyyppi</string>
@@ -186,7 +189,7 @@
     <string name="what_segments_will_be_skipped">Valise ohitettavat segmentit</string>
     <string name="save">Tallenna</string>
     <string name="saved">Tallennettu</string>
-    <string name="sponsor_block_intro">SponsorBlock on joukkoistettu järjestelmä YouTube-videoiden ärsyttävien osien ohittamiseen.\nLisätietoja: https://sponsor.ajay.app/\nYT Music Modissa SponsorBlock on käytettävissä vain, kun laite on online-tilassa</string>
+    <string name="sponsor_block_intro">SponsorBlock on joukkoistettu järjestelmä YouTube-videoiden ärsyttävien osien ohittamiseen.\nLisätietoja: https://sponsor.ajay.app/\nSimpMusicissa SponsorBlock on käytettävissä vain, kun laite on online-tilassa</string>
     <string name="skip_sponsor_part_of_video">Ohita videon sponsoriosa</string>
     <string name="customactivityoncrash_error_activity_error_occurred_explanation">Tapahtui odottamaton virhe. Pahoittelemme.</string>
     <string name="customactivityoncrash_error_activity_restart_app">Käynnistä sovellus uudelleen</string>
@@ -239,7 +242,7 @@
     <string name="email">Sähköposti</string>
     <string name="password">Salasana</string>
     <string name="please_enter_your_email_and_password">Syötä sähköpostiosoitteesi ja salasanasi</string>
-    <string name="translation_language_message">Kirjoita kielikoodi (esim: en) (2 kirjainta). Jos haluat asettaa kielen samaksi kuinYT Music Modissa, jätä kenttä tyhjäksi.</string>
+    <string name="translation_language_message">Kirjoita kielikoodi (esim: en) (2 kirjainta). Jos haluat asettaa kielen samaksi kuin YT Music Mod issa, jätä kenttä tyhjäksi.</string>
     <string name="invalid_language_code">Virheellinen kielikoodi</string>
     <string name="lyrics_provider_youtube">YouTuben tarjoamat sanoitukset</string>
     <string name="limit_player_cache">Rajoita soittimen välimuistia</string>
@@ -254,7 +257,7 @@
     <string name="reload">Lataa uudelleen</string>
     <string name="newer_first">Uusimmat ensin</string>
     <string name="added_date">Lisäyspäivämäärä</string>
-    <string name="credit_app">Yksinkertainen musiikkisovellus, joka käyttää YouTube Musicin taustajärjestelmää \n\nYT Music Mod on avoimen lähdekoodin projekti musiikin suoratoistoon YouTubesta ja YouTube Musicista ilman mainoksia ja seurantaa.YT Music Mod tarjoaa monia ominaisuuksia:\n\n - Musiikin suoratoisto \n - Synkronoidut sanoitukset\n - Tietojen mukauttaminen\n - jne… \n\nYT Music Mod on aina ilmainen ja vailla mainoksia\n\nTehty ❤️:llä, Tuan Minh Nguyen Duc (maxrave-dev)</string>
+    <string name="credit_app">Yksinkertainen musiikkisovellus, joka käyttää YouTube Musicin taustajärjestelmää \n\n YT Music Mod on avoimen lähdekoodin projekti musiikin suoratoistoon YouTubesta ja YouTube Musicista ilman mainoksia ja seurantaa.  YT Music Mod tarjoaa monia ominaisuuksia:\n\n - Musiikin suoratoisto \n - Synkronoidut sanoitukset\n - Tietojen mukauttaminen\n - jne… \n\n YT Music Mod on aina ilmainen ja vailla mainoksia\n\nTehty ❤️:llä, Tuan Minh Nguyen Duc (maxrave-dev)</string>
     <string name="issue_tracker">Tikettijärjestelmä</string>
     <string name="featured_playlists">Suositellut soittolistat</string>
     <string name="featured_inArtist">Mukana näissä</string>

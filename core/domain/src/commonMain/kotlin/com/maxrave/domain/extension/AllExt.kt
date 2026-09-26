@@ -69,14 +69,7 @@ fun GenericMediaItem.toSongEntity(): SongEntity =
     )
 
 fun SongEntity.toGenericMediaItem(): GenericMediaItem {
-    val thumb = if (this.thumbnails.isNullOrBlank()) {
-        "https://i.ytimg.com/vi/${this.videoId}/hqdefault.jpg"
-    } else {
-        this.thumbnails!!
-    }
-
-    val isSong = (thumb.contains("w544") && thumb.contains("h544"))
-
+    val isSong = (this.thumbnails?.contains("w544") == true && this.thumbnails.contains("h544"))
     return GenericMediaItem(
         mediaId = this.videoId,
         uri = this.videoId,
@@ -85,7 +78,7 @@ fun SongEntity.toGenericMediaItem(): GenericMediaItem {
                 title = this.title,
                 artist = this.artistName?.connectArtists(),
                 albumTitle = this.albumName,
-                artworkUri = thumb,
+                artworkUri = this.thumbnails,
                 description = if (isSong) MERGING_DATA_TYPE.SONG else MERGING_DATA_TYPE.VIDEO,
             ),
         customCacheKey = this.videoId,
@@ -94,22 +87,19 @@ fun SongEntity.toGenericMediaItem(): GenericMediaItem {
 
 fun Track.toGenericMediaItem(): GenericMediaItem {
     var thumbUrl =
-        this.thumbnails?.lastOrNull()?.url
-            ?: "https://i.ytimg.com/vi/${this.videoId}/hqdefault.jpg"
-
+        this.thumbnails?.last()?.url
+            ?: "http://i.ytimg.com/vi/${this.videoId}/maxresdefault.jpg"
     if (thumbUrl.contains("w120")) {
         thumbUrl = Regex("([wh])120").replace(thumbUrl, "$1544")
     }
-
     val artistName: String = this.artists.toListName().connectArtists()
     val isSong =
         (
-            this.thumbnails?.lastOrNull()?.height != 0 &&
-                this.thumbnails?.lastOrNull()?.height == this.thumbnails?.lastOrNull()?.width &&
-                this.thumbnails?.lastOrNull()?.height != null
-            ) &&
+            this.thumbnails?.last()?.height != 0 &&
+                this.thumbnails?.last()?.height == this.thumbnails?.last()?.width &&
+                this.thumbnails?.last()?.height != null
+        ) &&
             (!thumbUrl.contains("hq720") && !thumbUrl.contains("maxresdefault"))
-
     return GenericMediaItem(
         mediaId = this.videoId,
         uri = this.videoId,

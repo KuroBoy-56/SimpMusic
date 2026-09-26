@@ -20,8 +20,19 @@
     <!-- Añadido por la actualización de Android Auto -->
     <uses-permission android:name="androidx.car.app.MEDIA_TEMPLATES" />
 
+    <!-- Login sync: scanning the QR shown by  YT Music Mod Desktop. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Login sync reaches the computer by its LAN address. Only enforced for apps targeting
+         Android 17 (API 37) and up, where it is a runtime permission; LoginSync.android.kt asks
+         for it then. Declared now so a targetSdk bump cannot make the connection silently time out. -->
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
+
     <uses-feature
         android:name="android.hardware.type.automotive"
+        android:required="false" />
+    <!-- Requesting CAMERA implies a required camera, which would hide the app from TVs and cars. -->
+    <uses-feature
+        android:name="android.hardware.camera"
         android:required="false" />
     <uses-feature
         android:name="android.hardware.wifi"
@@ -213,7 +224,7 @@
         <service
             android:name="com.maxrave.media3.service.SimpleMediaService"
             android:exported="true"
-            android:foregroundServiceType="mediaPlayback|dataSync"
+            android:foregroundServiceType="mediaPlayback"
             android:stopWithTask="false"
             tools:ignore="ExportedService">
             <intent-filter>
@@ -265,7 +276,7 @@
             android:name="io.sentry.auto-init"
             android:value="false" />
 
-        <!-- LOS 3 WIDGETS NUEVOS DEL DESARROLLADOR ORIGINAL -->
+        <!-- LOS 3 WIDGETS NUEVOS DEL DESARROLLADOR ORIGINAL INTEGRADOS -->
         <receiver android:name=".ui.widget.TurntableWidgetReceiver"
             android:label="@string/widget_turntable_label"
             android:exported="true">

@@ -4,6 +4,8 @@ pluginManagement {
         mavenCentral()
         gradlePluginPortal()
         maven { setUrl("https://jitpack.io") }
+        // oss.sonatype.org (legacy OSSRH) removed — Sonatype shut it down; its flaky
+        // 504s disabled the whole repo set and blocked resolution fallbacks.
         maven("https://jogamp.org/deployment/maven")
     }
 }
@@ -14,7 +16,6 @@ dependencyResolutionManagement {
         mavenCentral()
         gradlePluginPortal()
         maven { url = uri("https://jitpack.io") }
-        maven("https://central.sonatype.com/repository/maven-snapshots/")
         maven("https://jogamp.org/deployment/maven")
         maven(url = "https://raw.githubusercontent.com/bravepipeproject/maven-repo/master/repository")
     }
@@ -24,6 +25,11 @@ plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 
+// Core modules live in the `core` git submodule INSIDE this repo.
+// We intentionally resolve ONLY the in-repo submodule and no longer probe a
+// sibling `../core` outside SimpMusic: another project (FPT Play `core`) shares
+// the same folder name one level up, and the old co-development lookup bound to
+// it by mistake, breaking configuration with ":common ... does not exist".
 val coreDir = File(rootDir, "core")
 val serviceDir = File(rootDir, "core/service")
 val mediaDir = File(rootDir, "core/media")
@@ -50,32 +56,11 @@ include(
     ":crashlytics-empty",
     ":cast",
     ":cast-empty",
-    ":kizzy",
-    ":listenTogether",
-    ":androidApp",
-    ":composeApp",
-    ":desktopApp",
-    ":common",
-    ":data",
-    ":domain",
-    ":ktorExt",
-    ":kotlinYtmusicScraper",
-    ":spotify",
-    ":aiService",
-    ":autoEqService",
-    ":lyricsService",
-    ":media-jvm",
-    ":media-jvm-ui",
-    ":media3",
-    ":media3-ui",
-    ":crashlytics",
-    ":crashlytics-empty",
-    ":cast",
-    ":cast-empty",
     ":lastfm",
     ":lastfm-empty",
     ":kizzy",
     ":listenTogether",
+    ":loginSync",
 )
 
 // core modules
@@ -92,6 +77,7 @@ project(":kotlinYtmusicScraper").projectDir = File(serviceDir, "kotlinYtmusicScr
 project(":spotify").projectDir = File(serviceDir, "spotify")
 project(":kizzy").projectDir = File(serviceDir, "kizzy")
 project(":listenTogether").projectDir = File(serviceDir, "listenTogether")
+project(":loginSync").projectDir = File(serviceDir, "loginSync")
 
 // media modules
 project(":media-jvm").projectDir = File(mediaDir, "media-jvm")

@@ -23,6 +23,7 @@ import com.maxrave.domain.repository.PodcastRepository
 import com.maxrave.domain.repository.SongRepository
 import com.maxrave.domain.utils.LocalResource
 import com.maxrave.domain.utils.Resource
+import com.maxrave.domain.utils.isRadioPlaylistId
 import com.maxrave.simpmusic.ui.screen.home.analytics.monthFullNameResource
 import com.maxrave.simpmusic.ui.screen.library.LibraryDynamicPlaylistType
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
@@ -56,7 +57,6 @@ import simpmusic.composeapp.generated.resources.youtube_liked_music
 
 class LibraryViewModel(
     private val dataStoreManager: DataStoreManager,
-    // --- ACTUALIZACIÓN LÓGICA --- Inyectamos AnalyticsRepository
     private val analyticsRepository: AnalyticsRepository,
     private val songRepository: SongRepository,
     private val commonRepository: CommonRepository,
@@ -103,8 +103,15 @@ class LibraryViewModel(
         MutableStateFlow(LocalResource.Loading())
     val listCanvasSong: StateFlow<LocalResource<List<SongEntity>>> get() = _listCanvasSong.asStateFlow()
 
-    // --- ACTUALIZACIÓN LÓGICA ---
-    // Manejo de los estados para los resúmenes mensuales
+    /**
+     * The months the Wrapped tab offers a recap for, newest first.
+     *
+     * A [MonthlyRecapItem] rather than the destination's own
+     * [LibraryDynamicPlaylistType.MonthlyRecap]: the tab draws these through the shared
+     * `GridLibraryPlaylist`, which renders only [PlaylistType]s, and a tile needs a title and a
+     * cover on top of the year and month the destination carries. The destination is rebuilt from
+     * the year and month when a tile is tapped.
+     */
     private val _monthlyRecaps: MutableStateFlow<LocalResource<List<MonthlyRecapItem>>> =
         MutableStateFlow(LocalResource.Loading())
     val monthlyRecaps: StateFlow<LocalResource<List<MonthlyRecapItem>>> get() = _monthlyRecaps.asStateFlow()
@@ -115,8 +122,12 @@ class LibraryViewModel(
     @OptIn(ExperimentalCoroutinesApi::class)
     val youtubeLoggedIn = dataStoreManager.loggedIn.mapLatest { it == DataStoreManager.TRUE }
 
-    // --- ACTUALIZACIÓN LÓGICA ---
-    // Determina si el chip de Wrapped/Recaps se debe mostrar basándose en si el rastreo está activado
+    /**
+     * Whether the Wrapped chip has anything behind it.
+     *
+     * The same setting the Analytics tab follows, read the same way — Wrapped and the recaps are
+     * built entirely from `playback_event`, which local tracking is what fills.
+     */
     @OptIn(ExperimentalCoroutinesApi::class)
     val localTrackingEnabled = dataStoreManager.localTrackingEnabled.mapLatest { it == DataStoreManager.TRUE }
 
@@ -155,7 +166,7 @@ class LibraryViewModel(
                 temp.addAll(data)
                 temp
                     .find {
-                        it is PlaylistEntity && (it.id.contains("RDEM") || it.id.contains("RDAMVM"))
+                        it is PlaylistEntity && it.id.isRadioPlaylistId()
                     }.let {
                         temp.remove(it)
                     }
@@ -260,6 +271,7 @@ class LibraryViewModel(
         _yourLocalPlaylist.value = LocalResource.Loading()
         viewModelScope.launch {
             localPlaylistRepository.getAllLocalPlaylists().collect { values ->
+//                    _listLocalPlaylist.postValue(values)
                 _yourLocalPlaylist.value = LocalResource.Success(values.reversed())
             }
         }
@@ -273,8 +285,21 @@ class LibraryViewModel(
         }
     }
 
-    // --- ACTUALIZACIÓN LÓGICA ---
-    // Función para obtener las tarjetas de los recaps mensuales (Wrapped) de los últimos 12 meses
+    /**
+     * Which of the last twelve months the user actually listened in, and what each tile shows.
+     *
+     * A month with no plays is left out rather than shown empty: a "Recap March" that opens onto
+     * nothing is worse than no row at all. Twelve is a cap, not a quota — a new install shows one
+     * row, or none.
+     *
+     * The count comes first and gates everything after it: twelve `COUNT`s over an indexed
+     * timestamp range are cheap, so the months with nothing in them are dropped before anything
+     * asks them for a ranking. Only the survivors pay for a cover.
+     *
+     * Title and cover are resolved here rather than in the tile, which cannot suspend: the title
+     * needs a month name out of a string resource with a format argument, and the cover needs a
+     * ranking query followed by a song lookup.
+     */
     fun getMonthlyRecaps() {
         _monthlyRecaps.value = LocalResource.Loading()
         viewModelScope.launch {
@@ -304,8 +329,14 @@ class LibraryViewModel(
         }
     }
 
-    // --- ACTUALIZACIÓN LÓGICA ---
-    // Resolución del título dinámico (Ej. "Recap January" o "Recap January 2025")
+    /**
+     * "Recap January", or "Recap January 2025" once the year stops being obvious.
+     *
+     * The same rule and the same two format strings as the header the tile opens — see
+     * [LibraryDynamicPlaylistType.title]. Fully qualified because [BaseViewModel] has a `getString`
+     * of its own that takes no format argument and wraps `runBlocking`, which has no business
+     * running inside a coroutine that is already suspended here.
+     */
     private suspend fun recapTitle(
         year: Int,
         month: Month,
@@ -361,6 +392,7 @@ class LibraryViewModel(
     }
 
     companion object {
+        /** How far back the Wrapped tab offers recaps, counting the current month as the first. */
         private const val MONTHS_OF_RECAP = 12
     }
 }

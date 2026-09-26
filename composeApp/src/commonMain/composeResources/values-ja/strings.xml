@@ -161,6 +161,9 @@
     <string name="balance_media_loudness">メディアの音の大きさの均衡をとる</string>
     <string name="normalize_volume">音量を均一化</string>
     <string name="audio">音声</string>
+    <string name="no_equalizer">端末にイコライザがありません</string>
+    <string name="open_system_equalizer">システムのイコライザを開く</string>
+    <string name="use_your_system_equalizer">システムのイコライザを使う</string>
     <string name="streaming_data_provider_piped">ストリーミングデータの提供元 (Piped)</string>
     <string name="itag">iタグ</string>
     <string name="mime_type">MIME 種別</string>
@@ -199,11 +202,11 @@
     <string name="what_segments_will_be_skipped">スキップしたいシーンを選択</string>
     <string name="save">保存</string>
     <string name="saved">保存しました</string>
-    <string name="sponsor_block_intro">SponsorBlock は、YouTube 動画の余分なシーンをスキップするための、クラウドソースのシステムです。\n詳細: https://sponsor.ajay.app/\nYT Music Mod では、SponsorBlock は端末がネットに接続中の場合にのみ利用できます。</string>
+    <string name="sponsor_block_intro">SponsorBlock は、YouTube 動画の余分なシーンをスキップするための、クラウドソースのシステムです。\n詳細: https://sponsor.ajay.app/\n YT Music Mod では、SponsorBlock は端末がネットに接続中の場合にのみ利用できます。</string>
     <string name="skip_sponsor_part_of_video">動画の協賛シーンなどをスキップします</string>
     <string name="customactivityoncrash_error_activity_error_occurred_explanation">予期しないエラーが発生しました。ご迷惑をおかけして申し訳ありません。</string>
     <string name="customactivityoncrash_error_activity_restart_app">アプリを再起動</string>
-    <string name="help_build_lyrics_database">YT Music Modの歌詞データベースの構築を手伝う</string>
+    <string name="help_build_lyrics_database">YT Music Mod の歌詞データベースの構築を手伝う</string>
     <string name="help_build_lyrics_database_description">保存した歌詞をSimpMusicの歌詞データベースに送信します</string>
     <string name="customactivityoncrash_error_activity_close_app">アプリを終了</string>
     <string name="customactivityoncrash_error_activity_error_details">エラーの詳細</string>
@@ -256,7 +259,7 @@
     <string name="email">メールアドレス</string>
     <string name="password">パスワード</string>
     <string name="please_enter_your_email_and_password">メールアドレスとパスワードを入力してください。</string>
-    <string name="translation_language_message">言語コードを入力してください (2文字、例: en)。SimpMusic の言語と同じに設定にするには、編集欄を空にしてください。</string>
+    <string name="translation_language_message">言語コードを入力してください (2文字、例: en)。 YT Music Mod の言語と同じに設定にするには、編集欄を空にしてください。</string>
     <string name="invalid_language_code">無効な言語コードです</string>
     <string name="lyrics_provider_youtube">歌詞の提供元 YouTube</string>
     <string name="limit_player_cache">プレイヤーのキャッシュを制限</string>
@@ -274,7 +277,7 @@
     <string name="older_first">古い順</string>
     <string name="newer_first">新しい順</string>
     <string name="added_date">追加日</string>
-    <string name="credit_app">バックエンドに YouTube ミュージックを使用するシンプルな音楽アプリ \n\nYT Music Mod は、広告や追跡なしで YouTube や YouTube ミュージックから音楽をストリーミングするオープンソースのプロジェクトです。SimpMusic の豊富な機能:\n\n - 音楽のストリーミング \n - 歌詞の同期\n - あなたに最適化されたデータ\n - など... \n\nYT Music Mod は常に無料、そして広告もなしです。\n\nTuan Minh Nguyen Duc (maxrave) が❤️を込めて開発しました</string>
+    <string name="credit_app">バックエンドに YouTube ミュージックを使用するシンプルな音楽アプリ \n\n YT Music Mod は、広告や追跡なしで YouTube や YouTube ミュージックから音楽をストリーミングするオープンソースのプロジェクトです。 YT Music Mod の豊富な機能:\n\n - 音楽のストリーミング \n - 歌詞の同期\n - あなたに最適化されたデータ\n - など... \n\n YT Music Mod は常に無料、そして広告もなしです。\n\nTuan Minh Nguyen Duc (maxrave) が❤️を込めて開発しました</string>
     <string name="issue_tracker">既知の問題一覧</string>
     <string name="featured_playlists">注目の再生リスト</string>
     <string name="featured_inArtist">おすすめ</string>
@@ -341,8 +344,6 @@
     <string name="repeat_off">リピートなし</string>
     <string name="youtube_transcript">YouTube の文字起こし</string>
     <string name="user_interface">外観</string>
-    <string name="translucent_bottom_navigation_bar">下部のナビバーを半透明に</string>
-    <string name="you_can_see_the_content_below_the_bottom_bar">下部のバーの裏のコンテンツを表示</string>
     <string name="donation">このアプリが気に入れば、私にコーヒーおごってください</string>
     <string name="relax">リラックス</string>
     <string name="sleep">睡眠</string>
@@ -396,8 +397,8 @@
     <string name="other_version">他のバージョン</string>
     <string name="later">また今度</string>
     <string name="give_a_star">星マークを押す</string>
-    <string name="enjoying_simpmusic">YT Music Modを楽しんでください</string>
-    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">YT Music Modで楽しんでいたら、GitHubで星マークを押すか、ここにレビューを投稿してください:</string>
+    <string name="enjoying_simpmusic">YT Music Mod を楽しんでください</string>
+    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">YT Music Mod で楽しんでいたら、GitHubで星マークを押すか、ここにレビューを投稿してください:</string>
     <string name="if_you_love_my_work_consider">"私のアプリを気に入ったら、"</string>
     <string name="buying_me_a_coffee">コーヒーを一杯ご馳走してください。</string>
     <string name="fade_audio_effect">フェードの音声エフェクト</string>
@@ -453,7 +454,7 @@
     <string name="backup_downloaded">ダウンロードしたデータをバックアップする</string>
     <string name="backup_downloaded_description">ダウンロードしたすべての曲のデータをバックアップします</string>
     <string name="auto_backup">自動バックアップ</string>
-    <string name="auto_backup_description">Downloads/SimpMusic フォルダにデータを自動的にバックアップします</string>
+    <string name="auto_backup_description">Downloads/ YT Music Mod フォルダにデータを自動的にバックアップします</string>
     <string name="no_playlist_found">ローカルプレイリストが見つかりませんでした。最初に作成してください</string>
     <string name="list_all_cookies_of_this_page">このページのすべてのクッキーを一覧表示</string>
     <string name="copied_to_clipboard">クリップボードにコピーしました</string>
@@ -473,8 +474,6 @@
     <string name="enable_rich_presence">Rich Presence を有効にする</string>
     <string name="rich_presence_info">Discordのプロフィールにメディアセッション情報を表示します</string>
     <string name="youtube_liked_music">YouTubeで高く評価した音楽</string>
-    <string name="keep_service_alive">サービスを有効したままにする</string>
-    <string name="keep_service_alive_description">システムによって終了されるのを避けるために音楽プレイヤーのサービスを有効したままにします</string>
     <string name="keep_your_youtube_playlist_offline">オフライン時にYouTubeプレイリストを表示する</string>
     <string name="keep_your_youtube_playlist_offline_description">オフライン時にYouTubeプレイリストをローカルに保存して表示します</string>
     <string name="combine_local_and_youtube_liked_songs">ログイン時にお気に入りをYouTubeの高評価に置き換える</string>

@@ -2,6 +2,7 @@ package com.maxrave.simpmusic.viewModel
 
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.viewModelScope
+import com.maxrave.common.Config
 import com.maxrave.common.Config.ALBUM_CLICK
 import com.maxrave.common.Config.DOWNLOAD_CACHE
 import com.maxrave.common.Config.PLAYLIST_CLICK
@@ -71,6 +72,7 @@ import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -152,6 +154,12 @@ class SharedViewModel(
     private var _format: MutableStateFlow<NewFormatEntity?> = MutableStateFlow(null)
     val format: SharedFlow<NewFormatEntity?> = _format.asSharedFlow()
 
+    /**
+     * Which extractor and cipher decoder produced the current track's URLs, shown in the info sheet.
+     *
+     * Read alongside the format rather than stored with it: the format row is cached and reused,
+     * while this describes the extraction that happened in this run of the app.
+     */
     private val _extractSource: MutableStateFlow<String?> = MutableStateFlow(null)
     val extractSource: StateFlow<String?> = _extractSource.asStateFlow()
 
@@ -165,6 +173,19 @@ class SharedViewModel(
 
     private val _showNotificationPermissionDialog = MutableStateFlow(false)
     val showNotificationPermissionDialog: StateFlow<Boolean> = _showNotificationPermissionDialog
+
+    // One-shot: the Desktop capsule asks the Now Playing panel, which hosts the page, to open
+    // full-screen lyrics. The panel consumes it once shown.
+    private val _fullscreenLyricsRequest = MutableStateFlow(false)
+    val fullscreenLyricsRequest: StateFlow<Boolean> = _fullscreenLyricsRequest
+
+    fun requestFullscreenLyrics() {
+        _fullscreenLyricsRequest.value = true
+    }
+
+    fun consumeFullscreenLyricsRequest() {
+        _fullscreenLyricsRequest.value = false
+    }
 
     private var getFormatFlowJob: Job? = null
 
@@ -216,6 +237,16 @@ class SharedViewModel(
     private var _likeStatus = MutableStateFlow<Boolean>(false)
     val likeStatus: StateFlow<Boolean> = _likeStatus
 
+    /**
+     * Which body of the Apple Music player was open last — held by ENUM NAME so this class stays
+     * ignorant of the UI enum, which is internal to the player package.
+     *
+     * It cannot live in the composable: that player is inside a ModalBottomSheet, so dismissing
+     * the sheet disposes the whole tree and takes any rememberSaveable with it — the tab snapped
+     * back to the artwork every single time it was reopened. This class is a Koin `single`, so it
+     * outlives the sheet while still resetting on app restart, which is the right lifetime for
+     * "where I was a moment ago".
+     */
     private val _lastPlayerViewTab = MutableStateFlow<String?>(null)
     val lastPlayerViewTab: StateFlow<String?> = _lastPlayerViewTab
 
@@ -313,6 +344,23 @@ class SharedViewModel(
                     canvasJob?.cancel()
                     _nowPlayingState.value = state
 
+                    // Seed the timeline from METADATA as soon as the track is known, instead of
+                    // waiting for the player. SimpleMediaState.Ready carries a duration and only
+                    // fires once the container is parsed; after a queue restore nothing plays, the
+                    // position poll never starts (it runs only while isPlaying), and so nothing
+                    // ever reports a length — which is why a restored queue showed no times at all.
+                    // SongEntity has known the length since the song was first seen.
+                    //
+                    // Written on EVERY track change, not just when missing: leaving the old value
+                    // in place would show the previous track's length over the new one.
+                    // Order matters: metadata first because it is available immediately, then the
+                    // player's own duration, and only -1 ("not known yet") when neither has one.
+                    //
+                    // Writing -1 whenever metadata is missing — which this did at first — makes
+                    // every radio track and every first-time track flash NA:NA on the clock until
+                    // the container is parsed, because those rows have no durationSeconds stored.
+                    // Asking the player before giving up covers exactly that case: on a normal
+                    // track change it usually already knows.
                     val metadataDurationMs = (state.songEntity?.durationSeconds ?: 0).toLong() * 1000L
                     val seededTotal =
                         metadataDurationMs.takeIf { it > 0L }
@@ -388,6 +436,13 @@ class SharedViewModel(
                             }
 
                             SimpleMediaState.Ended -> {
+                                // Park at the end of the track rather than at -1. The only formatter
+                                // for these fields renders any negative as "NA:NA", and nothing here
+                                // is guaranteed to follow: at the end of the queue the player simply
+                                // stays ended, so a -1 written here stays on screen. Worse, the
+                                // Progress branch below ignores negative values and the Loading
+                                // branch restores `total` without touching `current`, which is how
+                                // the player ends up showing a correct duration next to "NA:NA".
                                 _timeline.update {
                                     it.copy(
                                         current = it.total.coerceAtLeast(0L),
@@ -417,6 +472,15 @@ class SharedViewModel(
                                         }
                                     }
                                 }
+                                // When progress hasn't changed (same value polled again) or is negative,
+                                // don't modify loading state. The loading flag is already managed by
+                                // Buffering/Ready/Loading state events. Setting loading=true here would
+                                // cause rapid flickering whenever the same value arrives twice,
+                                // which it can: the handler's ticker and the adapter's position
+                                // poll both run at 50ms and are not in step, so a poll is sometimes
+                                // read twice. A repeat is not evidence of a stall, and the loading
+                                // flag belongs to the Buffering/Ready events rather than to a
+                                // guess made here.
                             }
 
                             is SimpleMediaState.Loading -> {
@@ -434,6 +498,12 @@ class SharedViewModel(
                                     it.copy(
                                         current = mediaPlayerHandler.getProgress(),
                                         loading = false,
+                                        // The player's own duration wins, but ONLY when it has one.
+                                        // ExoPlayer answers C.TIME_UNSET (a large negative, not
+                                        // null) until it has parsed the container, and Ready is
+                                        // also published from onIsLoadingChanged — which fires
+                                        // before STATE_READY. Writing that would throw away the
+                                        // metadata duration seeded on the track change above.
                                         total = mediaState.duration.takeIf { d -> d > 0L } ?: it.total,
                                     )
                                 }
@@ -447,6 +517,7 @@ class SharedViewModel(
                     mediaPlayerHandler.controlState.collectLatest {
                         Logger.w(tag, "ControlState is $it")
                         _controllerState.value = it
+                        // Propagate crossfade state to timeline so UI can react
                         _timeline.update { timeline ->
                             timeline.copy(isCrossfading = it.isCrossfading)
                         }
@@ -471,6 +542,7 @@ class SharedViewModel(
             sleepTimerJob.join()
             playlistNameJob.join()
         }
+        // Reset downloading songs & playlists to not downloaded
         checkAllDownloadingSongs()
         checkAllDownloadingPlaylists()
         checkAllDownloadingLocalPlaylists()
@@ -513,6 +585,16 @@ class SharedViewModel(
         _intent.value = intent
     }
 
+    /**
+     * Finishes a Last.fm login from the `wordbyword://lastfm-auth` callback.
+     *
+     * It lands here, and not on the login screen, because the callback arrives at the app rather
+     * than at any one screen: the user left for their browser, and the screen they left from may
+     * not even exist any more if the process was killed. Routing the token onwards through
+     * navigation would push a second copy of the login screen on top of the one already open.
+     *
+     * The screen learns it succeeded by watching the stored session key, not by being told.
+     */
     fun completeLastfmLogin(token: String) {
         if (token.isEmpty()) return
         viewModelScope.launch {
@@ -556,7 +638,12 @@ class SharedViewModel(
         duration: Int,
     ) {
         Logger.w(tag, "Start getCanvas: $videoId $duration")
+//        canvasJob?.cancel()
         viewModelScope.launch {
+            // Both sources fill the same slot, so they are tried in order rather than raced:
+            // animated artwork first, and a Spotify canvas only if that found nothing AND the user
+            // has that switch on too. Neither switch touches the other — a track with no animated
+            // artwork still gets its canvas, and turning Spotify off still means no canvas at all.
             val sources =
                 buildList {
                     if (dataStoreManager.amAnimatedArtwork.first() == TRUE) {
@@ -585,7 +672,9 @@ class SharedViewModel(
                                     ),
                             )
                         }
+                        // Save canvas video url
                         if (data.isVideo) lyricsCanvasRepository.updateCanvasUrl(videoId, data.canvasUrl)
+                        // Save canvas thumb url
                         data.canvasThumbUrl?.let { lyricsCanvasRepository.updateCanvasThumbUrl(videoId, it) }
                     } else {
                         log("Get canvas miss from a source: ${response.message}", LogLevel.WARN)
@@ -647,7 +736,13 @@ class SharedViewModel(
                     when (data) {
                         is AlbumEntity -> {
                             val tracks = data.tracks ?: emptyList()
-                            if (tracks.isEmpty() || (!downloadedCacheKeys.containsAll(tracks))) {
+                            if (tracks.isEmpty() ||
+                                (
+                                    !downloadedCacheKeys.containsAll(
+                                        tracks,
+                                    )
+                                    )
+                            ) {
                                 albumRepository.updateAlbumDownloadState(
                                     data.browseId,
                                     DownloadState.STATE_NOT_DOWNLOADED,
@@ -657,7 +752,13 @@ class SharedViewModel(
 
                         is PlaylistEntity -> {
                             val tracks = data.tracks ?: emptyList()
-                            if (tracks.isEmpty() || (!downloadedCacheKeys.containsAll(tracks))) {
+                            if (tracks.isEmpty() ||
+                                (
+                                    !downloadedCacheKeys.containsAll(
+                                        tracks,
+                                    )
+                                    )
+                            ) {
                                 playlistRepository.updatePlaylistDownloadState(
                                     data.id,
                                     DownloadState.STATE_NOT_DOWNLOADED,
@@ -667,7 +768,13 @@ class SharedViewModel(
 
                         is LocalPlaylistEntity -> {
                             val tracks = data.tracks ?: emptyList()
-                            if (tracks.isEmpty() || (!downloadedCacheKeys.containsAll(tracks))) {
+                            if (tracks.isEmpty() ||
+                                (
+                                    !downloadedCacheKeys.containsAll(
+                                        tracks,
+                                    )
+                                    )
+                            ) {
                                 localPlaylistRepository.updateLocalPlaylistDownloadState(
                                     DownloadState.STATE_NOT_DOWNLOADED,
                                     data.id,
@@ -815,22 +922,67 @@ class SharedViewModel(
     fun onUIEvent(uiEvent: UIEvent) =
         viewModelScope.launch {
             when (uiEvent) {
-                UIEvent.Backward -> mediaPlayerHandler.onPlayerEvent(PlayerEvent.Backward)
-                UIEvent.Forward -> mediaPlayerHandler.onPlayerEvent(PlayerEvent.Forward)
-                UIEvent.PlayPause -> mediaPlayerHandler.onPlayerEvent(PlayerEvent.PlayPause)
-                UIEvent.Next -> mediaPlayerHandler.onPlayerEvent(PlayerEvent.Next)
-                UIEvent.Previous -> mediaPlayerHandler.onPlayerEvent(PlayerEvent.Previous)
-                UIEvent.SkipToPrevious -> mediaPlayerHandler.onPlayerEvent(PlayerEvent.SkipToPrevious)
-                UIEvent.Stop -> mediaPlayerHandler.onPlayerEvent(PlayerEvent.Stop)
-                is UIEvent.UpdateProgress -> mediaPlayerHandler.onPlayerEvent(PlayerEvent.UpdateProgress(uiEvent.newProgress))
-                UIEvent.Repeat -> mediaPlayerHandler.onPlayerEvent(PlayerEvent.Repeat)
-                UIEvent.Shuffle -> mediaPlayerHandler.onPlayerEvent(PlayerEvent.Shuffle)
+                UIEvent.Backward -> {
+                    mediaPlayerHandler.onPlayerEvent(
+                        PlayerEvent.Backward,
+                    )
+                }
+
+                UIEvent.Forward -> {
+                    mediaPlayerHandler.onPlayerEvent(PlayerEvent.Forward)
+                }
+
+                UIEvent.PlayPause -> {
+                    mediaPlayerHandler.onPlayerEvent(
+                        PlayerEvent.PlayPause,
+                    )
+                }
+
+                UIEvent.Next -> {
+                    mediaPlayerHandler.onPlayerEvent(PlayerEvent.Next)
+                }
+
+                UIEvent.Previous -> {
+                    mediaPlayerHandler.onPlayerEvent(
+                        PlayerEvent.Previous,
+                    )
+                }
+
+                UIEvent.SkipToPrevious -> {
+                    mediaPlayerHandler.onPlayerEvent(
+                        PlayerEvent.SkipToPrevious,
+                    )
+                }
+
+                UIEvent.Stop -> {
+                    mediaPlayerHandler.onPlayerEvent(PlayerEvent.Stop)
+                }
+
+                is UIEvent.UpdateProgress -> {
+                    mediaPlayerHandler.onPlayerEvent(
+                        PlayerEvent.UpdateProgress(
+                            uiEvent.newProgress,
+                        ),
+                    )
+                }
+
+                UIEvent.Repeat -> {
+                    mediaPlayerHandler.onPlayerEvent(PlayerEvent.Repeat)
+                }
+
+                UIEvent.Shuffle -> {
+                    mediaPlayerHandler.onPlayerEvent(PlayerEvent.Shuffle)
+                }
+
                 UIEvent.ToggleLike -> {
                     Logger.w(tag, "ToggleLike")
                     mediaPlayerHandler.onPlayerEvent(PlayerEvent.ToggleLike)
                 }
+
                 is UIEvent.UpdateVolume -> {
                     val newVolume = uiEvent.newVolume
+                    // Apply to the player first: persisting to DataStore is a suspending disk write
+                    // and must not sit between the user's gesture and the audible change.
                     mediaPlayerHandler.onPlayerEvent(PlayerEvent.UpdateVolume(newVolume))
                     dataStoreManager.setPlayerVolume(newVolume)
                 }
@@ -869,7 +1021,9 @@ class SharedViewModel(
                             playlistRepository.updatePlaylistDownloadState(data.id, 0)
                         }
 
-                        else -> {}
+                        else -> {
+                            // Skip
+                        }
                     }
                 }
             }
@@ -911,6 +1065,8 @@ class SharedViewModel(
                         } else {
                             _format.emit(null)
                         }
+                        // Re-read on every emission: the first one usually lands before the
+                        // extractor has finished, so the source is only known on a later pass.
                         _extractSource.value = streamRepository.getExtractSource(mediaId)
                     }
                 }
@@ -983,6 +1139,7 @@ class SharedViewModel(
             )
 
         if (isTranslatedLyrics && lyricsProvider != LyricsProvider.AI) {
+            // Skip sync validation for AI translations — timestamps are copied programmatically
             val originalLyrics = _nowPlayingScreenData.value.lyricsData?.lyrics
             val originalLines = originalLyrics?.lines
             val lyricsLines = lyrics.lines
@@ -991,6 +1148,7 @@ class SharedViewModel(
                 val totalLines = originalLines.size
 
                 if (originalLines.size == lyricsLines.size) {
+                    // Line counts match: compare by index (1:1 mapping)
                     originalLines.forEachIndexed { index, originalLine ->
                         val originalTime = originalLine.startTimeMs.toLongOrNull() ?: 0L
                         val translatedLine = lyricsLines[index]
@@ -1002,6 +1160,7 @@ class SharedViewModel(
                         }
                     }
                 } else {
+                    // Line count mismatch: use timestamp-based matching with used-line tracking
                     val usedIndices = mutableSetOf<Int>()
                     originalLines.forEach { originalLine ->
                         val originalTime = originalLine.startTimeMs.toLongOrNull() ?: 0L
@@ -1027,6 +1186,7 @@ class SharedViewModel(
                     }
                 }
 
+                // Use percentage-based threshold: reject if >25% of lines are out of sync
                 val syncErrorRatio = if (totalLines > 0) timeSyncErrorCount.toFloat() / totalLines else 0f
                 if (syncErrorRatio > 0.25f || (totalLines > 0 && timeSyncErrorCount > totalLines / 2)) {
                     Logger.w(
@@ -1147,6 +1307,7 @@ class SharedViewModel(
                                 ),
                         )
                     }
+                    // Save lyrics to database
                     viewModelScope.launch {
                         lyricsCanvasRepository.insertLyrics(
                             LyricsEntity(
@@ -1442,6 +1603,8 @@ class SharedViewModel(
             val data = response.data
             when (response) {
                 is Resource.Success if (data != null) -> {
+                    // If SimpMusic translated lyrics are RICH_SYNCED (word-by-word),
+                    // convert to LINE_SYNCED, downvote, and fallback to AI translation
                     if (data.syncType == "RICH_SYNCED") {
                         Logger.w(tag, "SimpMusic translated lyrics are RICH_SYNCED, downvoting and falling back to AI")
                         val simpMusicLyricsId = data.simpMusicLyrics?.id
@@ -1457,6 +1620,7 @@ class SharedViewModel(
                                     }
                             }
                         }
+                        // Fallback to AI translation
                         getAITranslationLyrics(videoId, lyrics)
                     } else {
                         Logger.d(tag, "Get SimpMusic Translated Lyrics Success")
@@ -1506,6 +1670,8 @@ class SharedViewModel(
                     LyricsProvider.AI,
                 )
             } else {
+                // Convert RICH_SYNCED to LINE_SYNCED before sending to AI
+                // AI should only work with line-level or plain lyrics
                 val lyricsForAi =
                     if (lyrics.syncType == "RICH_SYNCED") {
                         lyrics.toSyncedLyrics()
@@ -1658,12 +1824,11 @@ class SharedViewModel(
         }
     }
 
-    fun getTranslucentBottomBar() = dataStoreManager.translucentBottomBar
-
     fun getEnableLiquidGlass() = dataStoreManager.enableLiquidGlass
 
     fun getLocalTrackingEnabled() = dataStoreManager.localTrackingEnabled
 
+    // Drives the Mix for you tab: YouTube hands an anonymous session no mixes at all.
     fun getYouTubeLoggedIn() = dataStoreManager.loggedIn
 
     fun getThemeMode() = dataStoreManager.themeMode
@@ -1712,6 +1877,9 @@ class SharedViewModel(
 
     fun setRomanizationLanguages(languages: Set<RomanizationLanguage>) {
         viewModelScope.launch {
+            // Sorted by name so the stored string is stable: an unsorted Set writes a different
+            // value for the same selection depending on iteration order, which makes the DataStore
+            // flow emit on a change that did not happen.
             dataStoreManager.setRomanizationLanguages(languages.map { it.name }.sorted().joinToString(","))
         }
     }
@@ -1792,19 +1960,25 @@ class SharedViewModel(
         }
     }
 
+    // Vote state for translated lyrics
     private val _translatedVoteState = MutableStateFlow<VoteData?>(null)
     val translatedVoteState: StateFlow<VoteData?> = _translatedVoteState.asStateFlow()
 
+    // Vote state for original lyrics
     private val _lyricsVoteState = MutableStateFlow<VoteData?>(null)
     val lyricsVoteState: StateFlow<VoteData?> = _lyricsVoteState.asStateFlow()
 
+    /**
+     * Vote for SimpMusic original lyrics (upvote or downvote)
+     * @param upvote true for upvote, false for downvote
+     */
     fun voteLyrics(upvote: Boolean) {
         val lyricsData = _nowPlayingScreenData.value.lyricsData
         val lyricsProvider = lyricsData?.lyricsProvider
         val simpMusicLyricsId = lyricsData?.lyrics?.simpMusicLyrics?.id ?: return
 
         if (lyricsProvider != LyricsProvider.SIMPMUSIC || simpMusicLyricsId.isEmpty()) {
-            Logger.w(tag, "Cannot vote: not a KuroMusic lyrics or missing ID")
+            Logger.w(tag, "Cannot vote: not a SimpMusic lyrics or missing ID")
             return
         }
 
@@ -1849,6 +2023,10 @@ class SharedViewModel(
         _translatedVoteState.value = null
     }
 
+    /**
+     * Vote for SimpMusic translated lyrics (upvote or downvote)
+     * @param upvote true for upvote, false for downvote
+     */
     fun voteTranslatedLyrics(upvote: Boolean) {
         val translatedLyrics = _nowPlayingScreenData.value.lyricsData?.translatedLyrics
         val lyricsProvider = translatedLyrics?.second
@@ -1899,6 +2077,8 @@ class SharedViewModel(
 
     fun isUserLoggedIn(): Boolean = runBlocking { dataStoreManager.cookie.first().isNotEmpty() }
 
+    // Flow-based variant of [isUserLoggedIn] so composables can collect login state once
+    // instead of calling runBlocking inside composition (used by NowPlayingScreenContent).
     fun isUserLoggedInFlow(): Flow<Boolean> = dataStoreManager.cookie.map { it.isNotEmpty() }
 
     fun isCombineFavoriteAndYTLiked(): Boolean = runBlocking { dataStoreManager.combineLocalAndYouTubeLiked.first() == TRUE }
@@ -1906,21 +2086,47 @@ class SharedViewModel(
 
 sealed class UIEvent {
     data object PlayPause : UIEvent()
+
     data object Backward : UIEvent()
+
     data object Forward : UIEvent()
+
     data object Next : UIEvent()
+
     data object Previous : UIEvent()
+
+    /**
+     * Always advances to the previous track — bypasses the 3-second
+     * "seek to start of current track" rule used by [Previous]. Used by the
+     * NowPlaying artwork pager swipe.
+     */
     data object SkipToPrevious : UIEvent()
+
     data object Stop : UIEvent()
+
     data object Shuffle : UIEvent()
+
     data object Repeat : UIEvent()
-    data class UpdateProgress(val newProgress: Float) : UIEvent()
-    data class UpdateVolume(val newVolume: Float) : UIEvent()
+
+    data class UpdateProgress(
+        val newProgress: Float,
+    ) : UIEvent()
+
+    data class UpdateVolume(
+        val newVolume: Float,
+    ) : UIEvent()
+
     data object ToggleLike : UIEvent()
 }
 
 enum class LyricsProvider {
-    SIMPMUSIC, YOUTUBE, SPOTIFY, LRCLIB, BETTER_LYRICS, AI, OFFLINE,
+    SIMPMUSIC,
+    YOUTUBE,
+    SPOTIFY,
+    LRCLIB,
+    BETTER_LYRICS,
+    AI,
+    OFFLINE,
 }
 
 data class NowPlayingScreenData(
@@ -1935,28 +2141,59 @@ data class NowPlayingScreenData(
     val songInfoData: SongInfoEntity? = null,
     val bitmap: ImageBitmap? = null,
 ) {
-    data class CanvasData(val isVideo: Boolean, val url: String)
+    data class CanvasData(
+        val isVideo: Boolean,
+        val url: String,
+    )
+
     data class LyricsData(
         val lyrics: Lyrics,
         val translatedLyrics: Pair<Lyrics, LyricsProvider>? = null,
         val lyricsProvider: LyricsProvider,
     )
+
     companion object {
-        fun initial(): NowPlayingScreenData = NowPlayingScreenData(
-            nowPlayingTitle = "", artistName = "", isVideo = false,
-            thumbnailURL = null, canvasData = null, lyricsData = null,
-            songInfoData = null, playlistName = "",
-        )
+        fun initial(): NowPlayingScreenData =
+            NowPlayingScreenData(
+                nowPlayingTitle = "",
+                artistName = "",
+                isVideo = false,
+                thumbnailURL = null,
+                canvasData = null,
+                lyricsData = null,
+                songInfoData = null,
+                playlistName = "",
+            )
     }
 }
 
-data class VoteData(val id: String, val vote: Int, val state: VoteState)
+data class VoteData(
+    val id: String,
+    val vote: Int,
+    val state: VoteState,
+)
 
 sealed class VoteState {
     data object Idle : VoteState()
+
     data object Loading : VoteState()
-    data class Success(val upvote: Boolean) : VoteState()
-    data class Error(val message: String) : VoteState()
+
+    data class Success(
+        val upvote: Boolean,
+    ) : VoteState()
+
+    data class Error(
+        val message: String,
+    ) : VoteState()
 }
 
+/**
+ * Whether a stored canvas url points at something a player should open rather than an image.
+ *
+ * The column holds whatever the active source wrote: a Spotify canvas is an `.mp4`, while AM
+ * animated artwork is an HLS `.m3u8` master playlist. Testing only for `.mp4` — as this did before
+ * AM existed — sends every AM artwork down the still-image branch, and because the branch that
+ * reads this is the one that restores a *cached* url, the failure only appears from the second play
+ * of a track onwards.
+ */
 private fun String.isCanvasVideoUrl(): Boolean = contains(".mp4") || contains(".m3u8")

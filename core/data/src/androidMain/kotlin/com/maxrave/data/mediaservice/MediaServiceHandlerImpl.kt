@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.app.ActivityManager.RunningAppProcessInfo
 import android.content.Context
+import android.content.Intent
+import android.media.audiofx.AudioEffect
 import android.media.audiofx.LoudnessEnhancer
 import com.maxrave.common.ASC
 import com.maxrave.common.CUSTOM_ORDER
@@ -54,6 +56,7 @@ import com.maxrave.domain.mediaservice.handler.NowPlayingTrackState
 import com.maxrave.domain.mediaservice.handler.PlayerEvent
 import com.maxrave.domain.mediaservice.handler.PlaylistType
 import com.maxrave.domain.mediaservice.handler.QueueData
+import com.maxrave.domain.mediaservice.handler.RadioQueueTrim
 import com.maxrave.domain.mediaservice.handler.RepeatState
 import com.maxrave.domain.mediaservice.handler.SimpleMediaState
 import com.maxrave.domain.mediaservice.handler.SleepTimerState
@@ -99,6 +102,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import org.koin.mp.KoinPlatform.getKoin
@@ -210,6 +215,10 @@ internal class MediaServiceHandlerImpl(
 
     private var normalizeVolume = false
 
+    /** Written by the equalizer-type collector; read on the player's thread by [shouldOpenOrCloseEqualizerIntent]. */
+    @Volatile
+    private var systemEqualizerSelected = false
+
     private var watchTimeList: ArrayList<Float> = arrayListOf()
 
     private var volumeNormalizationJob: Job? = null
@@ -245,6 +254,22 @@ internal class MediaServiceHandlerImpl(
     private var toggleLikeJob: Job? = null
 
     private var loadJob: Job? = null
+    private val restoreQueueMutex = Mutex()
+
+    // Set by restoreQueueAndPlay before it contends for restoreQueueMutex, so a startup
+    // restore already holding the lock can honour the play request itself instead of
+    // finishing paused. One-way for the life of the process: mayBeRestoreQueue only ever
+    // runs once, from init.
+    @Volatile
+    private var playRequestedDuringRestore = false
+
+    // Set by restoreSavedQueue once the saved track is in the player - i.e. once a play request
+    // can be honoured without the rest of the queue. Written after the addMediaItem that reads
+    // [playRequestedDuringRestore] and re-read immediately afterwards, so the restore and a
+    // resumption request racing it can never both miss the other's write: whichever runs second
+    // sees the first, and exactly one of them starts playback.
+    @Volatile
+    private var restoreHasPrimedPlayer = false
 
     private var songEntityJob: Job? = null
 
@@ -312,11 +337,13 @@ internal class MediaServiceHandlerImpl(
         // while music is playing, and a curve that only takes effect after a restart is useless
         // for judging what you just changed.
         backgroundScope.launch {
+            // While the system equalizer is selected the built-in curve goes flat, the same as its own switch being off.
             combine(
+                dataStoreManager.equalizerType,
                 dataStoreManager.equalizerEnabled,
                 dataStoreManager.equalizerBands,
                 dataStoreManager.equalizerPreamp,
-            ) { enabled, bands, preamp -> Triple(enabled == TRUE, bands, preamp) }
+            ) { type, enabled, bands, preamp -> Triple(enabled == TRUE && type != DataStoreManager.EQUALIZER_TYPE_SYSTEM, bands, preamp) }
                 .distinctUntilChanged()
                 .collect { (enabled, bands, preamp) ->
                     // Switched off sends a flat curve rather than skipping the call: the filter
@@ -327,6 +354,25 @@ internal class MediaServiceHandlerImpl(
                             if (enabled) bands.split(",").mapNotNull { it.trim().toFloatOrNull() } else emptyList(),
                         preampDb = if (enabled) preamp else 0f,
                     )
+                }
+        }
+        // Switching while music plays must hand over at once, or both equalizers run together: the
+        // adapter only asks to open or close when the player's own state changes, not the setting.
+        backgroundScope.launch {
+            dataStoreManager.equalizerType
+                .map { it == DataStoreManager.EQUALIZER_TYPE_SYSTEM }
+                .distinctUntilChanged()
+                .collect { system ->
+                    if (system == systemEqualizerSelected) return@collect
+                    systemEqualizerSelected = system
+                    // Main, like the adapter's own calls: both read the player's audio session.
+                    withContext(Dispatchers.Main) {
+                        if (!system) {
+                            sendCloseEqualizerIntent()
+                        } else if (player.isPlaying) {
+                            sendOpenEqualizerIntent()
+                        }
+                    }
                 }
         }
         // A collector of its own rather than more legs on the equalizer's: `combine` takes at most
@@ -566,7 +612,7 @@ internal class MediaServiceHandlerImpl(
             }
         val track =
             queueData.value.data.listTracks
-                ?.find { it.videoId == videoId }
+                .find { it.videoId == videoId }
         _nowPlayingState.update {
             it.copy(
                 mediaItem = mediaItem,
@@ -840,6 +886,32 @@ internal class MediaServiceHandlerImpl(
         } else if (position > player.duration) {
             player.seekToNext()
         }
+    }
+
+    private fun sendOpenEqualizerIntent() {
+        // No local audio session to expose to an equalizer while casting (or before one exists).
+        if (_castState.value.isRemote || player.audioSessionId == PlayerConstants.AUDIO_SESSION_ID_UNSET) return
+        context.sendBroadcast(
+            Intent(AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION).apply {
+                putExtra(AudioEffect.EXTRA_AUDIO_SESSION, player.audioSessionId)
+                putExtra(AudioEffect.EXTRA_PACKAGE_NAME, context.packageName)
+                putExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC)
+            },
+        )
+    }
+
+    private fun sendCloseEqualizerIntent() {
+        if (_castState.value.isRemote || player.audioSessionId == PlayerConstants.AUDIO_SESSION_ID_UNSET) return
+        context.sendBroadcast(
+            Intent(AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION).apply {
+                putExtra(AudioEffect.EXTRA_AUDIO_SESSION, player.audioSessionId)
+                // Mandatory per AudioEffect's javadoc, and missing from the pre-2.0.0 code this was
+                // restored from. AOSP's MusicFX returns early on a null package and closes sessions
+                // by package, so without it every CLOSE was ignored — and switching from the system
+                // equalizer back to the built-in one left both running until the track ended.
+                putExtra(AudioEffect.EXTRA_PACKAGE_NAME, context.packageName)
+            },
+        )
     }
 
     @SuppressLint("PrivateResource")
@@ -1566,7 +1638,15 @@ internal class MediaServiceHandlerImpl(
             _queueData.update {
                 it.copy(
                     queueState = QueueData.StateSource.STATE_INITIALIZED,
-                    data = it.data.copy(playlistId = "RDAMVM${lastTrack.videoId}"),
+                    data =
+                        it.data.copy(
+                            playlistId = "RDAMVM${lastTrack.videoId}",
+                            // Past the end of what the user picked, this queue IS a radio: from here
+                            // on it is extended by the radio of its last track and grows without end.
+                            // Saying so keeps the type honest and lets the history trim apply, while
+                            // the album snapshot for the crossfade rule was already taken at load.
+                            playlistType = PlaylistType.RADIO,
+                        ),
                 )
             }
             reorderShuffledQueue(player.getCurrentMediaTimeLine())
@@ -1814,6 +1894,9 @@ internal class MediaServiceHandlerImpl(
                     queueState = QueueData.StateSource.STATE_INITIALIZED,
                 ).addTrackList(catalogMetadata)
         }
+        // Right after a batch is the only moment the queue grows, and the moment both lists are
+        // known to be aligned again.
+        trimRadioHistoryIfNeeded()
         reorderShuffledQueue(player.getCurrentMediaTimeLine())
     }
 
@@ -2223,31 +2306,29 @@ internal class MediaServiceHandlerImpl(
     override fun mayBeSaveRecentSong(runBlocking: Boolean) {
         val unit =
             suspend {
-                if (dataStoreManager.saveRecentSongAndQueue.first() == TRUE) {
-                    // Skip while the playing song is unknown or the queue is mid-rebuild:
-                    // updateCatalog clears listTracks and re-inserts the current track only at
-                    // the end, so saving in that window persists a queue missing the current
-                    // track (plus a blank media id), which desyncs the next restore.
-                    val videoId = nowPlayingState.value.songEntity?.videoId
-                    if (videoId != null && queueData.value.queueState == QueueData.StateSource.STATE_INITIALIZED) {
-                        dataStoreManager.saveRecentSong(
-                            videoId,
-                            player.contentPosition,
-                        )
-                        dataStoreManager.setPlaylistFromSaved(queueData.value.data.playlistName ?: "")
-                        Logger.d(
-                            "Check saved",
-                            player.currentMediaItem
-                                ?.metadata
-                                ?.title
-                                .toString(),
-                        )
-                        val temp: ArrayList<Track> = ArrayList()
-                        temp.clear()
-                        temp.addAll(_queueData.value.data.listTracks)
-                        Logger.w("Check recover queue", temp.toString())
-                        songRepository.recoverQueue(temp)
-                    }
+                // Skip while the playing song is unknown or the queue is mid-rebuild:
+                // updateCatalog clears listTracks and re-inserts the current track only at
+                // the end, so saving in that window persists a queue missing the current
+                // track (plus a blank media id), which desyncs the next restore.
+                val videoId = nowPlayingState.value.songEntity?.videoId
+                if (videoId != null && queueData.value.queueState == QueueData.StateSource.STATE_INITIALIZED) {
+                    dataStoreManager.saveRecentSong(
+                        videoId,
+                        player.contentPosition,
+                    )
+                    dataStoreManager.setPlaylistFromSaved(queueData.value.data.playlistName ?: "")
+                    Logger.d(
+                        "Check saved",
+                        player.currentMediaItem
+                            ?.metadata
+                            ?.title
+                            .toString(),
+                    )
+                    val temp: ArrayList<Track> = ArrayList()
+                    temp.clear()
+                    temp.addAll(_queueData.value.data.listTracks)
+                    Logger.w("Check recover queue", temp.toString())
+                    songRepository.recoverQueue(temp)
                 }
             }
         if (runBlocking) {
@@ -2265,10 +2346,8 @@ internal class MediaServiceHandlerImpl(
      */
     private fun mayBeSaveRecentPosition() {
         coroutineScope.launch {
-            if (dataStoreManager.saveRecentSongAndQueue.first() == TRUE) {
-                val videoId = nowPlayingState.value.songEntity?.videoId ?: return@launch
-                dataStoreManager.saveRecentSong(videoId, player.contentPosition)
-            }
+            val videoId = nowPlayingState.value.songEntity?.videoId ?: return@launch
+            dataStoreManager.saveRecentSong(videoId, player.contentPosition)
         }
     }
 
@@ -2369,58 +2448,149 @@ internal class MediaServiceHandlerImpl(
     }
 
     override fun mayBeRestoreQueue() {
-        coroutineScope.launch {
-            if (dataStoreManager.saveRecentSongAndQueue.first() == TRUE) {
-                val currentPlayingTrack = songRepository.getSongById(dataStoreManager.recentMediaId.first()).lastOrNull()?.toTrack()
-                if (currentPlayingTrack != null) {
-                    // Snapshot the position before touching the player: loading the queue fires
-                    // onMediaItemTransition -> mayBeSaveRecentSong, which rewrites the stored
-                    // position before the seek below would otherwise read it.
-                    val savedPosition = dataStoreManager.recentPosition.first().toLongOrNull() ?: 0L
-                    val savedTracks =
-                        songRepository
-                            .getSavedQueue()
-                            .singleOrNull()
-                            ?.firstOrNull()
-                            ?.listTrack
-                            .orEmpty()
-                    // The saved queue may not contain the saved track (e.g. persisted while the
-                    // queue was being rebuilt). Put the track at the front then: updateCatalog
-                    // skips listTracks[index] as "already in the player", so index must point at
-                    // the playing track or the UI queue and the player playlist end up shifted
-                    // against each other.
-                    var index = savedTracks.indexOfFirst { it.videoId == currentPlayingTrack.videoId }
-                    val listTracks =
-                        if (index == -1) {
-                            index = 0
-                            (listOf(currentPlayingTrack) + savedTracks).toCollection(arrayListOf())
-                        } else {
-                            savedTracks.toCollection(arrayListOf())
-                        }
-                    setQueueData(
-                        QueueData.Data(
-                            listTracks = listTracks,
-                            firstPlayedTrack = currentPlayingTrack,
-                            playlistId = LOCAL_PLAYLIST_ID_SAVED_QUEUE,
-                            playlistName = dataStoreManager.playlistFromSaved.first(),
-                            playlistType = PlaylistType.PLAYLIST,
-                            continuation = null,
-                        ),
-                    )
-                    addMediaItem(currentPlayingTrack.toGenericMediaItem(), playWhenReady = false)
-                    loadPlaylistOrAlbum(index = index)
-                    loadJob?.join()
-                    resetCrossfade()
-                    player.seekTo(index, savedPosition)
-                    // Announce the restored position once. Nothing plays after a restore
-                    // (playWhenReady = false above), and startProgressUpdate only runs while
-                    // isPlaying — so no state is ever published and the UI sits at 0:00 on a
-                    // queue the user left half-finished, until they press play.
-                    _simpleMediaState.value = SimpleMediaState.Progress(savedPosition)
-                }
-            }
-        }
+        coroutineScope.launch { restoreSavedQueue(playWhenReady = false) }
     }
+
+    override suspend fun restoreQueueAndPlay(): Boolean {
+        playRequestedDuringRestore = true
+        // A restore that is already past its addMediaItem has the saved track in the player, so
+        // the request is served right here instead of queueing behind restoreQueueMutex. That
+        // restore is sitting on loadJob.join(), and the load it joins paces itself in chunks and
+        // can reach for the network, so waiting for the lock would put the whole queue in front
+        // of the first note - and in front of the BUFFERING/READY that lets Media3 call
+        // startForeground() before the system's deadline. Falling through is still correct when
+        // the player has not been primed yet: the restore has not read the flag either, so it
+        // starts the track playing itself.
+        if (restoreHasPrimedPlayer && player.mediaItemCount > 0) {
+            requestPlayWhenReady()
+            return true
+        }
+        return restoreSavedQueue(playWhenReady = true)
+    }
+
+    /**
+     * Asks the player to start, in a way that survives the track still being mid-load.
+     *
+     * [MediaPlayerInterface.play] alone does not. The adapter answers it out of its own state
+     * machine and drops it outright while the track is still being set up, and a load that was
+     * started with "do not play" ends by pausing whatever intent arrived during it. Writing
+     * `playWhenReady` records the intent synchronously instead, and both the load and the READY
+     * transition it ends on honour it - which is the whole point on the resumption path, where
+     * the request routinely lands on a track the restore only just handed to the player.
+     */
+    private fun requestPlayWhenReady() {
+        player.playWhenReady = true
+    }
+
+    /**
+     * Loads the persisted queue back into the player.
+     *
+     * [playWhenReady] is what separates the two callers. Startup restore only primes the
+     * player, but playback resumption (`MediaSession.Callback.onPlaybackResumption`, reached
+     * from a media button - a headset, a Bluetooth remote, a Samsung Routine) has to end up
+     * actually playing, and fast: `MediaButtonReceiver` started the service with
+     * `startForegroundService()`, and Media3 only calls `startForeground()` once the player
+     * reports BUFFERING or READY with `playWhenReady` set. Miss the system's foreground-start
+     * deadline and the service is torn down with "did not then call Service.startForeground()",
+     * which is reported as a background ANR with an idle main thread.
+     *
+     * That deadline is also why the resumption path starts the track loading before the rest of
+     * the queue: [load] paces itself in 100-track chunks and can reach for the network to fill
+     * in missing artists, so holding playback until it finishes is not safe here.
+     *
+     * Serialized because both callers can be in flight at once - the same service start that
+     * dispatches the media button event also creates this handler, whose init calls
+     * [mayBeRestoreQueue] - and a second unguarded pass would load the queue twice. That is the
+     * normal ordering rather than an edge case, which is why the play request is handed to the
+     * restore already in flight instead of queueing behind the lock, which would put the whole
+     * queue load in front of the first note. The handoff runs in both directions, because the
+     * request can arrive at any point of a restore that suspends repeatedly: before the track
+     * reaches the player it is read out of [playRequestedDuringRestore] here, and after that
+     * point [restoreHasPrimedPlayer] lets [restoreQueueAndPlay] start the track itself and
+     * return without touching the lock at all.
+     */
+    private suspend fun restoreSavedQueue(playWhenReady: Boolean): Boolean =
+        restoreQueueMutex.withLock {
+            if (player.mediaItemCount > 0) {
+                // Already restored, or the app was running all along.
+                if (playWhenReady || playRequestedDuringRestore) requestPlayWhenReady()
+                return@withLock true
+            }
+            val currentPlayingTrack =
+                songRepository
+                    .getSongById(dataStoreManager.recentMediaId.first())
+                    .lastOrNull()
+                    ?.toTrack() ?: return@withLock false
+            // Snapshot the position before touching the player: loading the queue fires
+            // onMediaItemTransition -> mayBeSaveRecentSong, which rewrites the stored
+            // position before the seek below would otherwise read it.
+            val savedPosition = dataStoreManager.recentPosition.first().toLongOrNull() ?: 0L
+            val savedTracks =
+                songRepository
+                    .getSavedQueue()
+                    .singleOrNull()
+                    ?.firstOrNull()
+                    ?.listTrack
+                    .orEmpty()
+            // The saved queue may not contain the saved track (e.g. persisted while the
+            // queue was being rebuilt). Put the track at the front then: updateCatalog
+            // skips listTracks[index] as "already in the player", so index must point at
+            // the playing track or the UI queue and the player playlist end up shifted
+            // against each other.
+            var index = savedTracks.indexOfFirst { it.videoId == currentPlayingTrack.videoId }
+            val listTracks =
+                if (index == -1) {
+                    index = 0
+                    (listOf(currentPlayingTrack) + savedTracks).toCollection(arrayListOf())
+                } else {
+                    savedTracks.toCollection(arrayListOf())
+                }
+            setQueueData(
+                QueueData.Data(
+                    listTracks = listTracks,
+                    firstPlayedTrack = currentPlayingTrack,
+                    playlistId = LOCAL_PLAYLIST_ID_SAVED_QUEUE,
+                    playlistName = dataStoreManager.playlistFromSaved.first(),
+                    playlistType = PlaylistType.PLAYLIST,
+                    continuation = null,
+                ),
+            )
+            // Playing is the whole difference: the track starts loading (and so reaches
+            // BUFFERING) right here, before the queue behind it. The flag is re-read at each use
+            // because a resumption request can arrive while the reads above are still running.
+            addMediaItem(
+                currentPlayingTrack.toGenericMediaItem(),
+                playWhenReady = playWhenReady || playRequestedDuringRestore,
+            )
+            // Land on the saved position now, not after the load: the track may already be
+            // playing (or start the moment it is primed below), and the queue load can take
+            // seconds. load() moves this item to [index] with moveMediaItem, which keeps both the
+            // item and its position, so nothing has to seek again afterwards.
+            player.seekTo(0, savedPosition)
+            // From here the track is in the player, so [restoreQueueAndPlay] can start it itself
+            // rather than waiting for the load below. Publishing that first and then re-reading
+            // the request is what closes the window between the two: a request that arrived
+            // while addMediaItem was running - too late for the line above - is picked up here,
+            // and one that arrives after this point finds the player primed and starts it there.
+            restoreHasPrimedPlayer = true
+            if (playWhenReady || playRequestedDuringRestore) requestPlayWhenReady()
+            loadPlaylistOrAlbum(index = index)
+            loadJob?.join()
+            resetCrossfade()
+            // Only a paused restore still needs this. While playing, the position set above has
+            // moved on during the load, and seeking back to savedPosition would rewind it.
+            if (!(playWhenReady || playRequestedDuringRestore)) player.seekTo(index, savedPosition)
+            // Announce the restored position once. Nothing plays after a restore
+            // (playWhenReady = false above), and startProgressUpdate only runs while
+            // isPlaying — so no state is ever published and the UI sits at 0:00 on a
+            // queue the user left half-finished, until they press play.
+            _simpleMediaState.value = SimpleMediaState.Progress(savedPosition)
+            // Backstop: playback has normally started well before this, above. It still matters
+            // for the startup restore, which reaches here with the request already set only when
+            // it lost the race described there.
+            if (playWhenReady || playRequestedDuringRestore) requestPlayWhenReady()
+            true
+        }
 
     override fun shouldReleaseOnTaskRemoved() =
         runBlocking {
@@ -2453,6 +2623,9 @@ internal class MediaServiceHandlerImpl(
             } catch (e: Exception) {
                 Logger.e("ServiceHandler", "Error releasing audio effects ${e.message}")
             }
+
+            // Send close equalizer intent
+            sendCloseEqualizerIntent()
 
             // Cancel all jobs
             progressJob?.cancel()
@@ -2693,6 +2866,12 @@ internal class MediaServiceHandlerImpl(
         }
     }
 
+    override fun shouldOpenOrCloseEqualizerIntent(shouldOpen: Boolean) {
+        // Built-in selected: the session is never handed to a system equalizer, so the two cannot run together.
+        if (!systemEqualizerSelected) return
+        if (shouldOpen) sendOpenEqualizerIntent() else sendCloseEqualizerIntent()
+    }
+
     override fun onShuffleModeEnabledChanged(
         shuffleModeEnabled: Boolean,
         list: List<GenericMediaItem>,
@@ -2767,6 +2946,7 @@ internal class MediaServiceHandlerImpl(
     ) {
         super.onTimelineChanged(list, reason)
         Logger.d(TAG, "onTimelineChanged: Reason: $reason, Items: ${list.size}")
+        applyPendingRadioTrim(list)
         reorderShuffledQueue(list)
     }
 
@@ -2782,21 +2962,94 @@ internal class MediaServiceHandlerImpl(
                 return
             }
         }
-        list
-            .mapNotNull {
-                listTrack.firstOrNull { track -> track.videoId == it.mediaId }
-            }.let { sorted ->
-                if (sorted.size != listTrack.size) return
-                Logger.d(TAG, "Reordering shuffled queue: ${sorted.map { it.title }}")
-                _queueData.update {
-                    it.copy(
-                        data =
-                            it.data.copy(
-                                listTracks = sorted,
-                            ),
-                    )
-                }
-            }
+        // Runs once per appended track — about 50 times per radio batch — so it is written to stay
+        // cheap as the queue grows (#2504): a map lookup instead of a nested search, and sizes in
+        // the log instead of every title.
+        val byId = HashMap<String, Track>(listTrack.size)
+        listTrack.forEach { track ->
+            if (!byId.containsKey(track.videoId)) byId[track.videoId] = track
+        }
+        val sorted = list.mapNotNull { byId[it.mediaId] }
+        if (sorted.size != listTrack.size) return
+        Logger.d(TAG, "Reordering shuffled queue: player ${list.size}, queue ${listTrack.size}")
+        _queueData.update {
+            it.copy(
+                data =
+                    it.data.copy(
+                        listTracks = sorted,
+                    ),
+            )
+        }
+    }
+
+    /** Set by [trimRadioHistoryIfNeeded]: the queue size to expect once the player applies a trim. */
+    private var pendingRadioTrimTo: Int? = null
+
+    /**
+     * Asks the player to drop the oldest played tracks of a RADIO queue.
+     *
+     * A radio grows without end and everything that walks the queue gets more expensive with it
+     * (#2504). A playlist or album is only trimmed once endless queue has carried it past the list
+     * the user picked, at which point it is re-typed as radio.
+     *
+     * Nothing is cut here unless the player's list and [queueData] are already aligned and the ids
+     * at the front match: trimming lists that are out of step is exactly the bug this must never
+     * cause. [queueData] is then cut by [applyPendingRadioTrim], after the player proves it removed
+     * them.
+     */
+    private fun trimRadioHistoryIfNeeded() {
+        if (queueData.value.data.playlistType != PlaylistType.RADIO) return
+        // Shuffle splits the two index spaces: `currentMediaItemIndex` and the indices
+        // `removeMediaItems` takes both count the player's UNSHUFFLED playlist, while the timeline
+        // and `listTracks` are in shuffled order. The oldest-played tracks are then not a range in
+        // the playlist at all, so trimming by index there would delete upcoming tracks. Radio with
+        // shuffle on simply keeps its full history.
+        if (player.shuffleModeEnabled) return
+        val listTracks = queueData.value.data.listTracks
+        val playerItems = player.getCurrentMediaTimeLine()
+        if (playerItems.size != listTracks.size) return
+        val drop = RadioQueueTrim.countToDropFromFront(player.currentMediaItemIndex, listTracks.size)
+        if (drop <= 0) return
+        if (playerItems.take(drop).map { it.mediaId } != listTracks.take(drop).map { it.videoId }) return
+        // queueData FOLLOWS the player here, it does not lead it. The adapters apply the removal on
+        // their own thread and re-check their guards there, so they may refuse (a crossfade started,
+        // the playlist moved). Cutting queueData now would then leave the two lists permanently
+        // offset — the "tap a queue row, play the wrong song" bug this feature must not cause.
+        pendingRadioTrimTo = listTracks.size - drop
+        player.removeMediaItems(0, drop)
+        Logger.d(TAG, "Radio trim requested: dropping $drop, expecting queue ${listTracks.size - drop}")
+    }
+
+    /**
+     * Applies a requested radio trim to [queueData] once the player's own timeline proves it
+     * happened: same size, and the player's ids are exactly the tail of the tracks we hold.
+     *
+     * Anything else clears the request instead of cutting, so a refused or superseded trim leaves
+     * both lists untouched and aligned rather than silently offset.
+     */
+    private fun applyPendingRadioTrim(list: List<GenericMediaItem>) {
+        val expected = pendingRadioTrimTo ?: return
+        val listTracks = queueData.value.data.listTracks
+        if (list.size >= listTracks.size) {
+            pendingRadioTrimTo = null
+            return
+        }
+        if (list.size != expected) return
+        val drop = listTracks.size - list.size
+        if (list.map { it.mediaId } != listTracks.drop(drop).map { it.videoId }) {
+            pendingRadioTrimTo = null
+            return
+        }
+        _queueData.update {
+            it.copy(
+                data =
+                    it.data.copy(
+                        listTracks = listTracks.drop(drop),
+                    ),
+            )
+        }
+        pendingRadioTrimTo = null
+        Logger.d(TAG, "Trimmed radio history: dropped $drop, queue now ${list.size}")
     }
 }
 

@@ -20,24 +20,11 @@ plugins {
     alias(libs.plugins.build.config) apply false
     alias(libs.plugins.osdetector) apply false
     alias(libs.plugins.conveyor) apply false
+    alias(libs.plugins.compose.hotReload) apply false
 }
 
 tasks.register<Delete>("Clean") {
     delete(rootProject.layout.buildDirectory)
-}
-
-// Shorten build directory path on Windows to avoid MAX_PATH issues
-val customBuildDir = project.findProperty("custom.build.dir") as String?
-if (customBuildDir != null) {
-    allprojects {
-        val pathName = project.path.replace(":", "/")
-        val newBuildDir = if (pathName.isEmpty() || pathName == "/") {
-            file("$customBuildDir/_root_")
-        } else {
-            file("$customBuildDir/$pathName")
-        }
-        layout.buildDirectory.set(newBuildDir)
-    }
 }
 
 subprojects {
@@ -64,23 +51,6 @@ subprojects {
     configurations.all {
         resolutionStrategy {
             force("com.github.TeamNewPipe:nanojson:c7a6c1c08d16b6d5ecded34758e6415e07be2166")
-        }
-    }
-
-    // EL CANDADO MAESTRO CORREGIDO (Inteligente y a prueba de fallos)
-    plugins.withId("org.jetbrains.kotlin.jvm") {
-        configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension> {
-            jvmToolchain(21)
-        }
-    }
-    plugins.withId("org.jetbrains.kotlin.android") {
-        configure<org.jetbrains.kotlin.gradle.dsl.KotlinAndroidProjectExtension> {
-            jvmToolchain(21)
-        }
-    }
-    plugins.withId("org.jetbrains.kotlin.multiplatform") {
-        configure<org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension> {
-            jvmToolchain(21)
         }
     }
 }

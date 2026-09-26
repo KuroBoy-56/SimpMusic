@@ -126,7 +126,7 @@
     <string name="developer_blog">Блог розробника</string>
     <string name="developer_blog_tagline">Читайте нотатки розробника, навчальні посібники та закулісся</string>
     <string name="blog_promo_title">Щось нове від розробника</string>
-    <string name="blog_promo_message">Я щойно запустив свій особистий блог на maxrave.dev — ділюся історієюYT Music Mod, глибоким зануренням у музичні технології та інженерними нотатками. Почитайте, якщо вам цікаво ✨</string>
+    <string name="blog_promo_message">Я щойно запустив свій особистий блог на maxrave.dev — ділюся історією YT Music Mod , глибоким зануренням у музичні технології та інженерними нотатками. Почитайте, якщо вам цікаво ✨</string>
     <string name="visit_blog">Відвідати блог</string>
     <string name="paypal">PayPal</string>
     <string name="title">Назва</string>
@@ -145,7 +145,7 @@
     <string name="albums_inArtist">Альбоми</string>
     <string name="singles_inArtist">Сингли</string>
     <string name="fans_might_also_like_inArtist">Фанатам може також сподобатися</string>
-    <string name="crash_log">ВYT Music Mod стався збій. Вибачте за цю проблему.\nНадішліть журнал збою розробнику</string>
+    <string name="crash_log">В  YT Music Mod стався збій. Вибачте за цю проблему.\nНадішліть журнал збою розробнику</string>
     <string name="crash">Збій</string>
     <string name="send">Відправити</string>
     <string name="mail_subject">Повідомити про збій</string>
@@ -163,6 +163,9 @@
     <string name="balance_media_loudness">Баланс гучності медіа</string>
     <string name="normalize_volume">Нормалізувати гучність</string>
     <string name="audio">Аудіо</string>
+    <string name="no_equalizer">Ваш пристрій не має еквалайзера</string>
+    <string name="open_system_equalizer">Відкрийте системний еквалайзер</string>
+    <string name="use_your_system_equalizer">Використовуйте системний еквалайзер</string>
     <string name="streaming_data_provider_piped">Постачальник даних потоку (Piped)</string>
     <string name="itag">Теги</string>
     <string name="mime_type">Тип Mime</string>
@@ -201,12 +204,12 @@
     <string name="what_segments_will_be_skipped">Які сегменти будуть пропущені</string>
     <string name="save">Зберегти</string>
     <string name="saved">Збережено</string>
-    <string name="sponsor_block_intro">SponsorBlock — це система краудсорсингу, яка дозволяє пропускати дратівливі фрагменти відео на YouTube.\nДетальніше: https://sponsor.ajay.app/\nУYT Music Mod функція SponsorBlock доступна лише в режимі онлайн</string>
+    <string name="sponsor_block_intro">SponsorBlock — це система краудсорсингу, яка дозволяє пропускати дратівливі фрагменти відео на YouTube.\nДетальніше: https://sponsor.ajay.app/\nУ  YT Music Mod функція SponsorBlock доступна лише в режимі онлайн</string>
     <string name="skip_sponsor_part_of_video">Пропустити частину відео зі спонсором</string>
     <string name="customactivityoncrash_error_activity_error_occurred_explanation">Виникла неочікувана помилка. Вибачте за незручності.</string>
     <string name="customactivityoncrash_error_activity_restart_app">Перезапустити додаток</string>
-    <string name="help_build_lyrics_database">ДопоможітьYT Music Mod перекласти тексти пісень</string>
-    <string name="help_build_lyrics_database_description">Надішліть ваші збережені тексти пісень в базу данихYT Music Mod</string>
+    <string name="help_build_lyrics_database">Допоможіть  YT Music Mod перекласти тексти пісень</string>
+    <string name="help_build_lyrics_database_description">Надішліть ваші збережені тексти пісень в базу даних YT Music Mod </string>
     <string name="customactivityoncrash_error_activity_close_app">Закрити застосунок</string>
     <string name="customactivityoncrash_error_activity_error_details">Деталі помилки</string>
     <string name="customactivityoncrash_error_activity_error_details_title">Деталі помилки</string>
@@ -259,7 +262,7 @@
     <string name="email">Адреса електронної пошти</string>
     <string name="password">Пароль</string>
     <string name="please_enter_your_email_and_password">Будь ласка, введіть адресу електронної пошти та пароль</string>
-    <string name="translation_language_message">Введіть код мови (наприклад: en) (2 літери). Якщо ви хочете встановити ту саму мову, що й уYT Music Mod, залиште поле для редагування порожнім.</string>
+    <string name="translation_language_message">Введіть код мови (наприклад: en) (2 літери). Якщо ви хочете встановити ту саму мову, що й у YT Music Mod , залиште поле для редагування порожнім.</string>
     <string name="invalid_language_code">Невірний код мови</string>
     <string name="lyrics_provider_youtube">Тексти пісень надані YouTube</string>
     <string name="lyrics_provider_betterlyrics">Текст пісні надано BetterLyrics</string>
@@ -278,7 +281,7 @@
     <string name="older_first">Спочатку старіші</string>
     <string name="newer_first">Спочатку новіші</string>
     <string name="added_date">Дата додавання</string>
-    <string name="credit_app">Простий музичний застосунок з використанням YouTube Music для бекенду \n\nYT Music Mod - це проєкт з відкритим вихідним кодом для потокової передачі музики з YouTube та YouTube Music без реклами та відстеження.YT Music Mod надає багато можливостей:\n\n - Потокова музика\n - Синхронізовані тексти\n - Персоналізація даних\n - тощо... \n\nYT Music Mod завжди безкоштовний і без реклами\n\nСтворено з ❤️ від Tuan Minh Nguyen Duc (maxrave-dev)</string>
+    <string name="credit_app">Простий музичний застосунок з використанням YouTube Music для бекенду \n\n YT Music Mod - це проєкт з відкритим вихідним кодом для потокової передачі музики з YouTube та YouTube Music без реклами та відстеження.  YT Music Mod надає багато можливостей:\n\n - Потокова музика\n - Синхронізовані тексти\n - Персоналізація даних\n - тощо... \n\n YT Music Mod завжди безкоштовний і без реклами\n\nСтворено з ❤️ від Tuan Minh Nguyen Duc (maxrave-dev)</string>
     <string name="issue_tracker">Відстежувач випусків</string>
     <string name="featured_playlists">Рекомендовані плейлисти</string>
     <string name="featured_inArtist">Рекомендовано</string>
@@ -320,7 +323,7 @@
     <string name="enable_spotify_lyrics">Увімкнути Spotify Lyrics</string>
     <string name="spotify_lyrícs_info">Більше текстів пісень без перекладу</string>
     <string name="enable_canvas">Увімкнути Canvas</string>
-    <string name="canvas_info">Показувати Spotify Canvas уYT Music Mod</string>
+    <string name="canvas_info">Показувати Spotify Canvas у YT Music Mod </string>
     <string name="spotify_lyrics_provider">Тексти пісень надані Spotify</string>
     <string name="offline_mode">Автономний режим</string>
     <string name="added_to_youtube_liked">Додано у вподобані на YouTube</string>
@@ -358,8 +361,6 @@
     <string name="theme_color_wallpaper">Шпалери</string>
     <string name="theme_color_custom">Власний</string>
     <string name="custom_color">Власний колір</string>
-    <string name="translucent_bottom_navigation_bar">Напівпрозора нижня панель навігації</string>
-    <string name="you_can_see_the_content_below_the_bottom_bar">Ви можете побачити вміст під нижньою панеллю</string>
     <string name="donation">Якщо ви оцінили мою роботу, дайте мені на каву</string>
     <string name="relax">Відпочинок</string>
     <string name="sleep">Сон</string>
@@ -378,7 +379,7 @@
     <string name="loading">Завантаження</string>
     <string name="updating">Оновлення</string>
     <string name="go_to_log_in_page">Перейти на сторінку входу</string>
-    <string name="log_in_warning">YouTube Music тепер вимагає входу для потокової передачі музики, Piped Instance іноді теж не працює. Вам слід увійти на YouTube, щоб отримати кращий досвід роботи зYT Music Mod.</string>
+    <string name="log_in_warning">YouTube Music тепер вимагає входу для потокової передачі музики, Piped Instance іноді теж не працює. Вам слід увійти на YouTube, щоб отримати кращий досвід роботи з YT Music Mod .</string>
     <string name="spotify_canvas_cache">Кеш Spotify Canvas</string>
     <string name="clear_canvas_cache">Очистити кеш Canvas</string>
     <string name="proxy">Проксі</string>
@@ -418,8 +419,8 @@
     <string name="other_version">Інші версії</string>
     <string name="later">Пізніше</string>
     <string name="give_a_star">Дати зірку</string>
-    <string name="enjoying_simpmusic">ПодобаєтьсяYT Music Mod</string>
-    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">Якщо вам подобається користуватисяYT Music Mod, оцінітьYT Music Mod на GitHub, або залиште свій відгук на</string>
+    <string name="enjoying_simpmusic">Подобається YT Music Mod </string>
+    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">Якщо вам подобається користуватися YT Music Mod , оцініть  YT Music Mod на GitHub, або залиште свій відгук на</string>
     <string name="if_you_love_my_work_consider">"Якщо ви любите мою роботу, подумайте "</string>
     <string name="buying_me_a_coffee">купити мені каву.</string>
     <string name="fade_audio_effect">Ефект затухання звуку</string>
@@ -472,8 +473,8 @@
     <string name="contributor_name">Ім'я учасника</string>
     <string name="contributor_email">Електронна пошта учасника</string>
     <string name="anonymous">Анонімно</string>
-    <string name="simpmusic_lyrics">Тексти пісеньYT Music Mod</string>
-    <string name="lyrics_provider_simpmusic">Тексти пісень наданоYT Music Mod Lyrics</string>
+    <string name="simpmusic_lyrics">Тексти пісень YT Music Mod </string>
+    <string name="lyrics_provider_simpmusic">Тексти пісень надано  YT Music Mod Lyrics</string>
     <string name="backup_in_progress">Виконується резервне копіювання</string>
     <string name="restore_in_progress">Виконується відновлення</string>
     <string name="backup_downloaded">Резервне копіювання завантажених даних</string>
@@ -511,8 +512,6 @@
     <string name="enable_rich_presence">Увімкнути Rich Presence</string>
     <string name="rich_presence_info">Показувати інформацію про медіа-сеанс у профілі Discord</string>
     <string name="youtube_liked_music">Вподобана музика YouTube</string>
-    <string name="keep_service_alive">Підтримувати службу активною</string>
-    <string name="keep_service_alive_description">Утримувати музичний плеєр активним, щоб не бути закритим системою</string>
     <string name="keep_your_youtube_playlist_offline">Показувати ваш YouTube-плейлист офлайн</string>
     <string name="keep_your_youtube_playlist_offline_description">Зберегти свій плейліст YouTube локально й переглядати офлайн</string>
     <string name="combine_local_and_youtube_liked_songs">Замінювати «Обране» на «Вподобане YouTube» після входу в обліковий запис</string>
@@ -539,7 +538,7 @@
     <string name="downvote">Невподобати</string>
     <string name="vote_submitted">Дякуємо, що проголосували за цей текст!</string>
     <string name="vote_error">Не вдалося надіслати</string>
-    <string name="open_app">ВідкритиYT Music Mod</string>
+    <string name="open_app">Відкрити YT Music Mod </string>
     <string name="close_miniplayer">Закрити міні-плеєр</string>
     <string name="open_miniplayer">Відкрити міні-плеєр</string>
     <string name="quit_app">Вийти</string>
@@ -547,7 +546,7 @@
     <string name="local_tracking_description">Запис історії прослуховування в локальну базу даних</string>
     <string name="blog_notification_title">Сповіщення про публікації в блозі</string>
     <string name="blog_notification_description">Отримуйте сповіщення про публікацію нової публікації в блозі</string>
-    <string name="simpmusic_charts">ЧартиYT Music Mod</string>
+    <string name="simpmusic_charts">Чарти YT Music Mod </string>
     <string name="crossfading">Кроссфейдинг</string>
     <string name="your_320kbps_url">Ваша URL-адреса 320 Кбіт/с</string>
     <string name="your_320kbps_url_description">Залиште поле порожнім, щоб автоматично вибрати робочу URL-адресу з перевірки часу безперебійної роботи.</string>

@@ -156,6 +156,8 @@ internal class LocalDataSource(
         offset,
     )
 
+    fun getLikedSongsByArtist(channelId: String) = databaseDao.getLikedSongsByArtist(channelId)
+
     suspend fun getSong(videoId: String) = databaseDao.getSong(videoId)
 
     fun getSongAsFlow(videoId: String) = databaseDao.getSongAsFlow(videoId)
@@ -543,6 +545,12 @@ internal class LocalDataSource(
     }
 
     suspend fun getNewestPlaylistPairSong(playlistId: Long) = databaseDao.getNewestPlaylistPairSong(playlistId)
+
+    suspend fun moveSongInPlaylist(
+        playlistId: Long,
+        fromIndex: Int,
+        toIndex: Int,
+    ) = databaseDao.moveSongInPlaylist(playlistId, fromIndex, toIndex)
 
     suspend fun editPositionOfSongInPlaylist(
         playlistId: Long,

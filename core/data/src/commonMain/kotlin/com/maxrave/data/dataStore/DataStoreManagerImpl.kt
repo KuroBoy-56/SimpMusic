@@ -191,14 +191,21 @@ internal class DataStoreManagerImpl(
             preferences[PAGE_ID] ?: ""
         }
 
+    override val authUser: Flow<Int> =
+        settingsDataStore.data.map { preferences ->
+            preferences[AUTH_USER] ?: 0
+        }
+
     override suspend fun setCookie(
         cookie: String,
         pageId: String?,
+        authUser: Int,
     ) {
         withContext(Dispatchers.IO) {
             settingsDataStore.edit { settings ->
                 settings[COOKIE] = cookie
                 settings[PAGE_ID] = pageId ?: ""
+                settings[AUTH_USER] = authUser
             }
         }
     }
@@ -607,6 +614,19 @@ internal class DataStoreManagerImpl(
         }
     }
 
+    override val equalizerType =
+        settingsDataStore.data.map { preferences ->
+            preferences[EQUALIZER_TYPE] ?: DataStoreManager.EQUALIZER_TYPE_BUILT_IN
+        }
+
+    override suspend fun setEqualizerType(type: String) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[EQUALIZER_TYPE] = type
+            }
+        }
+    }
+
     override val equalizerAutoEqProfile: Flow<String> =
         settingsDataStore.data.map { preferences ->
             preferences[EQUALIZER_AUTOEQ_PROFILE] ?: ""
@@ -887,25 +907,6 @@ internal class DataStoreManagerImpl(
         withContext(Dispatchers.IO) {
             settingsDataStore.edit { settings ->
                 settings[CHART_KEY] = key
-            }
-        }
-    }
-
-    override val translucentBottomBar =
-        settingsDataStore.data.map { preferences ->
-            preferences[TRANSLUCENT_BOTTOM_BAR] ?: TRUE
-        }
-
-    override suspend fun setTranslucentBottomBar(translucent: Boolean) {
-        withContext(Dispatchers.IO) {
-            if (translucent) {
-                settingsDataStore.edit { settings ->
-                    settings[TRANSLUCENT_BOTTOM_BAR] = TRUE
-                }
-            } else {
-                settingsDataStore.edit { settings ->
-                    settings[TRANSLUCENT_BOTTOM_BAR] = FALSE
-                }
             }
         }
     }
@@ -1397,25 +1398,6 @@ internal class DataStoreManagerImpl(
         }
     }
 
-    override val keepServiceAlive: Flow<String> =
-        settingsDataStore.data.map { preferences ->
-            preferences[KEEP_SERVICE_ALIVE] ?: TRUE
-        }
-
-    override suspend fun setKeepServiceAlive(keep: Boolean) {
-        withContext(Dispatchers.IO) {
-            if (keep) {
-                settingsDataStore.edit { settings ->
-                    settings[KEEP_SERVICE_ALIVE] = TRUE
-                }
-            } else {
-                settingsDataStore.edit { settings ->
-                    settings[KEEP_SERVICE_ALIVE] = FALSE
-                }
-            }
-        }
-    }
-
     override val crossfadeEnabled: Flow<String> =
         settingsDataStore.data.map { preferences ->
             preferences[CROSSFADE_ENABLED] ?: FALSE
@@ -1505,6 +1487,19 @@ internal class DataStoreManagerImpl(
         withContext(Dispatchers.IO) {
             settingsDataStore.edit { settings ->
                 settings[YOUTUBE_SUBTITLE_LANGUAGE] = language
+            }
+        }
+    }
+
+    override val preferredAudioLanguage =
+        settingsDataStore.data.map { preferences ->
+            preferences[PREFERRED_AUDIO_LANGUAGE] ?: ""
+        }
+
+    override suspend fun setPreferredAudioLanguage(language: String) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[PREFERRED_AUDIO_LANGUAGE] = language.trim()
             }
         }
     }
@@ -1764,6 +1759,7 @@ internal class DataStoreManagerImpl(
         val COOKIE = stringPreferencesKey("cookie")
 
         val PAGE_ID = stringPreferencesKey("page_id")
+        val AUTH_USER = intPreferencesKey("auth_user")
         val LOGGED_IN = stringPreferencesKey("logged_in")
         val LOCATION = stringPreferencesKey("location")
         val MOOD_AND_GENRES_CACHE = stringPreferencesKey("mood_and_genres_cache")
@@ -1783,7 +1779,6 @@ internal class DataStoreManagerImpl(
         val FROM_SAVED_PLAYLIST = stringPreferencesKey("from_saved_playlist")
 
         val KILL_SERVICE_ON_EXIT = stringPreferencesKey("kill_service_on_exit")
-        val KEEP_SERVICE_ALIVE = stringPreferencesKey("keep_service_alive")
         val CROSSFADE_ENABLED = stringPreferencesKey("crossfade_enabled")
         val CROSSFADE_DURATION = intPreferencesKey("crossfade_duration")
         val CROSSFADE_DJ_MODE = stringPreferencesKey("crossfade_dj_mode")
@@ -1806,6 +1801,7 @@ internal class DataStoreManagerImpl(
         val EQUALIZER_AUTOEQ_PROFILE = stringPreferencesKey("equalizer_autoeq_profile")
         val EQUALIZER_BANDS = stringPreferencesKey("equalizer_bands")
         val EQUALIZER_ENABLED = stringPreferencesKey("equalizer_enabled")
+        val EQUALIZER_TYPE = stringPreferencesKey("equalizer_type")
         val EQUALIZER_PREAMP = stringPreferencesKey("equalizer_preamp")
         val DELAY_ENABLED = stringPreferencesKey("delay_enabled")
         val DELAY_TIME_MS = stringPreferencesKey("delay_time_ms")
@@ -1824,7 +1820,6 @@ internal class DataStoreManagerImpl(
         val TIDAL_CLIENT_SECRET = stringPreferencesKey("tidal_client_secret")
         val HOME_LIMIT = intPreferencesKey("home_limit")
         val CHART_KEY = stringPreferencesKey("chart_key")
-        val TRANSLUCENT_BOTTOM_BAR = stringPreferencesKey("translucent_bottom_bar")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val THEME_COLOR_SOURCE = stringPreferencesKey("theme_color_source")
         val CUSTOM_THEME_COLOR = stringPreferencesKey("custom_theme_color")
@@ -1860,6 +1855,7 @@ internal class DataStoreManagerImpl(
 
         val LOCAL_PLAYLIST_FILTER = stringPreferencesKey("local_playlist_filter")
         val YOUTUBE_SUBTITLE_LANGUAGE = stringPreferencesKey("youtube_subtitle_language")
+        val PREFERRED_AUDIO_LANGUAGE = stringPreferencesKey("preferred_audio_language")
         val HELP_BUILD_LYRICS_DATABASE = stringPreferencesKey("help_build_lyrics_database")
         val CONTRIBUTOR_NAME = stringPreferencesKey("contributor_name")
         val CONTRIBUTOR_EMAIL = stringPreferencesKey("contributor_email")

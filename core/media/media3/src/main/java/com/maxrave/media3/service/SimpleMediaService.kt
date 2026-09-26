@@ -3,62 +3,47 @@ package com.maxrave.media3.service
 import android.app.Activity
 import android.app.ActivityManager
 import android.app.ActivityManager.RunningAppProcessInfo
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
 import android.os.Binder
-import android.os.Build
-import android.os.Bundle
 import android.os.IBinder
-import androidx.core.content.getSystemService
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaController
 import androidx.media3.session.MediaLibraryService
-import androidx.media3.session.MediaNotification
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionToken
-import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.MoreExecutors
 import com.maxrave.common.MEDIA_NOTIFICATION
-import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
 import com.maxrave.logger.Logger
 import com.maxrave.media3.R
 import com.maxrave.media3.extension.toCommandButton
 import com.maxrave.media3.utils.CoilBitmapLoader
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
+import com.maxrave.media3.utils.sizeLimitedForSession
 import kotlinx.coroutines.runBlocking
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import org.koin.core.qualifier.named
 import kotlin.system.exitProcess
-import kotlin.time.Duration.Companion.seconds
 
 @UnstableApi
 internal class SimpleMediaService :
     MediaLibraryService(),
     KoinComponent {
-    private val coroutineScope by inject<CoroutineScope>(named(com.maxrave.common.Config.SERVICE_SCOPE))
+    // Session-level player from DI: the ForwardingPlayer wrapped with Cast support in the
+    // full build (plain ForwardingPlayer in the FOSS build).
     private val player: Player by inject<Player>(qualifier = named(com.maxrave.common.Config.MAIN_PLAYER))
     private val coilBitmapLoader: CoilBitmapLoader by inject<CoilBitmapLoader>()
 
     private var mediaSession: MediaLibrarySession? = null
 
     private val simpleMediaSessionCallback: MediaLibrarySession.Callback by inject<MediaLibrarySession.Callback>()
+
     private val simpleMediaServiceHandler: MediaPlayerHandler by inject<MediaPlayerHandler>()
-    private val dataStoreManager: DataStoreManager by inject<DataStoreManager>()
 
     private val binder = MusicBinder()
 
@@ -91,48 +76,16 @@ internal class SimpleMediaService :
         super.onCreate()
         Logger.w("Service", "Simple Media Service Created")
 
-        val defaultProvider = DefaultMediaNotificationProvider(
-            this,
-            { MEDIA_NOTIFICATION.NOTIFICATION_ID },
-            MEDIA_NOTIFICATION.NOTIFICATION_CHANNEL_ID,
-            R.string.notification_channel_name,
-        ).apply {
-            setSmallIcon(R.drawable.mono)
-        }
-
-        // VARIABLES PARA ROBAR EL PODER ANTI-BATERÍA SIN USAR EL ZOMBI
-        var latestNotification: Notification? = null
-        var latestNotificationId: Int = MEDIA_NOTIFICATION.NOTIFICATION_ID
-
-        setMediaNotificationProvider(object : MediaNotification.Provider {
-            override fun createNotification(
-                mediaSession: MediaSession,
-                customLayout: ImmutableList<CommandButton>,
-                actionFactory: MediaNotification.ActionFactory,
-                onNotificationChangedCallback: MediaNotification.Provider.Callback
-            ): MediaNotification {
-                val mediaNotif = defaultProvider.createNotification(
-                    mediaSession, customLayout, actionFactory, onNotificationChangedCallback
-                )
-                // Atrapamos la notificación oficial para usarla en el loop de energía
-                latestNotification = mediaNotif.notification
-                latestNotificationId = mediaNotif.notificationId
-                return mediaNotif
-            }
-
-            override fun handleCustomCommand(
-                session: MediaSession,
-                action: String,
-                extras: Bundle
-            ): Boolean {
-                return defaultProvider.handleCustomCommand(session, action, extras)
-            }
-
-            // ✅ SOLUCIÓN AL ERROR DE COMPILACIÓN: Le decimos que use el canal original
-            override fun getNotificationChannelInfo(): MediaNotification.Provider.NotificationChannelInfo {
-                return defaultProvider.getNotificationChannelInfo()
-            }
-        })
+        setMediaNotificationProvider(
+            DefaultMediaNotificationProvider(
+                this,
+                { MEDIA_NOTIFICATION.NOTIFICATION_ID },
+                MEDIA_NOTIFICATION.NOTIFICATION_CHANNEL_ID,
+                R.string.notification_channel_name,
+            ).apply {
+                setSmallIcon(R.drawable.mono)
+            },
+        )
 
         if (mediaSession == null) {
             mediaSession =
@@ -154,39 +107,11 @@ internal class SimpleMediaService :
         val controllerFuture = MediaController.Builder(this, sessionToken).buildAsync()
         controllerFuture.addListener({ controllerFuture.get() }, MoreExecutors.directExecutor())
 
-        // 🔥 EL LOOP ANTI-BATERÍA USANDO LA NOTIFICACIÓN OFICIAL 🔥
-        if (runBlocking { dataStoreManager.keepServiceAlive.first() == DataStoreManager.TRUE }) {
-
-            // Recreamos el canal por si acaso (para evitar crashes en algunas versiones de Android)
-            val notificationManager = getSystemService<NotificationManager>()
-            notificationManager?.run {
-                createNotificationChannel(
-                    NotificationChannel(
-                        MEDIA_NOTIFICATION.NOTIFICATION_CHANNEL_ID,
-                        "Now playing",
-                        NotificationManager.IMPORTANCE_LOW,
-                    ).apply {
-                        setSound(null, null)
-                        enableLights(false)
-                        enableVibration(false)
-                    },
-                )
-            }
-
-            coroutineScope.launch {
-                while (isActive) {
-                    delay(30.seconds)
-                    latestNotification?.let { notif ->
-                        try {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                startForeground(latestNotificationId, notif, FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
-                            } else {
-                                startForeground(latestNotificationId, notif)
-                            }
-                        } catch (_: Exception) {}
-                    }
-                }
-            }
+        simpleMediaServiceHandler.onUpdateNotification = { list ->
+            val commandButtonList = list.map { it.toCommandButton(this) }
+            mediaSession?.setMediaButtonPreferences(
+                commandButtonList,
+            )
         }
     }
 
@@ -215,15 +140,18 @@ internal class SimpleMediaService :
         Logger.w("Service", "Starting release process")
         runBlocking {
             try {
+                // Release MediaSession (don't release player - CrossfadeExoPlayerAdapter manages it)
                 mediaSession?.run {
                     this.player.pause()
                     this.player.playWhenReady = false
+                    // Don't call this.player.release() - CrossfadeExoPlayerAdapter manages player lifecycle
                     this.release()
                 }
+                // Release handler (contains coroutines and jobs, which also releases the adapter)
                 simpleMediaServiceHandler.release()
                 mediaSession = null
                 Logger.w("Service", "Simple Media Service Released")
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 Logger.e("Service", "Error during release")
             }
         }
@@ -253,6 +181,7 @@ internal class SimpleMediaService :
         }
     }
 
+    // Can't inject by Koin because it depend on service
     @UnstableApi
     private fun provideMediaLibrarySession(
         service: MediaLibraryService,
@@ -265,7 +194,22 @@ internal class SimpleMediaService :
                 player,
                 callback,
             ).setId(this.javaClass.name)
-            .setBitmapLoader(coilBitmapLoader)
+            // Capped at the platform's own artwork limit so the framework never rescales the shared
+            // bitmap in setMetadata — see sizeLimitedForSession (#2500). Falls back to the plain
+            // loader if the limit cannot be read.
+            .setBitmapLoader(sizeLimitedForSession(service, coilBitmapLoader))
+            // Tapping the media notification opens whatever the session activity points at, and the
+            // only other place that sets it is MainActivity's bind. A service started without that
+            // bind — a headset/Bluetooth play, Android Auto, a widget, a restart after the process
+            // was killed — would otherwise post a notification that opens nothing. The launcher
+            // activity is resolved at runtime, so this module never has to name MainActivity.
+            .apply {
+                service.packageManager.getLaunchIntentForPackage(service.packageName)?.let { launch ->
+                    setSessionActivity(
+                        PendingIntent.getActivity(service, 0, launch, PendingIntent.FLAG_IMMUTABLE),
+                    )
+                }
+            }
             .build()
 
     private fun isAppInForeground(): Boolean {

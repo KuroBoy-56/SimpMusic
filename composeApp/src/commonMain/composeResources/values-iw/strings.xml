@@ -151,6 +151,9 @@
     <string name="balance_media_loudness">איזון עוצמת מדיה</string>
     <string name="normalize_volume">נרמל את עוצמת הקול</string>
     <string name="audio">אודיו</string>
+    <string name="no_equalizer">למכשיר שלך אין אקולייזר</string>
+    <string name="open_system_equalizer">אקולייזר מערכת פתוחה</string>
+    <string name="use_your_system_equalizer">השתמש באקולייזר המערכת שלך</string>
     <string name="streaming_data_provider_piped">ספק נתונים בסטרימינג (Piped)</string>
     <string name="itag">יציב</string>
     <string name="mime_type">סוג Mime</string>
@@ -242,7 +245,7 @@
     <string name="email">אימייל</string>
     <string name="password">סיסמה</string>
     <string name="please_enter_your_email_and_password">נא להזין דוא״ל וסיסמא</string>
-    <string name="translation_language_message">הקלד קוד שפה (למשל: en) (2 אותיות). אם אתה רוצה להגדיר אותו דבר עם השפה שלYT Music Mod, אנא הפוך את תיבת העריכה לריקה.</string>
+    <string name="translation_language_message">הקלד קוד שפה (למשל: en) (2 אותיות). אם אתה רוצה להגדיר אותו דבר עם השפה של YT Music Mod , אנא הפוך את תיבת העריכה לריקה.</string>
     <string name="invalid_language_code">קוד שפה לא חוקי</string>
     <string name="lyrics_provider_youtube">מילים מסופקות על ידי יוטיוב</string>
     <string name="limit_player_cache">הגבל את מטמון הנגן</string>
@@ -256,8 +259,8 @@
     <string name="suggest">הצעה</string>
     <string name="reload">טען מחדש</string>
     <string name="added_date">נוסף תאריך</string>
-    <string name="credit_app">אפליקציית מוזיקה פשוטה באמצעות YouTube Music עבור backend \n\nYT Music Mod הוא פרויקט קוד פתוח להזרמת מוזיקה מ-YouTube ו-YouTube Music ללא מודעות ומעקב.YT Music Mod מספקת תכונות רבות:\n\n - הזרמת מוזיקה \n - מילים מסונכרנות\n - התאמה אישית של נתונים\n - אקו… \n\n
-SimpMusic תמיד בחינם וללא פרסומות\n\nבונה מ ❤️מ-Tuan Minh Nguyen Duc (maxrave-dev)</string>
+    <string name="credit_app">אפליקציית מוזיקה פשוטה באמצעות YouTube Music עבור backend \n\n YT Music Mod הוא פרויקט קוד פתוח להזרמת מוזיקה מ-YouTube ו-YouTube Music ללא מודעות ומעקב.  YT Music Mod מספקת תכונות רבות:\n\n - הזרמת מוזיקה \n - מילים מסונכרנות\n - התאמה אישית של נתונים\n - אקו… \n\n
+ YT Music Mod תמיד בחינם וללא פרסומות\n\nבונה מ ❤️מ-Tuan Minh Nguyen Duc (maxrave-dev)</string>
     <string name="issue_tracker">מעקב סוגיות</string>
     <string name="featured_playlists">רשימות השמעה נבחרות</string>
     <string name="featured_inArtist">מצורף ב</string>
@@ -329,8 +332,6 @@ SimpMusic תמיד בחינם וללא פרסומות\n\nבונה מ ❤️מ-Tu
     <string name="repeat_off">חזרה כבויה</string>
     <string name="youtube_transcript">תמלול יוטיוב</string>
     <string name="user_interface">ממשק</string>
-    <string name="translucent_bottom_navigation_bar">סרגל ניווט תחתון שקוף</string>
-    <string name="you_can_see_the_content_below_the_bottom_bar">אתה יכול לראות את התוכן מתחת לסרגל התחתון</string>
     <string name="donation">אם אתה אוהב את העבודה שלי, תן ​​לי קפה</string>
     <string name="relax">לְהִרָגַע</string>
     <string name="sleep">שינה</string>

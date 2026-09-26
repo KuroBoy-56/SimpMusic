@@ -131,6 +131,12 @@ class Ytmusic {
 
     var pageId: String? = null
 
+    // Index of the Google account inside the browser session the cookie came from
+    // (the `authuser` query param on youtube.com). A brand channel's pageId is only
+    // valid together with the authuser that owns it; sending 0 for a channel of the
+    // second signed-in account makes YouTube answer as if not logged in.
+    var authUser: Int = 0
+
     // TIDAL credentials. Empty until CommonRepositoryImpl pushes the values fetched from the
     // remote config (cached in DataStore). Deliberately NOT hard-coded in source — while
     // empty, TIDAL metadata lookups fail silently until the first successful fetch.
@@ -141,6 +147,7 @@ class Ytmusic {
 
     var proxy: ProxyConfig? = null
         set(value) {
+            if (field == value) return
             field = value
             httpClient.close()
             httpClient = createClient()
@@ -213,7 +220,7 @@ class Ytmusic {
             append("X-Goog-Api-Format-Version", "1")
             append("X-YouTube-Client-Name", "${client.xClientName ?: 1}")
             append("X-YouTube-Client-Version", client.clientVersion)
-            append("X-Goog-Authuser", "0")
+            append("X-Goog-Authuser", authUser.toString())
             pageId?.let {
                 append("X-Goog-Pageid", it)
             }
@@ -662,6 +669,11 @@ class Ytmusic {
         httpClient.get("https://f-droid.org/api/v1/packages/com.maxrave.simpmusic") {
             contentType(ContentType.Application.Json)
         }
+
+    suspend fun fdroidMetadata() =
+        httpClient.get(
+            "https://raw.githubusercontent.com/f-droid/fdroiddata/master/metadata/com.maxrave.simpmusic.yml",
+        )
 
     suspend fun playlist(playlistId: String) =
         httpClient.post("browse") {

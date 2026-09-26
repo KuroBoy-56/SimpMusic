@@ -1,6 +1,5 @@
 package com.maxrave.media3.service.download
 
-import android.annotation.SuppressLint
 import android.app.Notification
 import android.content.Context
 import androidx.media3.common.util.NotificationUtil
@@ -29,7 +28,6 @@ internal class MusicDownloadService :
 
     override fun getDownloadManager() = (downloadUtil as DownloadUtils).downloadManager
 
-    @SuppressLint("MissingPermission")
     override fun getScheduler(): Scheduler = PlatformScheduler(this, JOB_ID)
 
     override fun getForegroundNotification(

@@ -40,24 +40,24 @@ import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.pagination.PagingActions
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.singleOrNull
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDateTime
@@ -205,8 +205,6 @@ class LocalPlaylistViewModel(
         )
     val tracksPagingState: StateFlow<PagingData<Pair<SongEntity, PairSongLocalPlaylist>>> get() = _tracksPagingState
 
-    // --- ACTUALIZACIÓN LÓGICA ---
-    // Motor de búsqueda interna para playlists locales con debounce
     private val _searchQuery: MutableStateFlow<String> = MutableStateFlow("")
     val searchQuery: StateFlow<String> get() = _searchQuery
 
@@ -214,6 +212,16 @@ class LocalPlaylistViewModel(
         _searchQuery.value = query
     }
 
+    /**
+     * Results for the search box, entirely separate from [tracksPagingState].
+     *
+     * Deliberately not a filter over the paged list: PagingData.filter only sees pages already
+     * loaded, so on a long playlist a track would be findable or not depending on how far the
+     * user had scrolled. This queries the database instead and returns a plain list.
+     *
+     * Below two characters it emits nothing — a single letter matches most of a playlist, which
+     * is neither useful to read nor cheap to fetch.
+     */
     @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
     val searchResults: StateFlow<List<Pair<SongEntity, PairSongLocalPlaylist>>> =
         _searchQuery
@@ -227,7 +235,6 @@ class LocalPlaylistViewModel(
                     localPlaylistRepository.searchTracks(uiState.value.id, query)
                 }
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
     private val lazyTrackPagingItems: MutableStateFlow<LazyPagingItems<Pair<SongEntity, PairSongLocalPlaylist>>?> = MutableStateFlow(null)
 
     fun setLazyTrackPagingItems(lazyPagingItems: LazyPagingItems<Pair<SongEntity, PairSongLocalPlaylist>>) {
@@ -399,6 +406,46 @@ class LocalPlaylistViewModel(
 
     val listJob: MutableStateFlow<ArrayList<SongEntity>> = MutableStateFlow(arrayListOf())
 
+//        var downloadState: StateFlow<List<Download?>>
+//        viewModelScope.launch {
+//            downloadState = downloadUtils.getAllDownloads().stateIn(viewModelScope)
+//            downloadState.collectLatest { down ->
+//                if (down.isNotEmpty()){
+//                    var count = 0
+//                    down.forEach { downloadItem ->
+//                        if (downloadItem?.state == Download.STATE_COMPLETED) {
+//                            count++
+//                        }
+//                        else if (downloadItem?.state == Download.STATE_FAILED) {
+//                            updatePlaylistDownloadState(id, DownloadState.STATE_DOWNLOADING)
+//                        }
+//                    }
+//                    if (count == down.size) {
+//                        mainRepository.getLocalPlaylist(id).collect{ playlist ->
+//                            mainRepository.getSongsByListVideoId(playlist.tracks!!).collect{ tracks ->
+//                                tracks.forEach { track ->
+//                                    if (track.downloadState != DownloadState.STATE_DOWNLOADED) {
+//                                        mainRepository.updateDownloadState(track.videoId, DownloadState.STATE_NOT_DOWNLOADED)
+//                                        Toast.makeText(getApplication(), "Download Failed", Toast.LENGTH_SHORT).show()
+//                                    }
+//                                }
+//                            }
+//                        }
+//                        Logger.d("Check Downloaded", "Downloaded")
+//                        updatePlaylistDownloadState(id, DownloadState.STATE_DOWNLOADED)
+//                        Toast.makeText(getApplication(), "Download Completed", Toast.LENGTH_SHORT).show()
+//                    }
+//                    else {
+//                        updatePlaylistDownloadState(id, DownloadState.STATE_DOWNLOADING)
+//                    }
+//                }
+//                else {
+//                    updatePlaylistDownloadState(id, DownloadState.STATE_NOT_DOWNLOADED)
+//                }
+//            }
+//        }
+//    }
+
     fun updatePlaylistTitle(
         title: String,
         id: Long,
@@ -493,8 +540,18 @@ class LocalPlaylistViewModel(
         }
     }
 
-    // --- ACTUALIZACIÓN LÓGICA ---
-    // Versión robusta del manejo de estados de descarga por lotes
+    /**
+     * Mirrors the download state of [listJob] onto the playlist while the batch runs.
+     *
+     * A missing entry in `downloadTask` means "nothing reported yet", which is NOT the same as
+     * "finished and not downloaded" — collapsing the two into a trailing `else` is what pinned
+     * every playlist to STATE_NOT_DOWNLOADED whenever the map had not been populated. An
+     * unresolved batch therefore leaves the current state alone instead of overwriting it.
+     *
+     * The repository write also has to happen OUTSIDE `_uiState.update`: that helper is a
+     * compare-and-set retry loop, so a lambda with a suspending side effect in it can run more
+     * than once per emission and issue duplicate writes.
+     */
     fun downloadFullPlaylistState(
         id: Long,
         listJob: List<String>,
@@ -505,6 +562,8 @@ class LocalPlaylistViewModel(
                 val states = listJob.map { download[it] }
                 val resolved =
                     when {
+                        // Checked before completeness: one track actively downloading is enough
+                        // to call the playlist downloading, even if the rest are still unreported.
                         states.any { it == STATE_DOWNLOADING } -> STATE_DOWNLOADING
                         states.all { it == STATE_DOWNLOADED } -> STATE_DOWNLOADED
                         states.any { it == null } -> null
@@ -552,6 +611,37 @@ class LocalPlaylistViewModel(
                         hideLoadingDialog()
                     },
                 )
+//            mainRepository.createYouTubePlaylist(playlist).collect {
+//                if (it != null) {
+//                    val ytId = "VL$it"
+//                    mainRepository.updateLocalPlaylistYouTubePlaylistId(playlist.id, ytId)
+//                    mainRepository.updateLocalPlaylistYouTubePlaylistSynced(playlist.id, 1)
+//                    mainRepository.getLocalPlaylistByYoutubePlaylistId(ytId).collect { yt ->
+//                        if (yt != null) {
+//                            mainRepository.updateLocalPlaylistYouTubePlaylistSyncState(
+//                                yt.id,
+//                                LocalPlaylistEntity.YouTubeSyncState.Synced,
+//                            )
+//                            mainRepository.getLocalPlaylist(playlist.id).collect { last ->
+//                                _localPlaylist.emit(last)
+//                                Toast
+//                                    .makeText(
+//                                        application,
+//                                        application.getString(Res.string.synced),
+//                                        Toast.LENGTH_SHORT,
+//                                    ).show()
+//                            }
+//                        }
+//                    }
+//                } else {
+//                    Toast
+//                        .makeText(
+//                            application,
+//                            application.getString(Res.string.error),
+//                            Toast.LENGTH_SHORT,
+//                        ).show()
+//                }
+//            }
         }
     }
 
@@ -937,7 +1027,7 @@ class LocalPlaylistViewModel(
                     playlistId = uiState.value.id,
                     fromIndex = from,
                     toIndex = to,
-                ).collectResource<String>(
+                ).collectResource(
                     onLoading = {
                         log("changeLocalPlaylistItemPosition (synced): loading")
                     },
@@ -953,22 +1043,23 @@ class LocalPlaylistViewModel(
                 )
         } else {
             // Unsynced playlist: local only, no loading dialog needed
-            val loadedList =
-                lazyTrackPagingItems.value?.itemSnapshotList?.toList() ?: return
-            val fromItem = loadedList.getOrNull(from)?.first ?: return
-            val toItem = loadedList.getOrNull(to)?.first ?: return
-            val fromPosition = loadedList.getOrNull(from)?.second?.position ?: from
-            val toPosition = loadedList.getOrNull(to)?.second?.position ?: to
-            val playlistId = uiState.value.id
-
             localPlaylistRepository
-                .changePositionOfSongInPlaylist(playlistId, fromItem.videoId, toPosition)
-                .lastOrNull()
-                ?.let { log("changeLocalPlaylistItemPosition: from $it") }
-            localPlaylistRepository
-                .changePositionOfSongInPlaylist(playlistId, toItem.videoId, fromPosition)
-                .lastOrNull()
-                ?.let { log("changeLocalPlaylistItemPosition: to $it") }
+                .moveItemInLocalPlaylist(
+                    playlistId = uiState.value.id,
+                    fromIndex = from,
+                    toIndex = to,
+                ).collectResource(
+                    onLoading = {
+                        log("changeLocalPlaylistItemPosition (local): loading")
+                    },
+                    onSuccess = {
+                        log("changeLocalPlaylistItemPosition (local): success $it")
+                    },
+                    onError = { message ->
+                        log("changeLocalPlaylistItemPosition (local): error $message")
+                        makeToast(message)
+                    },
+                )
         }
     }
 }

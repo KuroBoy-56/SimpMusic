@@ -9,18 +9,21 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.res.Configuration
+import android.content.res.ColorStateList
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.net.Uri
 import android.provider.Settings
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.SystemBarStyle
@@ -52,12 +55,14 @@ import com.maxrave.domain.data.model.intent.GenericIntent
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
 import com.maxrave.domain.mediaservice.handler.ToastType
+import com.maxrave.logger.Logger
 import com.maxrave.media3.di.setServiceActivitySession
 import com.maxrave.simpmusic.di.viewModelModule
 import com.maxrave.simpmusic.service.backup.MediaAudioConfig
 import com.maxrave.simpmusic.service.rss.RssFeedNotifyWork
 import com.maxrave.simpmusic.service.test.notification.NotifyWork
 import com.maxrave.simpmusic.utils.ComposeResUtils
+import com.maxrave.simpmusic.utils.VersionManager
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -71,10 +76,18 @@ import org.koin.core.context.unloadKoinModules
 import org.koin.dsl.module
 import org.simpmusic.crashlytics.pushPlayerError
 import pub.devrel.easypermissions.EasyPermissions
+import androidx.core.content.FileProvider
+import java.io.BufferedInputStream
+import java.io.File
+import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.security.MessageDigest
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 import kotlin.system.exitProcess
 
@@ -82,6 +95,13 @@ class MainActivity : AppCompatActivity() {
     val viewModel: SharedViewModel by inject()
     val mediaPlayerHandler by inject<MediaPlayerHandler>()
     val dataStoreManager: DataStoreManager by inject()
+
+    // Actualizador interno: conserva el sistema de versiones/API existente.
+    private var updateDownloadDialog: Dialog? = null
+    private var pendingUpdateApk: File? = null
+    private var waitingForInstallPermission = false
+    private var updateProgressBar: ProgressBar? = null
+    private var updateProgressText: TextView? = null
 
     companion object {
         var isAppDoubleLoaded = false
@@ -101,10 +121,12 @@ class MainActivity : AppCompatActivity() {
                 service: IBinder?,
             ) {
                 setServiceActivitySession(this@MainActivity, MainActivity::class.java, service)
+                Logger.w("MainActivity", "onServiceConnected: ")
                 mBound = true
             }
 
             override fun onServiceDisconnected(name: ComponentName?) {
+                Logger.w("MainActivity", "onServiceDisconnected: ")
                 mBound = false
             }
         }
@@ -118,6 +140,18 @@ class MainActivity : AppCompatActivity() {
         processed = processed.padEnd(16, 'A')
         processed = processed.substring(0, 16).uppercase()
         return processed.chunked(2).joinToString(":")
+    }
+
+    private fun generateSecurityToken(user: String, mac: String): String {
+        val secretKey = "kuropanchi950125"
+        val format = SimpleDateFormat("yyyy-MM-dd-HH", Locale.US)
+        format.timeZone = TimeZone.getTimeZone("America/Panama")
+        val currentHourDate = format.format(Date())
+
+        val stringToHash = "$user$mac$currentHourDate$secretKey"
+
+        val bytes = MessageDigest.getInstance("SHA-256").digest(stringToHash.toByteArray(Charsets.UTF_8))
+        return bytes.joinToString("") { "%02x".format(it) }
     }
 
     override fun onStart() {
@@ -134,6 +168,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        Logger.d("MainActivity", "onNewIntent: $intent")
         viewModel.setIntent(
             GenericIntent(
                 action = intent.action,
@@ -176,12 +211,16 @@ class MainActivity : AppCompatActivity() {
         unloadKoinModules(viewModelModule)
         loadKoinModules(viewModelModule)
 
+        // Integrado: Inicializador de versión del desarrollador
+        VersionManager.initialize()
+
         if (viewModel.recreateActivity.value || viewModel.isServiceRunning) {
             viewModel.activityRecreateDone()
         } else {
             startMusicService()
         }
 
+        Logger.d("MainActivity", "onCreate: ")
         val data = (intent?.data ?: intent?.getStringExtra(Intent.EXTRA_TEXT)?.toUri())?.toKmpUriOrNull()
         if (data != null) {
             viewModel.setIntent(
@@ -192,9 +231,19 @@ class MainActivity : AppCompatActivity() {
                 ),
             )
         }
+        Logger.d("Italy", "Key: ${Locale.ITALY.toLanguageTag()}")
 
         if (getString(FIRST_TIME_MIGRATION) != STATUS_DONE) {
+            Logger.d("Locale Key", "onCreate: ${Locale.getDefault().toLanguageTag()}")
             if (SUPPORTED_LANGUAGE.codes.contains(Locale.getDefault().toLanguageTag())) {
+                Logger.d(
+                    "Contains",
+                    "onCreate: ${
+                        SUPPORTED_LANGUAGE.codes.contains(
+                            Locale.getDefault().toLanguageTag(),
+                        )
+                    }",
+                )
                 putString(SELECTED_LANGUAGE, Locale.getDefault().toLanguageTag())
                 if (SUPPORTED_LOCATION.items.contains(Locale.getDefault().country)) {
                     putString("location", Locale.getDefault().country)
@@ -205,6 +254,7 @@ class MainActivity : AppCompatActivity() {
                 putString(SELECTED_LANGUAGE, "en-US")
             }
             getString(SELECTED_LANGUAGE)?.let {
+                Logger.d("Locale Key", "getString: $it")
                 val localeList = LocaleListCompat.forLanguageTags(it)
                 AppCompatDelegate.setApplicationLocales(localeList)
                 putString(FIRST_TIME_MIGRATION, STATUS_DONE)
@@ -215,10 +265,24 @@ class MainActivity : AppCompatActivity() {
                 SELECTED_LANGUAGE,
             )
         ) {
+            Logger.d(
+                "Locale Key",
+                "onCreate: ${AppCompatDelegate.getApplicationLocales().toLanguageTags()}",
+            )
             putString(SELECTED_LANGUAGE, AppCompatDelegate.getApplicationLocales().toLanguageTags())
         }
 
-        enableEdgeToEdge()
+        // Integrado: Mejoras visuales del desarrollador (barras transparentes)
+        enableEdgeToEdge(
+            navigationBarStyle =
+                SystemBarStyle.dark(
+                    scrim = Color.Transparent.toArgb(),
+                ),
+            statusBarStyle =
+                SystemBarStyle.dark(
+                    scrim = Color.Transparent.toArgb(),
+                ),
+        )
 
         viewModel.checkIsRestoring()
 
@@ -239,22 +303,31 @@ class MainActivity : AppCompatActivity() {
             request,
         )
 
-        val updateRequest =
-            PeriodicWorkRequestBuilder<RssFeedNotifyWork>(
-                12L,
-                TimeUnit.HOURS,
-            ).addTag("Blog RSS Worker")
-                .setConstraints(
-                    Constraints
-                        .Builder()
-                        .setRequiredNetworkType(NetworkType.CONNECTED)
-                        .build(),
-                ).build()
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "Blog RSS Worker",
-            ExistingPeriodicWorkPolicy.KEEP,
-            updateRequest,
-        )
+        // Integrado: Nuevo sistema de Notificaciones RSS controlado por preferencias del usuario
+        lifecycleScope.launch {
+            dataStoreManager.blogNotificationEnabled.collect { enabled ->
+                if (enabled == DataStoreManager.TRUE) {
+                    val rssRequest =
+                        PeriodicWorkRequestBuilder<RssFeedNotifyWork>(
+                            24L,
+                            TimeUnit.HOURS,
+                        ).addTag("Blog RSS Worker")
+                            .setConstraints(
+                                Constraints
+                                    .Builder()
+                                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                                    .build(),
+                            ).build()
+                    WorkManager.getInstance(this@MainActivity).enqueueUniquePeriodicWork(
+                        "Blog RSS Worker",
+                        ExistingPeriodicWorkPolicy.KEEP,
+                        rssRequest,
+                    )
+                } else {
+                    WorkManager.getInstance(this@MainActivity).cancelUniqueWork("Blog RSS Worker")
+                }
+            }
+        }
 
         if (!EasyPermissions.hasPermissions(this, Manifest.permission.POST_NOTIFICATIONS)) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -278,6 +351,7 @@ class MainActivity : AppCompatActivity() {
 
         viewModel.getLocation()
 
+        // 🛡️ TUS SISTEMAS PRIVADOS (Intocables)
         verificarDiasRestantes()
         verificarActualizacionApp()
 
@@ -289,10 +363,13 @@ class MainActivity : AppCompatActivity() {
                     val user = prefs.getString("saved_user", "") ?: ""
                     val pass = prefs.getString("saved_pass", "") ?: ""
 
+                    if (user.isEmpty() || pass.isEmpty()) return@withContext
+
                     val deviceMac = getCustomMacAddress()
                     val userEnc = URLEncoder.encode(user, "UTF-8")
                     val passEnc = URLEncoder.encode(pass, "UTF-8")
                     val macEnc = URLEncoder.encode(deviceMac, "UTF-8")
+                    val securityToken = generateSecurityToken(user, deviceMac)
 
                     val encryptedBytes = intArrayOf(
                         109, 121, 121, 117, 120, 63, 52, 52, 108, 102, 119, 106, 123, 126, 115, 117, 102, 115, 106, 113,
@@ -305,7 +382,7 @@ class MainActivity : AppCompatActivity() {
                         urlBuilder.append((byteVal - 5).toChar())
                     }
 
-                    val urlString = "${urlBuilder.toString()}?username=$userEnc&password=$passEnc&mac=$macEnc"
+                    val urlString = "${urlBuilder.toString()}?username=$userEnc&password=$passEnc&mac=$macEnc&token=$securityToken"
                     val response = fetchPanelDataWithRetry(urlString)
 
                     if (response == "AUTH_ERROR") {
@@ -614,14 +691,18 @@ class MainActivity : AppCompatActivity() {
 
             if (usuarioGuardado.isEmpty()) return@launch
 
+            val deviceMac = getCustomMacAddress()
             val userEnc = URLEncoder.encode(usuarioGuardado, "UTF-8")
+            val macEnc = URLEncoder.encode(deviceMac, "UTF-8")
+            val securityToken = generateSecurityToken(usuarioGuardado, deviceMac)
+
             val encryptedBytes = intArrayOf(109, 121, 121, 117, 120, 63, 52, 52, 108, 102, 119, 106, 123, 126, 115, 117, 102, 115, 106, 113, 120, 51, 113, 102, 121, 114, 117, 125, 51, 104, 116, 114, 52, 126, 116, 122, 121, 122, 103, 106, 52, 117, 102, 115, 106, 113, 52, 102, 117, 110, 52, 104, 109, 106, 104, 112, 100, 105, 102, 126, 120, 51, 117, 109, 117)
             val urlBuilder = java.lang.StringBuilder()
             for (byteVal in encryptedBytes) {
                 urlBuilder.append((byteVal - 5).toChar())
             }
 
-            val urlString = "${urlBuilder.toString()}?username=$userEnc"
+            val urlString = "${urlBuilder.toString()}?username=$userEnc&mac=$macEnc&token=$securityToken"
             val response = fetchPanelDataWithRetry(urlString)
 
             if (response != null && response != "AUTH_ERROR") {
@@ -809,7 +890,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun mostrarAlertaActualizacion(versionName: String, mensaje: String, downloadUrl: String, isMandatory: Boolean) {
+    private fun mostrarAlertaActualizacion(
+        versionName: String,
+        mensaje: String,
+        downloadUrl: String,
+        isMandatory: Boolean,
+    ) {
         try {
             val dialog = Dialog(this)
             dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
@@ -909,13 +995,19 @@ class MainActivity : AppCompatActivity() {
                     gravity = Gravity.CENTER_HORIZONTAL
                 }
                 setOnClickListener {
-                    if (downloadUrl.isNotEmpty()) {
-                        val intent = Intent(Intent.ACTION_VIEW, downloadUrl.toUri())
-                        startActivity(intent)
+                    if (downloadUrl.isBlank()) {
+                        mostrarErrorActualizacion("No se encontró la dirección de descarga de la actualización.")
+                        return@setOnClickListener
                     }
-                    if (!isMandatory) {
-                        dialog.dismiss()
-                    }
+
+                    // No se abre navegador: la APK se descarga dentro de la aplicación.
+                    dialog.dismiss()
+                    descargarActualizacionInterna(
+                        downloadUrl = downloadUrl,
+                        versionName = versionName,
+                        themeColor = themeColor,
+                        isMandatory = isMandatory,
+                    )
                 }
             }
 
@@ -965,13 +1057,511 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Descarga la APK directamente desde download_url.
+     *
+     * No modifica ni vuelve a validar el sistema de cuenta, firma o token.
+     * Solamente sustituye el ACTION_VIEW que anteriormente abría el navegador.
+     */
+    private fun descargarActualizacionInterna(
+        downloadUrl: String,
+        versionName: String,
+        themeColor: String,
+        isMandatory: Boolean,
+    ) {
+        val progressDialog = mostrarDialogoDescarga(
+            versionName = versionName,
+            themeColor = themeColor,
+            isMandatory = isMandatory,
+        )
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            var connection: HttpURLConnection? = null
+
+            try {
+                val url = URL(downloadUrl)
+                connection = url.openConnection() as HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 15000
+                connection.readTimeout = 30000
+                connection.instanceFollowRedirects = true
+                connection.useCaches = false
+                connection.connect()
+
+                if (connection.responseCode !in 200..299) {
+                    throw java.io.IOException(
+                        "Error HTTP ${connection.responseCode}"
+                    )
+                }
+
+                val totalBytes = connection.contentLengthLong
+                val updateDir = File(cacheDir, "updates")
+                if (!updateDir.exists() && !updateDir.mkdirs()) {
+                    throw java.io.IOException("No se pudo crear el directorio de actualización.")
+                }
+
+                // Siempre reemplazamos el APK anterior para evitar instalar una descarga vieja.
+                val apkFile = File(updateDir, "update-$versionName.apk")
+                if (apkFile.exists() && !apkFile.delete()) {
+                    throw java.io.IOException("No se pudo reemplazar la actualización anterior.")
+                }
+
+                var downloadedBytes = 0L
+
+                BufferedInputStream(connection.inputStream).use { input ->
+                    FileOutputStream(apkFile).use { output ->
+                        val buffer = ByteArray(64 * 1024)
+
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count == -1) break
+
+                            output.write(buffer, 0, count)
+                            downloadedBytes += count
+
+                            val progress = if (totalBytes > 0L) {
+                                ((downloadedBytes * 100L) / totalBytes)
+                                    .coerceIn(0L, 100L)
+                                    .toInt()
+                            } else {
+                                -1
+                            }
+
+                            withContext(Dispatchers.Main) {
+                                actualizarProgresoDescarga(
+                                    progressDialog,
+                                    downloadedBytes,
+                                    totalBytes,
+                                    progress,
+                                )
+                            }
+                        }
+
+                        output.flush()
+                    }
+                }
+
+                if (!apkFile.exists() || apkFile.length() <= 0L) {
+                    throw java.io.IOException("La APK descargada está vacía o no existe.")
+                }
+
+                withContext(Dispatchers.Main) {
+                    actualizarProgresoDescarga(
+                        progressDialog,
+                        apkFile.length(),
+                        apkFile.length(),
+                        100,
+                    )
+
+                    updateDownloadDialog?.dismiss()
+                    updateDownloadDialog = null
+                    updateProgressBar = null
+                    updateProgressText = null
+
+                    // Guardamos la APK por si Android requiere primero habilitar
+                    // la instalación desde esta fuente.
+                    pendingUpdateApk = apkFile
+                    instalarActualizacion(apkFile)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+
+                withContext(Dispatchers.Main) {
+                    updateDownloadDialog?.dismiss()
+                    updateDownloadDialog = null
+                    updateProgressBar = null
+                    updateProgressText = null
+
+                    mostrarErrorActualizacion(
+                        e.message ?: "No se pudo descargar la actualización."
+                    )
+                }
+            } finally {
+                connection?.disconnect()
+            }
+        }
+    }
+
+    private fun mostrarDialogoDescarga(
+        versionName: String,
+        themeColor: String,
+        isMandatory: Boolean,
+    ): Dialog {
+        val dialog = Dialog(this)
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+
+        val rootLayout = LinearLayout(this).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            gravity = Gravity.CENTER
+            setBackgroundColor(android.graphics.Color.parseColor("#E6000000"))
+        }
+
+        val cardLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(70, 80, 70, 80)
+            background = GradientDrawable().apply {
+                colors = intArrayOf(
+                    android.graphics.Color.parseColor("#1C1C1C"),
+                    android.graphics.Color.parseColor("#0A0A0A")
+                )
+                orientation = GradientDrawable.Orientation.TOP_BOTTOM
+                cornerRadius = 50f
+                setStroke(3, android.graphics.Color.parseColor(themeColor))
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                (resources.displayMetrics.widthPixels * 0.85).toInt(),
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        val iconView = ImageView(this).apply {
+            setImageResource(R.drawable.mono)
+            layoutParams = LinearLayout.LayoutParams(180, 180).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                bottomMargin = 35
+            }
+        }
+
+        val titleView = TextView(this).apply {
+            text = "DESCARGANDO $versionName"
+            textSize = 20f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(android.graphics.Color.WHITE)
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = 25
+            }
+        }
+
+        val progressBar = ProgressBar(
+            this,
+            null,
+            android.R.attr.progressBarStyleHorizontal
+        ).apply {
+            max = 100
+            progress = 0
+            progressTintList = ColorStateList.valueOf(
+                android.graphics.Color.parseColor(themeColor)
+            )
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                35
+            ).apply {
+                bottomMargin = 25
+            }
+        }
+
+        val progressText = TextView(this).apply {
+            text = "Preparando descarga..."
+            textSize = 14f
+            setTextColor(android.graphics.Color.parseColor("#CCCCCC"))
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        cardLayout.addView(iconView)
+        cardLayout.addView(titleView)
+        cardLayout.addView(progressBar)
+        cardLayout.addView(progressText)
+
+        rootLayout.addView(cardLayout)
+        dialog.setContentView(rootLayout)
+
+        dialog.window?.apply {
+            setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
+            setLayout(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            setGravity(Gravity.CENTER)
+        }
+
+        dialog.setCancelable(false)
+        dialog.show()
+
+        updateProgressBar = progressBar
+        updateProgressText = progressText
+        updateDownloadDialog = dialog
+        return dialog
+    }
+
+    private fun actualizarProgresoDescarga(
+        dialog: Dialog,
+        downloadedBytes: Long,
+        totalBytes: Long,
+        progress: Int,
+    ) {
+        if (!dialog.isShowing) return
+
+        if (progress >= 0) {
+            updateProgressBar?.progress = progress
+        }
+
+        updateProgressText?.text = if (totalBytes > 0L) {
+            "${progress.coerceAtLeast(0)}%  •  ${formatearTamano(downloadedBytes)} / ${formatearTamano(totalBytes)}"
+        } else {
+            "${formatearTamano(downloadedBytes)} descargados"
+        }
+    }
+
+    private fun formatearTamano(bytes: Long): String {
+        if (bytes < 1024L) return "$bytes B"
+
+        val kb = bytes / 1024.0
+        if (kb < 1024.0) return String.format(Locale.US, "%.1f KB", kb)
+
+        val mb = kb / 1024.0
+        if (mb < 1024.0) return String.format(Locale.US, "%.1f MB", mb)
+
+        val gb = mb / 1024.0
+        return String.format(Locale.US, "%.2f GB", gb)
+    }
+
+    private fun instalarActualizacion(apkFile: File) {
+        try {
+            if (!apkFile.exists() || apkFile.length() <= 0L) {
+                mostrarErrorActualizacion("La actualización no está disponible para instalar.")
+                return
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val puedeInstalar =
+                    try {
+                        packageManager.canRequestPackageInstalls()
+                    } catch (_: SecurityException) {
+                        false
+                    }
+
+                if (!puedeInstalar) {
+                    pendingUpdateApk = apkFile
+                    waitingForInstallPermission = true
+
+                    val settingsIntent = Intent(
+                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:$packageName")
+                    )
+
+                    try {
+                        startActivity(settingsIntent)
+                    } catch (_: Exception) {
+                        startActivity(
+                            Intent(Settings.ACTION_SECURITY_SETTINGS)
+                        )
+                    }
+
+                    return
+                }
+            }
+
+            lanzarInstalador(apkFile)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            mostrarErrorActualizacion(
+                e.message ?: "No se pudo abrir el instalador de paquetes."
+            )
+        }
+    }
+
+    private fun lanzarInstalador(apkFile: File) {
+        try {
+            val apkUri = FileProvider.getUriForFile(
+                this,
+                "${BuildConfig.APPLICATION_ID}.FileProvider",
+                apkFile,
+            )
+
+            val installIntent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(
+                    apkUri,
+                    "application/vnd.android.package-archive"
+                )
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+
+            pendingUpdateApk = apkFile
+            startActivity(installIntent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            mostrarErrorActualizacion(
+                "No se pudo abrir el instalador de paquetes."
+            )
+        }
+    }
+
+    private fun mostrarErrorActualizacion(mensaje: String) {
+        if (isFinishing || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1 && isDestroyed)) {
+            return
+        }
+
+        try {
+            val dialog = Dialog(this)
+            dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+
+            val rootLayout = LinearLayout(this).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                gravity = Gravity.CENTER
+                setBackgroundColor(android.graphics.Color.parseColor("#E6000000"))
+            }
+
+            val cardLayout = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(70, 80, 70, 80)
+                background = GradientDrawable().apply {
+                    colors = intArrayOf(
+                        android.graphics.Color.parseColor("#1C1C1C"),
+                        android.graphics.Color.parseColor("#0A0A0A")
+                    )
+                    orientation = GradientDrawable.Orientation.TOP_BOTTOM
+                    cornerRadius = 50f
+                    setStroke(3, android.graphics.Color.parseColor("#E50914"))
+                }
+                layoutParams = LinearLayout.LayoutParams(
+                    (resources.displayMetrics.widthPixels * 0.85).toInt(),
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            }
+
+            val iconView = ImageView(this).apply {
+                setImageResource(R.drawable.mono)
+                layoutParams = LinearLayout.LayoutParams(180, 180).apply {
+                    gravity = Gravity.CENTER_HORIZONTAL
+                    bottomMargin = 35
+                }
+            }
+
+            val titleView = TextView(this).apply {
+                text = "ACTUALIZACIÓN"
+                textSize = 20f
+                setTypeface(null, Typeface.BOLD)
+                setTextColor(android.graphics.Color.WHITE)
+                gravity = Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    bottomMargin = 25
+                }
+            }
+
+            val messageView = TextView(this).apply {
+                text = mensaje
+                textSize = 15f
+                setTextColor(android.graphics.Color.parseColor("#CCCCCC"))
+                gravity = Gravity.CENTER
+                setLineSpacing(0f, 1.4f)
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    bottomMargin = 45
+                }
+            }
+
+            val button = Button(this).apply {
+                text = "ENTENDIDO"
+                setTextColor(android.graphics.Color.WHITE)
+                textSize = 15f
+                setTypeface(null, Typeface.BOLD)
+                background = GradientDrawable().apply {
+                    colors = intArrayOf(
+                        android.graphics.Color.parseColor("#E50914"),
+                        android.graphics.Color.parseColor("#990000")
+                    )
+                    orientation = GradientDrawable.Orientation.BL_TR
+                    cornerRadius = 25f
+                }
+                layoutParams = LinearLayout.LayoutParams(
+                    (resources.displayMetrics.widthPixels * 0.65).toInt(),
+                    130
+                ).apply {
+                    gravity = Gravity.CENTER_HORIZONTAL
+                }
+                setOnClickListener {
+                    dialog.dismiss()
+                }
+            }
+
+            cardLayout.addView(iconView)
+            cardLayout.addView(titleView)
+            cardLayout.addView(messageView)
+            cardLayout.addView(button)
+
+            rootLayout.addView(cardLayout)
+            dialog.setContentView(rootLayout)
+
+            dialog.window?.apply {
+                setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
+                setLayout(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                setGravity(Gravity.CENTER)
+            }
+
+            dialog.setCancelable(true)
+            dialog.show()
+        } catch (e: Exception) {
+            Toast.makeText(
+                this,
+                mensaje,
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
     override fun onDestroy() {
+        updateDownloadDialog?.dismiss()
+        updateDownloadDialog = null
+        updateProgressBar = null
+        updateProgressText = null
+
         val shouldStopMusicService = viewModel.shouldStopMusicService()
+        Logger.w("MainActivity", "onDestroy: Should stop service $shouldStopMusicService")
+
         if (shouldStopMusicService && shouldUnbind && isFinishing) {
             viewModel.isServiceRunning = false
         }
         unloadKoinModules(viewModelModule)
         super.onDestroy()
+        Logger.d("MainActivity", "onDestroy: ")
+    }
+
+    override fun onResume() {
+        super.onResume()
+
+        if (waitingForInstallPermission && pendingUpdateApk != null) {
+            val canInstall = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                try {
+                    packageManager.canRequestPackageInstalls()
+                } catch (_: SecurityException) {
+                    false
+                }
+            } else {
+                true
+            }
+
+            if (canInstall) {
+                waitingForInstallPermission = false
+                pendingUpdateApk?.let { apkFile ->
+                    lanzarInstalador(apkFile)
+                }
+            }
+        }
     }
 
     override fun onRestart() {
@@ -1000,6 +1590,7 @@ class MainActivity : AppCompatActivity() {
         }
         viewModel.isServiceRunning = true
         shouldUnbind = true
+        Logger.d("Service", "Service started")
     }
 
     private fun putString(

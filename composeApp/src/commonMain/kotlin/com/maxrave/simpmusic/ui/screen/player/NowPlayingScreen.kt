@@ -3,19 +3,29 @@
 package com.maxrave.simpmusic.ui.screen.player
 
 import androidx.compose.animation.Animatable
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetValue
@@ -34,22 +44,37 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.kmpalette.rememberPaletteState
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
 import com.maxrave.logger.Logger
+import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.extension.GradientAngle
 import com.maxrave.simpmusic.extension.GradientOffset
 import com.maxrave.simpmusic.extension.KeepScreenOn
 import com.maxrave.simpmusic.extension.getColorFromPalette
+import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.hsvToColor
 import com.maxrave.simpmusic.extension.rememberIsInPipMode
+import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.component.AddToPlaylistModalBottomSheet
+import com.maxrave.simpmusic.ui.component.FullscreenLyricsContent
 import com.maxrave.simpmusic.ui.component.FullscreenLyricsSheet
 import com.maxrave.simpmusic.ui.component.InfoPlayerBottomSheet
 import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
@@ -79,8 +104,9 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import kotlin.math.abs
 
-// Imports para la carátula de Apple Music
+// Imports para la carátula de Apple Music (Mantenido de la versión local)
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.get
@@ -89,6 +115,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 private const val TAG = "NowPlayingScreen"
+
+private const val FULLSCREEN_LYRICS_ENTER_MS = 300
+private const val FULLSCREEN_LYRICS_EXIT_MS = 220
 
 @OptIn(ExperimentalFoundationApi::class)
 @ExperimentalMaterial3Api
@@ -174,7 +203,9 @@ fun NowPlayingScreenContent(
     val artworkQueue by remember {
         derivedStateOf { queueDataState?.data?.listTracks ?: emptyList() }
     }
+
     val nowPlayingVideoId: String? = nowPlayingState?.track?.videoId
+
     val currentOrderIndex by remember(artworkQueue, nowPlayingVideoId) {
         derivedStateOf {
             deriveOrderIndex(
@@ -211,7 +242,11 @@ fun NowPlayingScreenContent(
         ) {
             isAnimatingFromPlayer = true
             try {
-                artworkPagerState.animateScrollToPage(target)
+                if (abs(target - artworkPagerState.currentPage) <= 1) {
+                    artworkPagerState.animateScrollToPage(target)
+                } else {
+                    artworkPagerState.scrollToPage(target)
+                }
             } finally {
                 isAnimatingFromPlayer = false
             }
@@ -266,6 +301,15 @@ fun NowPlayingScreenContent(
     var showHideMiddleLayout by rememberSaveable { mutableStateOf(true) }
     var showSheet by rememberSaveable { mutableStateOf(false) }
     var showFullscreenLyrics by rememberSaveable { mutableStateOf(false) }
+
+    val fullscreenLyricsRequested by sharedViewModel.fullscreenLyricsRequest.collectAsStateWithLifecycle()
+    LaunchedEffect(fullscreenLyricsRequested) {
+        if (fullscreenLyricsRequested) {
+            showFullscreenLyrics = true
+            sharedViewModel.consumeFullscreenLyricsRequest()
+        }
+    }
+
     var showQueueBottomSheet by rememberSaveable { mutableStateOf(false) }
     var showInfoBottomSheet by rememberSaveable { mutableStateOf(false) }
     var showVoteDialog by rememberSaveable { mutableStateOf(false) }
@@ -421,84 +465,6 @@ fun NowPlayingScreenContent(
         }
     }
 
-    if (showSheet) {
-        NowPlayingBottomSheet(
-            onDismiss = { showSheet = false },
-            navController = navController,
-            onNavigateToOtherScreen = { onDismiss() },
-            song = null,
-            setSleepTimerEnable = true,
-            changeMainLyricsProviderEnable = true,
-        )
-    }
-
-    if (showFullscreenLyrics) {
-        FullscreenLyricsSheet(
-            sharedViewModel = sharedViewModel,
-            navController = navController,
-            color = startColor.value,
-        ) {
-            showFullscreenLyrics = false
-        }
-    }
-
-    if (showQueueBottomSheet) {
-        QueueBottomSheet(onDismiss = { showQueueBottomSheet = false })
-    }
-
-    if (showInfoBottomSheet) {
-        InfoPlayerBottomSheet(onDismiss = { showInfoBottomSheet = false })
-    }
-
-    if (showAddToPlaylistDirectly) {
-        val viewModel: NowPlayingBottomSheetViewModel = koinViewModel()
-        val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-
-        LaunchedEffect(Unit) {
-            viewModel.resetPlaylists()
-            viewModel.setSongEntity(null)
-        }
-
-        AddToPlaylistModalBottomSheet(
-            isBottomSheetVisible = true,
-            listLocalPlaylist = uiState.listLocalPlaylist,
-            listYouTubePlaylist = uiState.listYouTubePlaylist,
-            onDismiss = { showAddToPlaylistDirectly = false },
-            onClick = { playlist ->
-                viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToPlaylist(playlist.id))
-                showAddToPlaylistDirectly = false
-            },
-            onYTPlaylistClick = { playlist ->
-                viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToYouTubePlaylist(playlist.browseId))
-                showAddToPlaylistDirectly = false
-            },
-            videoId = uiState.songUIState.videoId,
-        )
-    }
-
-    if (showVoteDialog) {
-        val canVoteLyrics =
-            screenDataState.lyricsData?.lyricsProvider == LyricsProvider.SIMPMUSIC &&
-                screenDataState.lyricsData?.lyrics?.simpMusicLyrics != null
-        val canVoteTranslatedLyrics =
-            screenDataState.lyricsData?.translatedLyrics?.second == LyricsProvider.SIMPMUSIC &&
-                screenDataState.lyricsData?.translatedLyrics?.first?.simpMusicLyrics != null
-
-        VoteLyricsDialog(
-            canVoteLyrics = canVoteLyrics,
-            canVoteTranslatedLyrics = canVoteTranslatedLyrics,
-            lyricsVoteState = lyricsVoteState,
-            translatedLyricsVoteState = translatedVoteState,
-            onVoteLyrics = { upvote -> sharedViewModel.voteLyrics(upvote) },
-            onVoteTranslatedLyrics = { upvote -> sharedViewModel.voteTranslatedLyrics(upvote) },
-            onDismiss = { showVoteDialog = false },
-        )
-    }
-
-    if (screenDataState.lyricsData != null && controllerState.isPlaying) {
-        KeepScreenOn()
-    }
-
     val highResThumbnail = rememberHighResArtwork(
         title = screenDataState.nowPlayingTitle,
         artist = screenDataState.artistName,
@@ -595,6 +561,149 @@ fun NowPlayingScreenContent(
                 mediaPlayerHandler.removeMediaItem(index)
             },
         )
+
+    // Integration of Desktop Fullscreen Lyrics Popup
+    if (showFullscreenLyrics) {
+        if (getPlatform() == Platform.Desktop) {
+            val windowSize = LocalWindowInfo.current.containerSize
+            val density = LocalDensity.current
+            val windowIsRounded = windowSize.height > getScreenSizeInfo().hPX
+            val popupPositionProvider =
+                remember {
+                    object : PopupPositionProvider {
+                        override fun calculatePosition(
+                            anchorBounds: IntRect,
+                            windowSize: IntSize,
+                            layoutDirection: LayoutDirection,
+                            popupContentSize: IntSize,
+                        ): IntOffset = IntOffset.Zero
+                    }
+                }
+            val pageVisibility = remember { MutableTransitionState(false).apply { targetState = true } }
+            val closePage = { pageVisibility.targetState = false }
+            LaunchedEffect(pageVisibility.currentState, pageVisibility.isIdle) {
+                if (pageVisibility.isIdle && !pageVisibility.currentState) {
+                    showFullscreenLyrics = false
+                }
+            }
+            Popup(
+                popupPositionProvider = popupPositionProvider,
+                onDismissRequest = closePage,
+                properties = PopupProperties(focusable = true),
+            ) {
+                AnimatedVisibility(
+                    visibleState = pageVisibility,
+                    enter =
+                        fadeIn(tween(FULLSCREEN_LYRICS_ENTER_MS)) +
+                            scaleIn(tween(FULLSCREEN_LYRICS_ENTER_MS, easing = FastOutSlowInEasing), initialScale = 0.96f),
+                    exit =
+                        fadeOut(tween(FULLSCREEN_LYRICS_EXIT_MS)) +
+                            scaleOut(tween(FULLSCREEN_LYRICS_EXIT_MS, easing = FastOutSlowInEasing), targetScale = 0.96f),
+                ) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(
+                                    with(density) { windowSize.width.toDp() },
+                                    with(density) { windowSize.height.toDp() },
+                                ).then(
+                                    if (windowIsRounded) Modifier.clip(RoundedCornerShape(12.dp)) else Modifier,
+                                ),
+                    ) {
+                        FullscreenLyricsContent(
+                            sharedViewModel = sharedViewModel,
+                            navController = navController,
+                            color = startColor.value,
+                            state = state,
+                            actions = actions,
+                            nowPlayingStyle = nowPlayingStyle,
+                            onDismiss = closePage,
+                        )
+                    }
+                }
+            }
+        } else {
+            FullscreenLyricsSheet(
+                sharedViewModel = sharedViewModel,
+                navController = navController,
+                color = startColor.value,
+                state = state,
+                actions = actions,
+                nowPlayingStyle = nowPlayingStyle,
+            ) {
+                showFullscreenLyrics = false
+            }
+        }
+    }
+
+    if (showSheet) {
+        NowPlayingBottomSheet(
+            onDismiss = { showSheet = false },
+            navController = navController,
+            onNavigateToOtherScreen = { onDismiss() },
+            song = null,
+            setSleepTimerEnable = true,
+            changeMainLyricsProviderEnable = true,
+        )
+    }
+
+    if (showQueueBottomSheet) {
+        QueueBottomSheet(onDismiss = { showQueueBottomSheet = false })
+    }
+
+    if (showInfoBottomSheet) {
+        InfoPlayerBottomSheet(onDismiss = { showInfoBottomSheet = false })
+    }
+
+    if (showAddToPlaylistDirectly) {
+        val viewModel: NowPlayingBottomSheetViewModel = koinViewModel()
+        val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+        LaunchedEffect(Unit) {
+            viewModel.resetPlaylists()
+            viewModel.setSongEntity(null) // Uses current playing song
+        }
+
+        AddToPlaylistModalBottomSheet(
+            isBottomSheetVisible = true,
+            listLocalPlaylist = uiState.listLocalPlaylist,
+            listYouTubePlaylist = uiState.listYouTubePlaylist,
+            onDismiss = { showAddToPlaylistDirectly = false },
+            onClick = { playlist ->
+                viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToPlaylist(playlist.id))
+                showAddToPlaylistDirectly = false
+            },
+            onYTPlaylistClick = { playlist ->
+                viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToYouTubePlaylist(playlist.browseId))
+                showAddToPlaylistDirectly = false
+            },
+            videoId = uiState.songUIState.videoId,
+        )
+    }
+
+    if (showVoteDialog) {
+        val canVoteLyrics =
+            screenDataState.lyricsData?.lyricsProvider == LyricsProvider.SIMPMUSIC &&
+                screenDataState.lyricsData?.lyrics?.simpMusicLyrics != null
+        val canVoteTranslatedLyrics =
+            screenDataState.lyricsData?.translatedLyrics?.second == LyricsProvider.SIMPMUSIC &&
+                screenDataState.lyricsData?.translatedLyrics?.first?.simpMusicLyrics != null
+
+        VoteLyricsDialog(
+            canVoteLyrics = canVoteLyrics,
+            canVoteTranslatedLyrics = canVoteTranslatedLyrics,
+            lyricsVoteState = lyricsVoteState,
+            translatedLyricsVoteState = translatedVoteState,
+            onVoteLyrics = { upvote -> sharedViewModel.voteLyrics(upvote) },
+            onVoteTranslatedLyrics = { upvote -> sharedViewModel.voteTranslatedLyrics(upvote) },
+            onDismiss = { showVoteDialog = false },
+        )
+    }
+
+    if (screenDataState.lyricsData != null && controllerState.isPlaying) {
+        KeepScreenOn()
+    }
+
     when (nowPlayingStyle) {
         DataStoreManager.NOW_PLAYING_STYLE_M3_EXPRESSIVE ->
             NowPlayingContentM3Expressive(
@@ -622,43 +731,99 @@ fun NowPlayingScreenContent(
 
 fun String.cleanMusicTitle(): String {
     var clean = this
-    clean = clean.replace(Regex("(?i)[\\[\\(]?(official|audio|music video|lyric|live|remix|visualizer).*?[\\]\\)]?"), "")
+    clean = clean.replace(
+        Regex("(?i)[\\[\\(]?(official|official video|audio|music video|lyric video|lyric|live|remix|visualizer).*?[\\]\\)]?"),
+        "",
+    )
     clean = clean.replace(Regex("(?i)\\s+(ft\\.|feat\\.?|featuring).*"), "")
-    clean = clean.replace(Regex("(?i)\\s+-\\s+.*"), "")
+    clean = clean.replace(Regex("(?i)\\s+-\\s+(official|official video|audio|music video|lyric|live|remix|visualizer).*"), "")
     return clean.trim().ifEmpty { this }
 }
+
+private fun normalizeArtworkSearchText(value: String?): String {
+    return value
+        ?.replace(Regex("(?i)\\s*[-–—]\\s*topic\\b"), "")
+        ?.replace(Regex("(?i)\\b(official|official video|official audio|music video|lyric video|lyrics|visualizer|remastered)\\b"), "")
+        ?.replace(Regex("[^a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ]+"), " ")
+        ?.trim()
+        ?.lowercase()
+        .orEmpty()
+}
+
+private fun artworkQuery(value: String): String =
+    value.trim().replace(Regex("\\s+"), "+")
 
 @Composable
 fun rememberHighResArtwork(
     title: String?,
     artist: String?,
-    fallbackThumbnail: String?
+    fallbackThumbnail: String?,
 ): String? {
     var artworkUrl by remember(title, artist, fallbackThumbnail) {
         mutableStateOf(fallbackThumbnail)
     }
 
-    LaunchedEffect(title, artist) {
+    LaunchedEffect(title, artist, fallbackThumbnail) {
         if (title.isNullOrBlank()) return@LaunchedEffect
 
-        val cleanTitle = title.cleanMusicTitle()
-        val cleanArtist = artist?.replace(Regex("(?i)- topic"), "")?.trim() ?: ""
+        val cleanTitle = title.cleanMusicTitle().trim()
+        val cleanArtist = artist
+            ?.replace(Regex("(?i)-\\s*topic\\b"), "")
+            ?.replace(Regex("(?i)\\s+(ft\\.|feat\\.?|featuring).*"), "")
+            ?.trim()
+            .orEmpty()
 
         withContext(Dispatchers.IO) {
             try {
                 val client = HttpClient(CIO)
-                val query = "$cleanTitle $cleanArtist".replace(" ", "+")
-                val response = client.get("https://itunes.apple.com/search?term=$query&entity=song&limit=1")
+                val query = artworkQuery("$cleanTitle $cleanArtist")
+                val response =
+                    client.get(
+                        "https://itunes.apple.com/search?term=$query&entity=song&limit=10",
+                    )
                 val body = response.bodyAsText()
 
-                val artworkRegex = Regex(""""artworkUrl100":"([^"]+)"""")
-                val match = artworkRegex.find(body)
-                if (match != null) {
-                    artworkUrl = match.groupValues[1].replace("100x100bb", "600x600bb")
+                val trackNames =
+                    Regex("\\\"trackName\\\":\\\"([^\\\"]*)\\\"").findAll(body).map { it.groupValues[1] }.toList()
+                val artistNames =
+                    Regex("\\\"artistName\\\":\\\"([^\\\"]*)\\\"").findAll(body).map { it.groupValues[1] }.toList()
+                val artworks =
+                    Regex("\\\"artworkUrl100\\\":\\\"([^\\\"]+)\\\"").findAll(body).map { it.groupValues[1] }.toList()
+
+                val normalizedTitle = normalizeArtworkSearchText(cleanTitle)
+                val normalizedArtist = normalizeArtworkSearchText(cleanArtist)
+
+                var bestIndex = -1
+                var bestScore = Int.MIN_VALUE
+                val count = minOf(trackNames.size, artistNames.size, artworks.size)
+
+                for (index in 0 until count) {
+                    val resultTitle = normalizeArtworkSearchText(trackNames[index])
+                    val resultArtist = normalizeArtworkSearchText(artistNames[index])
+                    var score = 0
+
+                    if (resultTitle == normalizedTitle) score += 100
+                    else if (resultTitle.contains(normalizedTitle) || normalizedTitle.contains(resultTitle)) score += 45
+
+                    if (normalizedArtist.isNotBlank()) {
+                        if (resultArtist == normalizedArtist) score += 120
+                        else if (resultArtist.contains(normalizedArtist) || normalizedArtist.contains(resultArtist)) score += 65
+                        else score -= 35
+                    }
+
+                    if (score > bestScore) {
+                        bestScore = score
+                        bestIndex = index
+                    }
                 }
+
+                if (bestIndex >= 0 && bestScore >= 80) {
+                    artworkUrl = artworks[bestIndex].replace("100x100bb", "600x600bb")
+                }
+
                 client.close()
-            } catch (e: Exception) {
-                // Falla silenciosa, mantiene la carátula de respaldo
+            } catch (_: Exception) {
+                // Mantiene la miniatura de YouTube si iTunes no devuelve una coincidencia fiable.
             }
         }
     }

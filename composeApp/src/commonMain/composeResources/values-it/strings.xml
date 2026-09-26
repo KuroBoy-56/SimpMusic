@@ -126,7 +126,7 @@
     <string name="developer_blog">Blog degli sviluppatori</string>
     <string name="developer_blog_tagline">Leggi le note degli sviluppatori, i tutorial e i dietro le quinte</string>
     <string name="blog_promo_title">Novità dagli sviluppatori</string>
-    <string name="blog_promo_message">Ho appena lanciato il mio blog personale, lo trovi su maxrave.dev — troverai la storia dietroYT Music Mod, riflessioni su music-tech e note d'ingegneria</string>
+    <string name="blog_promo_message">Ho appena lanciato il mio blog personale, lo trovi su maxrave.dev — troverai la storia dietro YT Music Mod , riflessioni su music-tech e note d'ingegneria</string>
     <string name="visit_blog">Visita il blog</string>
     <string name="paypal">PayPal</string>
     <string name="title">Titolo</string>
@@ -163,6 +163,9 @@
     <string name="balance_media_loudness">Bilancia il volume dei contenuti multimediali</string>
     <string name="normalize_volume">Normalizza il volume</string>
     <string name="audio">Audio</string>
+    <string name="no_equalizer">Il tuo dispositivo non ha l'equalizzatore</string>
+    <string name="open_system_equalizer">Equalizzatore a sistema aperto</string>
+    <string name="use_your_system_equalizer">Usa l'equalizzatore del tuo sistema</string>
     <string name="streaming_data_provider_piped">Fornitore di dati in streaming (Piped)</string>
     <string name="itag">Itag</string>
     <string name="extract_source">Estrai sorgente</string>
@@ -202,12 +205,12 @@
     <string name="what_segments_will_be_skipped">Quali segmenti verranno saltati</string>
     <string name="save">Salva</string>
     <string name="saved">Salvato</string>
-    <string name="sponsor_block_intro">SponsorBlock è un sistema di crowdsourcing per saltare parti fastidiose dei video di YouTube.\nUlteriori informazioni: https://sponsor.ajay.app/\nInYT Music Mod, SponsorBlock è disponibile solo quando il dispositivo è online</string>
+    <string name="sponsor_block_intro">SponsorBlock è un sistema di crowdsourcing per saltare parti fastidiose dei video di YouTube.\nUlteriori informazioni: https://sponsor.ajay.app/\nIn YT Music Mod , SponsorBlock è disponibile solo quando il dispositivo è online</string>
     <string name="skip_sponsor_part_of_video">Salta la parte dello sponsor del video</string>
     <string name="customactivityoncrash_error_activity_error_occurred_explanation">Si è verificato un errore imprevisto. Ci dispiace per l'inconvenienza.</string>
     <string name="customactivityoncrash_error_activity_restart_app">Riavvia l'applicazione</string>
-    <string name="help_build_lyrics_database">AiutaYT Music Mod a costruire il database dei testi</string>
-    <string name="help_build_lyrics_database_description">Invia i tuoi testi salvati al database dei testi diYT Music Mod</string>
+    <string name="help_build_lyrics_database">Aiuta  YT Music Mod a costruire il database dei testi</string>
+    <string name="help_build_lyrics_database_description">Invia i tuoi testi salvati al database dei testi di YT Music Mod </string>
     <string name="customactivityoncrash_error_activity_close_app">Chiudi l'applicazione</string>
     <string name="customactivityoncrash_error_activity_error_details">Dettagli errore</string>
     <string name="customactivityoncrash_error_activity_error_details_title">Dettagli errore</string>
@@ -260,7 +263,7 @@
     <string name="email">Posta elettronica</string>
     <string name="password">Password</string>
     <string name="please_enter_your_email_and_password">Per favore inserisci le tue credenziali</string>
-    <string name="translation_language_message">Digitare il codice della lingua (Es: it) (2 lettere). Se vuoi impostare lo stesso con la lingua diYT Music Mod, lascia vuota la casella di modifica.</string>
+    <string name="translation_language_message">Digitare il codice della lingua (Es: it) (2 lettere). Se vuoi impostare lo stesso con la lingua di YT Music Mod , lascia vuota la casella di modifica.</string>
     <string name="invalid_language_code">Codice lingua non valido</string>
     <string name="lyrics_provider_youtube">Testi forniti da YouTube</string>
     <string name="lyrics_provider_betterlyrics">Testi forniti da BetterLyrics</string>
@@ -279,7 +282,7 @@
     <string name="older_first">Prima i più datati</string>
     <string name="newer_first">Prima i più recenti</string>
     <string name="added_date">Data aggiunta</string>
-    <string name="credit_app">Una semplice app musicale che utilizza YouTube Music come backend \n\nYT Music Mod è un progetto open source per lo streaming di musica da YouTube e YouTube Music senza pubblicità e tracciamento.YT Music Mod offre molte funzionalità:\n\n - Musica in streaming\n - Testi sincronizzati\n - Personalizza dati\n - ecc... \n\nYT Music Mod è sempre gratuito e senza pubblicità\n\nCrea con ❤️ di Tuan Minh Nguyen Duc (maxrave-dev)</string>
+    <string name="credit_app">Una semplice app musicale che utilizza YouTube Music come backend \n\n YT Music Mod è un progetto open source per lo streaming di musica da YouTube e YouTube Music senza pubblicità e tracciamento.  YT Music Mod offre molte funzionalità:\n\n - Musica in streaming\n - Testi sincronizzati\n - Personalizza dati\n - ecc... \n\n YT Music Mod è sempre gratuito e senza pubblicità\n\nCrea con ❤️ di Tuan Minh Nguyen Duc (maxrave-dev)</string>
     <string name="issue_tracker">Rilevatore di problemi</string>
     <string name="featured_playlists">Playlist in primo piano</string>
     <string name="featured_inArtist">In primo piano</string>
@@ -317,7 +320,7 @@
     <string name="equalizer_autoeq_unavailable">Impossibile raggiungere AutoEq. Controlla la tua connessione e riprova.</string>
     <string name="equalizer_autoeq_empty">Nessuna cuffia corrisponde a quel nome</string>
     <string name="equalizer_autoeq_failed">Impossibile caricare quel profilo — la prima volta necessita una connessione</string>
-    <string name="sync_follow_to_youtube_description">Seguire un artista suYT Music Mod ti iscrive anche al suo canale sul tuo account YouTube</string>
+    <string name="sync_follow_to_youtube_description">Seguire un artista su  YT Music Mod ti iscrive anche al suo canale sul tuo account YouTube</string>
     <string name="sync_follow_failed">Impossibile aggiornare la tua iscrizione su YouTube</string>
     <string name="subscribed_on_youtube">Iscritto su YouTube</string>
     <string name="unsubscribed_on_youtube">Disiscritto da YouTube</string>
@@ -338,7 +341,7 @@
     <string name="enable_spotify_lyrics">Abilita testi da Spotify</string>
     <string name="spotify_lyrícs_info">Più testi senza traduzione</string>
     <string name="enable_canvas">Abilita Canvas</string>
-    <string name="canvas_info">Mostra i Canvas di Spotify inYT Music Mod</string>
+    <string name="canvas_info">Mostra i Canvas di Spotify in YT Music Mod </string>
     <string name="spotify_lyrics_provider">Testi forniti da Spotify</string>
     <string name="offline_mode">Modalità disconnessa</string>
     <string name="added_to_youtube_liked">Aggiunto ai mi piace di YouTube</string>
@@ -386,8 +389,6 @@
     <string name="theme_color_wallpaper">Sfondo</string>
     <string name="theme_color_custom">Personalizzato</string>
     <string name="custom_color">Colore personalizzato</string>
-    <string name="translucent_bottom_navigation_bar">Barra di navigazione inferiore traslucida</string>
-    <string name="you_can_see_the_content_below_the_bottom_bar">Puoi vedere il contenuto sotto la barra inferiore</string>
     <string name="donation">Se apprezzi il mio lavoro, donami un caffè</string>
     <string name="relax">Relax</string>
     <string name="sleep">Riposo</string>
@@ -406,7 +407,7 @@
     <string name="loading">Caricamento</string>
     <string name="updating">Aggiornando</string>
     <string name="go_to_log_in_page">Vai alla pagina di accesso</string>
-    <string name="log_in_warning">YouTube Music ora richiede di accedere per riprodurre musica, quindi l'istanza Piped potrebbe occasionalmente non funzionare. Si consiglia di accedere a YouTube per ottenere un'esperienza migliore conYT Music Mod.</string>
+    <string name="log_in_warning">YouTube Music ora richiede di accedere per riprodurre musica, quindi l'istanza Piped potrebbe occasionalmente non funzionare. Si consiglia di accedere a YouTube per ottenere un'esperienza migliore con YT Music Mod .</string>
     <string name="spotify_canvas_cache">Cache di Spotify Canvas</string>
     <string name="clear_canvas_cache">Pulisci la cache di Spotify Canvas</string>
     <string name="listening_history">Cronologia d'ascolto</string>
@@ -453,8 +454,8 @@
     <string name="other_version">Altra versione</string>
     <string name="later">Dopo</string>
     <string name="give_a_star">Dai una stella</string>
-    <string name="enjoying_simpmusic">Divertiti conYT Music Mod</string>
-    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">Se ti piace usareYT Music Mod, stellaYT Music Mod su GitHub o lasciare una recensione su</string>
+    <string name="enjoying_simpmusic">Divertiti con YT Music Mod </string>
+    <string name="if_you_enjoy_using_simpmusic_star_simpmusic_on_github_or_leave_a_review_on">Se ti piace usare YT Music Mod , stella  YT Music Mod su GitHub o lasciare una recensione su</string>
     <string name="if_you_love_my_work_consider">"Se ami il mio lavoro, considera"</string>
     <string name="buying_me_a_coffee">di offrirmi un caffè.</string>
     <string name="fade_audio_effect">Effetto di dissolvenza audio</string>
@@ -510,14 +511,14 @@
     <string name="contributor_name">Nome del collaboratore</string>
     <string name="contributor_email">E-mail del collaboratore</string>
     <string name="anonymous">Anonimo</string>
-    <string name="simpmusic_lyrics">Testi diYT Music Mod</string>
-    <string name="lyrics_provider_simpmusic">Testi forniti daYT Music Mod Lyrics</string>
+    <string name="simpmusic_lyrics">Testi di YT Music Mod </string>
+    <string name="lyrics_provider_simpmusic">Testi forniti da  YT Music Mod Lyrics</string>
     <string name="backup_in_progress">Duplicazione in corso</string>
     <string name="restore_in_progress">Ripristino in corso</string>
     <string name="backup_downloaded">Copia dei dati scaricati</string>
     <string name="backup_downloaded_description">Crea una copia di sicurezza di tutti i dati delle canzoni scaricate</string>
     <string name="auto_backup">Duplicazione automatica</string>
-    <string name="auto_backup_description">Duplica automaticamente i tuoi dati nella cartella Download/SimpMusic</string>
+    <string name="auto_backup_description">Duplica automaticamente i tuoi dati nella cartella Download/YT Music Mod</string>
     <string name="backup_frequency">Frequenza di salvataggio delle copie di sicurezza</string>
     <string name="daily">Giornaliero</string>
     <string name="weekly">Settimanale</string>
@@ -553,8 +554,6 @@
     <string name="lastfm_paste_callback_confirm">Continua con questo collegamento</string>
     <string name="logged_in_as">Accesso effettuato come %1$s</string>
     <string name="youtube_liked_music">Musica apprezzata su YouTube</string>
-    <string name="keep_service_alive">Tieni il servizio attivo</string>
-    <string name="keep_service_alive_description">Mantieni attivo il servizio del lettore musicale per evitare che venga chiuso dal sistema</string>
     <string name="keep_your_youtube_playlist_offline">Mostra la tua playlist di YouTube quando offline</string>
     <string name="keep_your_youtube_playlist_offline_description">Salva la tua playlist di YouTube in locale per mantenerla anche senza connessione</string>
     <string name="combine_local_and_youtube_liked_songs">Combina i preferiti di YouTube con i mi piace quando accedi</string>
@@ -599,7 +598,7 @@
     <string name="downvote">Vota negativamente</string>
     <string name="vote_submitted">Grazie per aver votato questo testo!</string>
     <string name="vote_error">Invio non riuscito</string>
-    <string name="open_app">ApriYT Music Mod</string>
+    <string name="open_app">Apri YT Music Mod </string>
     <string name="close_miniplayer">Chiudi il mini-lettore</string>
     <string name="open_miniplayer">Apri il mini-lettore</string>
     <string name="quit_app">Esci dall'applicazione</string>
@@ -607,7 +606,7 @@
     <string name="local_tracking_description">Registra la cronologia di ascolto nel database locale</string>
     <string name="blog_notification_title">Notifiche post blog</string>
     <string name="blog_notification_description">Ricevi una notifica quando viene pubblicato un nuovo post sul blog</string>
-    <string name="simpmusic_charts">ClassificaYT Music Mod</string>
+    <string name="simpmusic_charts">Classifica YT Music Mod </string>
     <string name="crossfading">Dissolvenza incrociata</string>
     <string name="your_320kbps_url">Il tuo URL 320kbps</string>
     <string name="your_320kbps_url_description">Lascia vuoto per scegliere automaticamente un URL di lavoro dal checker uptime.</string>

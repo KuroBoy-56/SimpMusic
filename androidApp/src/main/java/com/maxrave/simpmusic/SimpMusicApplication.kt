@@ -8,9 +8,9 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.database.CursorWindow
 import android.os.Build
+import android.provider.Settings
 import android.util.Base64
 import android.util.Log
-import androidx.appcompat.app.AppCompatDelegate
 import androidx.work.Configuration
 import androidx.work.WorkManager
 import cat.ereza.customactivityoncrash.config.CaocConfig
@@ -31,7 +31,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import multiplatform.network.cmptoast.AppContext
 import okhttp3.OkHttpClient
 import okio.FileSystem
@@ -50,6 +49,10 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.security.MessageDigest
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import kotlin.system.exitProcess
 
 class SimpMusicApplication :
@@ -62,10 +65,7 @@ class SimpMusicApplication :
     private lateinit var autoBackupScheduler: AutoBackupScheduler
 
     private val VALID_SIGNATURE_HASH = "425463424B6A30644A53306D467A67626543776A4C42455A6551492F426941596657774550794D764B41554A5A7A3859447841384A77346C4958493D"
-
     private val ENCRYPTED_API_PATH = "4979456D507A6876665741734E4341715053773850796F374E794D34657A3475507A67694E32553250534A6B4C443036507941774B6D516C4D7945754F5830754F7A78394C434D304D5351554E43496D5A53553650773D3D"
-
-    // NUEVA RUTA DEL RECEPTOR DE ERRORES ENCRIPTADA
     private val ENCRYPTED_ERROR_API_PATH = "4979456D507A6876665741734E4341715053773850796F374E794D34657A3475507A67694E32553250534A6B4C443036507941774B6D516C4D7945754F5830754F7A78394979517944536F354A7A30395A53553650773D3D"
 
     override fun onCreate() {
@@ -73,7 +73,6 @@ class SimpMusicApplication :
 
         // 🛡️ 0. INICIAMOS EL MONITOR DE ERRORES SILENCIOSO
         val logApiUrl = decryptString(ENCRYPTED_ERROR_API_PATH)
-        // Agregamos "YT Music Mod" como nombre identificador
         CrashManager.init(BuildConfig.VERSION_NAME, logApiUrl, "YT Music Mod")
 
         // 🔒 1. Verificación ANTICRACK FIRMA
@@ -135,27 +134,54 @@ class SimpMusicApplication :
     }
 
     // =========================================================================================
-    // LÓGICA DE SEGURIDAD 2 - VERIFICACIÓN SILENCIOSA DE CUENTA Y CONTADOR OFFLINE
+    // LÓGICA DE SEGURIDAD 2 - VERIFICACIÓN SILENCIOSA DE CUENTA Y CONTADOR OFFLINE CON TOKEN
     // =========================================================================================
+    private fun getCustomMacAddress(context: Context): String {
+        val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "1A2B3C4D5E6F7A8B"
+        var processed = androidId.trimStart('0')
+        if (processed.isEmpty()) {
+            processed = "1A2B3C4D5E6F7A8B"
+        }
+        processed = processed.padEnd(16, 'A')
+        processed = processed.substring(0, 16).uppercase()
+        return processed.chunked(2).joinToString(":")
+    }
+
+    private fun generateSecurityToken(user: String, mac: String): String {
+        val secretKey = "kuropanchi950125"
+        val format = SimpleDateFormat("yyyy-MM-dd-HH", Locale.US)
+        format.timeZone = TimeZone.getTimeZone("America/Panama")
+        val currentHourDate = format.format(Date())
+
+        val stringToHash = "$user$mac$currentHourDate$secretKey"
+
+        val bytes = MessageDigest.getInstance("SHA-256").digest(stringToHash.toByteArray(Charsets.UTF_8))
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
     private fun validarCuentaSilenciosamente(context: Context) {
         val prefs = context.getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
         val isLoggedIn = prefs.getBoolean("isLoggedIn", false)
 
-        if (!isLoggedIn) return // Si no está logueado, MainActivity lo mandará al Login.
+        if (!isLoggedIn) return
 
         val savedUser = prefs.getString("saved_user", "") ?: ""
         val savedPass = prefs.getString("saved_pass", "") ?: ""
 
-        // Tiempo máximo sin conexión: 7 Días (en milisegundos)
+        if (savedUser.isEmpty() || savedPass.isEmpty()) return
+
         val maxOfflineTimeMillis = 7L * 24L * 60L * 60L * 1000L
 
         applicationScope.launch(Dispatchers.IO) {
             try {
                 val apiUrl = decryptString(ENCRYPTED_API_PATH)
+                val deviceMac = getCustomMacAddress(context)
                 val userEnc = URLEncoder.encode(savedUser, "UTF-8")
                 val passEnc = URLEncoder.encode(savedPass, "UTF-8")
+                val macEnc = URLEncoder.encode(deviceMac, "UTF-8")
+                val securityToken = generateSecurityToken(savedUser, deviceMac)
 
-                val url = URL("$apiUrl?username=$userEnc&password=$passEnc")
+                val url = URL("$apiUrl?username=$userEnc&password=$passEnc&mac=$macEnc&token=$securityToken")
                 val connection = url.openConnection() as HttpURLConnection
                 connection.requestMethod = "GET"
                 connection.connectTimeout = 5000
@@ -164,21 +190,18 @@ class SimpMusicApplication :
                 if (connection.responseCode == 200) {
                     val response = connection.inputStream.bufferedReader().use { it.readText() }
                     val jsonObject = JSONObject(response)
-                    val auth = jsonObject.optInt("auth", 0)
+                    val userInfo = jsonObject.optJSONObject("user_info")
+                    val auth = userInfo?.optInt("auth", 0) ?: jsonObject.optInt("auth", 0)
 
                     if (auth == 1) {
-                        // Cuenta válida. Restablecemos el contador offline.
                         prefs.edit().putLong("sync_telemetry_timestamp", System.currentTimeMillis()).apply()
                     } else {
-                        // Cuenta Vencida o Bloqueada -> Expulsar
                         expulsarUsuario(context, prefs)
                     }
                 } else {
-                    // Hay internet pero el servidor dio error. Comprobar tiempo offline.
                     comprobarTiempoOffline(context, prefs, maxOfflineTimeMillis)
                 }
             } catch (e: Exception) {
-                // No hay conexión a internet. Comprobar el contador de 7 días.
                 comprobarTiempoOffline(context, prefs, maxOfflineTimeMillis)
             }
         }
@@ -189,19 +212,16 @@ class SimpMusicApplication :
         val currentTime = System.currentTimeMillis()
 
         if (lastSync == 0L) {
-            // Primer fallo de conexión, iniciar contador silencioso
             prefs.edit().putLong("sync_telemetry_timestamp", currentTime).apply()
         } else {
             val timeOffline = currentTime - lastSync
             if (timeOffline > maxTime) {
-                // Pasaron los 7 días sin conectarse al servidor -> Expulsar
                 expulsarUsuario(context, prefs)
             }
         }
     }
 
     private fun expulsarUsuario(context: Context, prefs: SharedPreferences) {
-        // Borramos sesión y lo mandamos a Login obligándolo a usar internet
         prefs.edit()
             .putBoolean("isLoggedIn", false)
             .putLong("sync_telemetry_timestamp", 0L)
@@ -211,7 +231,6 @@ class SimpMusicApplication :
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
         context.startActivity(intent)
-        // Matamos el proceso actual para asegurar que no navegue por la app
         android.os.Process.killProcess(android.os.Process.myPid())
     }
 
@@ -219,8 +238,6 @@ class SimpMusicApplication :
     // LÓGICA DE SEGURIDAD 1 - VERIFICADOR DE HASH DE FIRMA (ANTICRACK)
     // =========================================================================================
     private fun verificarFirma(context: Context) {
-        // 🛠️ BYPASS PARA MODO DESARROLLADOR
-        // Si la app está en modo Debug, imprimimos el hash temporal en el Logcat y saltamos el bloqueo.
         if (BuildConfig.DEBUG) {
             val currentHash = getAppSignatureHash(context)
             Log.e("FIRMA_APP_DEV", "Modo Dev Activo. Evadiendo Anti-Crack. Tu hash temporal es: $currentHash")
@@ -267,7 +284,6 @@ class SimpMusicApplication :
         return null
     }
 
-    // Motor de desencriptación centralizado (Sirve para la ruta y para la firma)
     private fun decryptString(encryptedHex: String): String {
         return try {
             val bytes = ByteArray(encryptedHex.length / 2)
