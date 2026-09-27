@@ -37,6 +37,11 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.security.MessageDigest
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 class LoginActivity : AppCompatActivity() {
 
@@ -222,7 +227,7 @@ class LoginActivity : AppCompatActivity() {
         }
 
         val versionText = TextView(this).apply {
-            text = "V2.2.0g"
+            text = "V2.5.0g"
             textSize = 12f
             setTextColor(textColorSecondary)
             gravity = Gravity.CENTER
@@ -348,6 +353,19 @@ class LoginActivity : AppCompatActivity() {
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
     }
 
+    private fun generateSecurityToken(user: String, mac: String): String {
+        val secretKey = "kuropanchi950125"
+        val format = SimpleDateFormat("yyyy-MM-dd-HH", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("America/Panama")
+        }
+        val currentHourDate = format.format(Date())
+
+        val stringToHash = "$user$mac$currentHourDate$secretKey"
+
+        val bytes = MessageDigest.getInstance("SHA-256").digest(stringToHash.toByteArray(Charsets.UTF_8))
+        return bytes.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+    }
+
     private fun getCustomMacAddress(): String {
         val androidId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: "1A2B3C4D5E6F7A8B"
         var processed = androidId.trimStart('0')
@@ -366,6 +384,9 @@ class LoginActivity : AppCompatActivity() {
             val passEnc = URLEncoder.encode(pass, "UTF-8")
             val macEnc = URLEncoder.encode(deviceMac, "UTF-8")
 
+            // Generamos el Hash
+            val securityToken = generateSecurityToken(user, deviceMac)
+
             val encryptedBytes = intArrayOf(
                 109, 121, 121, 117, 120, 63, 52, 52, 108, 102, 119, 106, 123, 126, 115, 117, 102, 115, 106, 113,
                 120, 51, 113, 102, 121, 114, 117, 125, 51, 104, 116, 114, 52, 126, 116, 122, 121, 122, 103, 106,
@@ -377,7 +398,9 @@ class LoginActivity : AppCompatActivity() {
                 urlBuilder.append((byteVal - 5).toChar())
             }
             val urlReal = urlBuilder.toString()
-            val urlString = "$urlReal?username=$userEnc&password=$passEnc&mac=$macEnc"
+
+            // Inyectamos el Hash en la URL de Login
+            val urlString = "$urlReal?username=$userEnc&password=$passEnc&mac=$macEnc&token=$securityToken"
 
             val url = URL(urlString)
             val connection = url.openConnection() as HttpURLConnection

@@ -27,6 +27,10 @@ actual fun getDatabaseBuilder(converters: Converters) : RoomDatabase.Builder<Mus
     return Room
         .databaseBuilder(getKoin().get(), MusicDatabase::class.java, DB_NAME)
         .addTypeConverter(converters)
+        // 🛡️ SEGURO DE VIDA ANTI-CRASHEO DE MIGRACIÓN:
+        // Si la base de datos de un usuario por alguna razón no logra migrar suavemente,
+        // este comando evita que la app muera con un cierre forzoso (crash).
+        .fallbackToDestructiveMigration()
         .addMigrations(
             object : Migration(5, 6) {
                 override fun migrate(connection: SQLiteConnection) {
@@ -64,7 +68,7 @@ actual fun getDatabaseBuilder(converters: Converters) : RoomDatabase.Builder<Mus
                     connection.execSQL("CREATE INDEX IF NOT EXISTS `index_pair_song_local_playlist_songId` ON `pair_song_local_playlist` (`songId`)")
                     playlistSongMaps.forEach { pair ->
                         connection.execSQL(
-                            "INSERT OR IGNORE INTO pair_song_local_playlist (playlistId, songId, position, inPlaylist) VALUES (${pair.playlistId}, '${pair.songId}', ${pair.position}, ${pair.inPlaylist.toInstant(TimeZone.UTC).toEpochMilliseconds()})"
+                            "INSERT OR IGNORE INTO pair_song_local_playlist (playlistId, songId, position, inPlaylist) VALUES (${pair.playlistId}, '${pair.songId}', ${pair.position},${pair.inPlaylist.toInstant(TimeZone.UTC).toEpochMilliseconds()})"
                         )
                     }
                 }

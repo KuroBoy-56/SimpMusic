@@ -156,7 +156,10 @@ class SimpMusicApplication :
         val stringToHash = "$user$mac$currentHourDate$secretKey"
 
         val bytes = MessageDigest.getInstance("SHA-256").digest(stringToHash.toByteArray(Charsets.UTF_8))
-        return bytes.joinToString("") { "%02x".format(it) }
+
+        // CORRECCIÓN VITAL: "it.toInt() and 0xFF" garantiza que los bytes negativos
+        // no rompan el formato hexadecimal (es decir, el hash será exacto al del PHP).
+        return bytes.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
     }
 
     private fun validarCuentaSilenciosamente(context: Context) {

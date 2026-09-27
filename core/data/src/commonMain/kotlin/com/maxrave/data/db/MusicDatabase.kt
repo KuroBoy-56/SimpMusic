@@ -41,7 +41,7 @@ import com.maxrave.domain.data.entities.analytics.PlaybackEventEntity
         YourYouTubePlaylistList::class, PlaybackEventEntity::class, EventArtistEntity::class,
         AutoEqEntryEntity::class, AutoEqIndexMetaEntity::class, AutoEqCurveEntity::class
     ],
-    version = 26,
+    version = 27,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 2, to = 3), AutoMigration(
@@ -91,6 +91,9 @@ import com.maxrave.domain.data.entities.analytics.PlaybackEventEntity
         AutoMigration(25, 26),
         AutoMigration(24, 26),
         AutoMigration(23, 26),
+        AutoMigration(26, 27),
+        AutoMigration(25, 27),
+        AutoMigration(24, 27),
     ],
 )
 @TypeConverters(Converters::class)
