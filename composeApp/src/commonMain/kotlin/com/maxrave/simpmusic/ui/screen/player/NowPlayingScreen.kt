@@ -106,13 +106,9 @@ import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.abs
 
-// Imports para la carátula de Apple Music (Mantenido de la versión local)
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.request.get
-import io.ktor.client.statement.bodyAsText
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+// Importamos la lógica maestra compartida
+import com.maxrave.simpmusic.ui.component.cleanMusicTitle
+import com.maxrave.simpmusic.ui.component.rememberHighResArtwork
 
 private const val TAG = "NowPlayingScreen"
 
@@ -723,109 +719,4 @@ fun NowPlayingScreenContent(
                 actions = actions,
             )
     }
-}
-
-// -------------------------------------------------------------------------
-// UTILIDADES PARA FILTRAR TÍTULO Y OBTENER CARÁTULA EN ALTA RESOLUCIÓN
-// -------------------------------------------------------------------------
-
-fun String.cleanMusicTitle(): String {
-    var clean = this
-    clean = clean.replace(
-        Regex("(?i)[\\[\\(]?(official|official video|audio|music video|lyric video|lyric|live|remix|visualizer).*?[\\]\\)]?"),
-        "",
-    )
-    clean = clean.replace(Regex("(?i)\\s+(ft\\.|feat\\.?|featuring).*"), "")
-    clean = clean.replace(Regex("(?i)\\s+-\\s+(official|official video|audio|music video|lyric|live|remix|visualizer).*"), "")
-    return clean.trim().ifEmpty { this }
-}
-
-private fun normalizeArtworkSearchText(value: String?): String {
-    return value
-        ?.replace(Regex("(?i)\\s*[-–—]\\s*topic\\b"), "")
-        ?.replace(Regex("(?i)\\b(official|official video|official audio|music video|lyric video|lyrics|visualizer|remastered)\\b"), "")
-        ?.replace(Regex("[^a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ]+"), " ")
-        ?.trim()
-        ?.lowercase()
-        .orEmpty()
-}
-
-private fun artworkQuery(value: String): String =
-    value.trim().replace(Regex("\\s+"), "+")
-
-@Composable
-fun rememberHighResArtwork(
-    title: String?,
-    artist: String?,
-    fallbackThumbnail: String?,
-): String? {
-    var artworkUrl by remember(title, artist, fallbackThumbnail) {
-        mutableStateOf(fallbackThumbnail)
-    }
-
-    LaunchedEffect(title, artist, fallbackThumbnail) {
-        if (title.isNullOrBlank()) return@LaunchedEffect
-
-        val cleanTitle = title.cleanMusicTitle().trim()
-        val cleanArtist = artist
-            ?.replace(Regex("(?i)-\\s*topic\\b"), "")
-            ?.replace(Regex("(?i)\\s+(ft\\.|feat\\.?|featuring).*"), "")
-            ?.trim()
-            .orEmpty()
-
-        withContext(Dispatchers.IO) {
-            try {
-                val client = HttpClient(CIO)
-                val query = artworkQuery("$cleanTitle $cleanArtist")
-                val response =
-                    client.get(
-                        "https://itunes.apple.com/search?term=$query&entity=song&limit=10",
-                    )
-                val body = response.bodyAsText()
-
-                val trackNames =
-                    Regex("\\\"trackName\\\":\\\"([^\\\"]*)\\\"").findAll(body).map { it.groupValues[1] }.toList()
-                val artistNames =
-                    Regex("\\\"artistName\\\":\\\"([^\\\"]*)\\\"").findAll(body).map { it.groupValues[1] }.toList()
-                val artworks =
-                    Regex("\\\"artworkUrl100\\\":\\\"([^\\\"]+)\\\"").findAll(body).map { it.groupValues[1] }.toList()
-
-                val normalizedTitle = normalizeArtworkSearchText(cleanTitle)
-                val normalizedArtist = normalizeArtworkSearchText(cleanArtist)
-
-                var bestIndex = -1
-                var bestScore = Int.MIN_VALUE
-                val count = minOf(trackNames.size, artistNames.size, artworks.size)
-
-                for (index in 0 until count) {
-                    val resultTitle = normalizeArtworkSearchText(trackNames[index])
-                    val resultArtist = normalizeArtworkSearchText(artistNames[index])
-                    var score = 0
-
-                    if (resultTitle == normalizedTitle) score += 100
-                    else if (resultTitle.contains(normalizedTitle) || normalizedTitle.contains(resultTitle)) score += 45
-
-                    if (normalizedArtist.isNotBlank()) {
-                        if (resultArtist == normalizedArtist) score += 120
-                        else if (resultArtist.contains(normalizedArtist) || normalizedArtist.contains(resultArtist)) score += 65
-                        else score -= 35
-                    }
-
-                    if (score > bestScore) {
-                        bestScore = score
-                        bestIndex = index
-                    }
-                }
-
-                if (bestIndex >= 0 && bestScore >= 80) {
-                    artworkUrl = artworks[bestIndex].replace("100x100bb", "600x600bb")
-                }
-
-                client.close()
-            } catch (_: Exception) {
-                // Mantiene la miniatura de YouTube si iTunes no devuelve una coincidencia fiable.
-            }
-        }
-    }
-    return artworkUrl
 }

@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import com.maxrave.common.SELECTED_LANGUAGE
 import com.maxrave.common.SUPPORTED_LANGUAGE
 import com.maxrave.domain.data.entities.SongEntity
+import com.maxrave.domain.data.model.home.HomeDataCombine
 import com.maxrave.domain.data.model.home.HomeItem
 import com.maxrave.domain.data.model.home.chart.Chart
 import com.maxrave.domain.data.model.mood.Mood
@@ -13,7 +14,6 @@ import com.maxrave.domain.repository.HomeRepository
 import com.maxrave.domain.utils.Resource
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
@@ -181,90 +182,115 @@ class HomeViewModel(
     fun getHomeItemList(params: String? = null) {
         loading.value = true
         _homeListState.value = ListState.LOADING
-
-        language = runBlocking {
-            dataStoreManager.getString(SELECTED_LANGUAGE).first() ?: SUPPORTED_LANGUAGE.codes.first()
-        }
+        language =
+            runBlocking {
+                dataStoreManager.getString(SELECTED_LANGUAGE).first()
+                    ?: SUPPORTED_LANGUAGE.codes.first()
+            }
         regionCode = runBlocking { dataStoreManager.location.first() }
-
         homeJob?.cancel()
-        homeJob = viewModelScope.launch(Dispatchers.IO) {
-
-            // 1. Cargamos el Home Principal de Inmediato
-            launch {
-                homeRepository.getHomeData(
-                    params,
-                    getString(Res.string.view_count),
-                    getString(Res.string.song),
-                ).collectLatest { home ->
+        homeJob =
+            viewModelScope.launch {
+                combine(
+                    homeRepository.getHomeData(
+                        params,
+                        getString(Res.string.view_count),
+                        getString(Res.string.song),
+                    ),
+                    homeRepository.getMoodAndMomentsData(),
+                    homeRepository.getChartData(dataStoreManager.chartKey.first()),
+                    homeRepository.getNewRelease(
+                        getString(Res.string.new_release),
+                        getString(Res.string.music_video),
+                    ),
+                ) { home, exploreMood, exploreChart, newRelease ->
+                    HomeDataCombine(home, exploreMood, exploreChart, newRelease)
+                }.collect { result ->
+                    val home = result.home
+                    Logger.d("home size", "${home.data?.second?.size}")
+                    val exploreMoodItem = result.mood
+                    val chart = result.chart
+                    val newRelease = result.newRelease
                     when (home) {
                         is Resource.Success -> {
                             _continuation.value = home.data?.first
                             _homeItemList.value = home.data?.second ?: listOf()
-                            if (continuation.value.isNullOrEmpty()) {
-                                _homeListState.value = ListState.PAGINATION_EXHAUST
-                            } else {
-                                _homeListState.value = ListState.IDLE
-                            }
                         }
-                        is Resource.Error -> {
+
+                        else -> {
                             _continuation.value = null
                             _homeItemList.value = listOf()
-                            showSnackBarErrorState.emit(home.message ?: "Error al cargar Home")
                         }
-                        else -> {}
                     }
-                    loading.value = false // Liberamos la pantalla de carga rápido
-                }
-            }
+                    if (continuation.value.isNullOrEmpty()) {
+                        _homeListState.value = ListState.PAGINATION_EXHAUST
+                    } else {
+                        _homeListState.value = ListState.IDLE
+                    }
+                    when (chart) {
+                        is Resource.Success -> {
+                            _chart.value = chart.data
+                        }
 
-            // 2. Cargamos Nuevos Lanzamientos en paralelo
-            launch {
-                homeRepository.getNewRelease(
-                    getString(Res.string.new_release),
-                    getString(Res.string.music_video),
-                ).collectLatest { newRel ->
-                    when (newRel) {
-                        is Resource.Success -> _newRelease.value = newRel.data ?: arrayListOf()
-                        else -> _newRelease.value = arrayListOf()
+                        else -> {
+                            _chart.value = null
+                        }
+                    }
+                    when (newRelease) {
+                        is Resource.Success -> {
+                            _newRelease.value = newRelease.data ?: arrayListOf()
+                        }
+
+                        else -> {
+                            _newRelease.value = arrayListOf()
+                        }
+                    }
+                    when (exploreMoodItem) {
+                        is Resource.Success -> {
+                            _exploreMoodItem.value = exploreMoodItem.data
+                        }
+
+                        else -> {
+                            _exploreMoodItem.value = null
+                        }
+                    }
+                    regionCodeChart.value = dataStoreManager.chartKey.first()
+                    Logger.d("HomeViewModel", "getHomeItemList: $result")
+                    dataStoreManager.cookie.first().let {
+                        if (it != "") {
+                            _accountInfo.emit(
+                                Pair(
+                                    dataStoreManager.getString("AccountName").first(),
+                                    dataStoreManager.getString("AccountThumbUrl").first(),
+                                ),
+                            )
+                        }
+                    }
+                    when {
+                        home is Resource.Error -> home.message
+                        exploreMoodItem is Resource.Error -> exploreMoodItem.message
+                        chart is Resource.Error -> chart.message
+                        else -> null
+                    }?.let {
+                        showSnackBarErrorState.emit(it)
+                        Logger.w("Error", "getHomeItemList: ${home.message}")
+                        Logger.w("Error", "getHomeItemList: ${exploreMoodItem.message}")
+                        Logger.w("Error", "getHomeItemList: ${chart.message}")
+                    }
+                    loading.value = false
+
+                    // 🔥 SIMULACIÓN DE DOBLE CARGA (EL TRUCO QUE PEDISTE)
+                    // Si el pull-to-refresh congeló la paginación, disparamos automáticamente
+                    // la continuación simulando la recomposición de pantalla.
+                    if (!continuation.value.isNullOrEmpty()) {
+                        viewModelScope.launch {
+                            delay(400) // Pausa táctica para dejar que Compose dibuje la primera mitad
+                            Logger.w("HomeViewModel", "Forzando simulación de doble recarga")
+                            getContinueHomeItem(continuation.value)
+                        }
                     }
                 }
             }
-
-            // 3. Cargamos Mood/Moments en paralelo
-            launch {
-                homeRepository.getMoodAndMomentsData().collectLatest { mood ->
-                    when (mood) {
-                        is Resource.Success -> _exploreMoodItem.value = mood.data
-                        else -> _exploreMoodItem.value = null
-                    }
-                }
-            }
-
-            // 4. Cargamos el Chart en paralelo
-            launch {
-                val chartKey = dataStoreManager.chartKey.first()
-                homeRepository.getChartData(chartKey).collectLatest { chartRes ->
-                    when (chartRes) {
-                        is Resource.Success -> _chart.value = chartRes.data
-                        else -> _chart.value = null
-                    }
-                    regionCodeChart.value = chartKey
-                }
-            }
-
-            // Actualización de Cookie/Usuario
-            dataStoreManager.cookie.first().let {
-                if (it != "") {
-                    _accountInfo.emit(
-                        Pair(
-                            dataStoreManager.getString("AccountName").first(),
-                            dataStoreManager.getString("AccountThumbUrl").first(),
-                        ),
-                    )
-                }
-            }
-        }
     }
 
     fun getContinueHomeItem(continuation: String?) {
