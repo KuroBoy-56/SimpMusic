@@ -156,8 +156,8 @@ import kotlin.math.roundToLong
 import kotlin.time.Duration.Companion.seconds
 
 // Nuevas importaciones necesarias
-import com.maxrave.simpmusic.ui.screen.player.cleanMusicTitle
-import com.maxrave.simpmusic.ui.screen.player.rememberHighResArtwork
+import com.maxrave.simpmusic.ui.component.cleanMusicTitle
+import com.maxrave.simpmusic.ui.component.rememberHighResArtwork
 
 private const val TAG = "MiniPlayer"
 
@@ -319,11 +319,17 @@ fun MiniPlayer(
         fallbackThumbnail = songEntity?.thumbnails
     )
 
+    // LÓGICA DE DETECCIÓN INTELIGENTE DE CARÁTULA
+    val isSquareThumb = highResThumbnail?.toString()?.let { url ->
+        url.contains("mzstatic", ignoreCase = true) ||
+            url.contains("googleusercontent", ignoreCase = true) ||
+            url.contains("sqp=", ignoreCase = true)
+    } ?: false
+
     if (getPlatform() == Platform.Android) {
         val miniPlayerShape =
             if (isLiquidGlassEnabled == DataStoreManager.TRUE) CircleShape else RoundedCornerShape(12.dp)
 
-        // El color del Card toma la paleta pero le aplica transparencia para el blur
         val cardColor =
             if (isLiquidGlassEnabled == DataStoreManager.TRUE) {
                 backgroundColor.copy(alpha = 0.4f)
@@ -439,7 +445,7 @@ fun MiniPlayer(
                             Box(
                                 modifier =
                                     Modifier
-                                        .size(40.dp)
+                                        .height(40.dp)
                                         .align(Alignment.CenterVertically),
                                 contentAlignment = Alignment.Center,
                             ) {
@@ -447,7 +453,7 @@ fun MiniPlayer(
                                     val ringStroke = Stroke(width = with(LocalDensity.current) { 3.dp.toPx() }, cap = StrokeCap.Round)
                                     CircularWavyProgressIndicator(
                                         progress = { animatedProgress },
-                                        modifier = Modifier.fillMaxSize(),
+                                        modifier = Modifier.size(40.dp),
                                         color = textColor,
                                         trackColor = textColor.copy(alpha = 0.2f),
                                         stroke = ringStroke,
@@ -465,14 +471,14 @@ fun MiniPlayer(
                                     placeholder = rememberHolderPainter(),
                                     error = rememberHolderPainter(),
                                     contentDescription = null,
-                                    contentScale = ContentScale.Crop, // Siempre cuadrado perfecto
+                                    contentScale = ContentScale.Crop, // Adaptable
                                     onSuccess = { state ->
                                         bitmap = state.result.image.toImageBitmap()
                                     },
                                     modifier =
                                         Modifier
-                                            .size(if (isFlat) 26.dp else 40.dp)
-                                            .aspectRatio(1f)
+                                            .height(if (isFlat) 26.dp else 40.dp)
+                                            .aspectRatio(if (isSquareThumb || isFlat) 1f else 16f / 9f) // Ratio inteligente
                                             .clip(if (isFlat) CircleShape else RoundedCornerShape(4.dp)),
                                 )
                             }
@@ -629,7 +635,6 @@ fun MiniPlayer(
             }
         }
     } else {
-        // En Desktop, el texto usa el color adaptado automáticamente gracias al bloque superior
         val sweepTransition = rememberInfiniteTransition(label = "miniPlayerCrossfadeSweep")
         val crossfadeSweep by sweepTransition.animateFloat(
             initialValue = 0f,
@@ -674,7 +679,7 @@ fun MiniPlayer(
         Box(
             modifier
                 .liquidGlass(backdrop, layer, luminanceAnimation.value, capsuleShape, blurScale = 1.2f)
-                .background(backgroundColor.copy(alpha = 0.4f), capsuleShape) // Tinte del color de carátula manteniendo cristal en Desktop
+                .background(backgroundColor.copy(alpha = 0.4f), capsuleShape)
                 .clip(capsuleShape)
                 .clickable {
                     onClick()
@@ -744,14 +749,14 @@ fun MiniPlayer(
                             placeholder = rememberHolderPainter(),
                             error = rememberHolderPainter(),
                             contentDescription = null,
-                            contentScale = ContentScale.Crop, // Cuadrado perfecto
+                            contentScale = ContentScale.Crop,
                             onSuccess = { state ->
                                 bitmap = state.result.image.toImageBitmap()
                             },
                             modifier =
                                 Modifier
-                                    .size(32.dp)
-                                    .aspectRatio(1f) // Siempre cuadrado
+                                    .height(32.dp)
+                                    .aspectRatio(if (isSquareThumb) 1f else 16f / 9f) // Ratio Inteligente
                                     .clip(
                                         RoundedCornerShape(6.dp),
                                     ),
@@ -963,7 +968,7 @@ fun MiniPlayer(
                                             .width(44.dp)
                                             .height(VOLUME_POPUP_HEIGHT)
                                             .clip(RoundedCornerShape(14.dp))
-                                            .background(backgroundColor.copy(alpha = 0.96f)) // Fondo del popup dinámico también
+                                            .background(backgroundColor.copy(alpha = 0.96f))
                                             .padding(vertical = 10.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.spacedBy(8.dp),

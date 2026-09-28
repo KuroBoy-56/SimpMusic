@@ -658,7 +658,7 @@
     <string name="not_available_while_casting">Недоступно во время трансляции</string>
     <string name="import_data">Импортировать плейлист</string>
     <string name="import_playlists_from_other_apps">Импортирует плейлисты из других приложений</string>
-    <string name="import_data_intro">Импорт добавляет плейлисты из Spotify или другого YTMusic клиента. \nИнструмент для конвертирования: https://www.simpmusic.org/tools\n В  YT Music Mod можно импортировать файлы плейлистов только нашего формата</string>
+    <string name="import_data_intro">Импорт добавляет плейлисты из Spotify или другого YTMusic клиента. \nИнструмент для конвертирования: https://www.garevynmusic.org/tools\n В  YT Music Mod можно импортировать файлы плейлистов только нашего формата</string>
     <string name="import_reading_file">Чтение файла…</string>
     <string name="import_progress_songs">%1$d из %2$d песен</string>
     <string name="import_result">Создано %1$d плейлистов и импортировано %2$d песен.</string>

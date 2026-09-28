@@ -673,7 +673,7 @@
     <string name="not_available_while_casting">Indisponible pendant le casting</string>
     <string name="import_data">Importer des playlists</string>
     <string name="import_playlists_from_other_apps">Importer des playlists depuis une autre application</string>
-    <string name="import_data_intro">La fonction d'importation permet d'importer des playlists converties depuis Spotify ou une autre application cliente de YouTube Music.\nOutil de conversion : https://www.simpmusic.org/tools\nDans YT Music Mod , seules les playlists au format propre à l'application peuvent être importées</string>
+    <string name="import_data_intro">La fonction d'importation permet d'importer des playlists converties depuis Spotify ou une autre application cliente de YouTube Music.\nOutil de conversion : https://www.garevynmusic.org/tools\nDans YT Music Mod , seules les playlists au format propre à l'application peuvent être importées</string>
     <string name="import_reading_file">Lecture du fichier…</string>
     <string name="import_progress_songs">%1$d sur %2$d titres</string>
     <string name="import_result">%1$d playlists ont été créées et %2$d titres ont été importés.</string>

@@ -252,7 +252,6 @@ fun PlaylistScreen(
         }
     }
 
-    // CORRECCIÓN: Coleccionar estado limpiamente sin operadores Flow en Composable
     val nowPlayingState by sharedViewModel.nowPlayingState.collectAsStateWithLifecycle()
     val playingTrack = nowPlayingState?.songEntity
 
@@ -297,8 +296,7 @@ fun PlaylistScreen(
         shouldHideTopBar = !firstItemVisible
     }
     val paletteState = rememberPaletteState()
-    val hazeState =
-        rememberHazeState()
+    val hazeState = rememberHazeState()
     var bitmap by remember {
         mutableStateOf<ImageBitmap?>(null)
     }
@@ -346,8 +344,16 @@ fun PlaylistScreen(
                 val data = state.data
                 Logger.d(tag, "data: $data")
                 if (data == null) return@Crossfade
-                val hazeState =
-                    rememberHazeState()
+
+                // LÓGICA INTELIGENTE DE ASPECT RATIO (Cuadrado vs 16:9)
+                val isSquareThumb = data.thumbnail?.let { url ->
+                    url.contains("mzstatic", ignoreCase = true) ||
+                        url.contains("googleusercontent", ignoreCase = true) ||
+                        url.contains("sqp=", ignoreCase = true) ||
+                        data.isRadio
+                } ?: false
+
+                val hazeState = rememberHazeState()
                 LazyColumn(
                     modifier =
                         Modifier
@@ -375,11 +381,14 @@ fun PlaylistScreen(
                                     ) {
                                         if (isPortrait) {
                                             val artworkBackdrop = rememberBackdrop(Color.Black)
+                                            // Calculamos la altura dinámicamente según si es cuadrado o rectángulo
+                                            val headerHeight = if (isSquareThumb) screenInfo.wDP.dp else (screenInfo.wDP * (9f / 16f)).dp
+
                                             Box(
                                                 modifier =
                                                     Modifier
                                                         .fillMaxWidth()
-                                                        .height((screenInfo.wDP).dp),
+                                                        .height(headerHeight),
                                             ) {
                                                 Box(modifier = Modifier.fillMaxSize().layerBackdrop(artworkBackdrop)) {
                                                     AsyncImage(
@@ -396,20 +405,18 @@ fun PlaylistScreen(
                                                         placeholder = rememberHolderPainter(),
                                                         error = rememberHolderPainter(),
                                                         contentDescription = null,
-                                                        contentScale = ContentScale.Crop, // FUERZA RECORTE
+                                                        contentScale = ContentScale.Crop,
                                                         onSuccess = {
                                                             bitmap = it.result.image.toImageBitmap()
                                                         },
-                                                        modifier = Modifier
-                                                            .fillMaxSize()
-                                                            .aspectRatio(1f), // ASPECTO CUADRADO PERFECTO
+                                                        modifier = Modifier.fillMaxSize(),
                                                     )
 
                                                     Box(
                                                         modifier =
                                                             Modifier
                                                                 .fillMaxWidth()
-                                                                .height((screenInfo.hDP * 0.35f).dp)
+                                                                .height(headerHeight * 0.45f)
                                                                 .align(Alignment.BottomCenter)
                                                                 .background(artworkScrimBrush(mutedPaletteBg)),
                                                     )
@@ -563,14 +570,14 @@ fun PlaylistScreen(
                                                             placeholder = rememberHolderPainter(),
                                                             error = rememberHolderPainter(),
                                                             contentDescription = null,
-                                                            contentScale = ContentScale.Crop, // FUERZA RECORTE 1:1
+                                                            contentScale = ContentScale.Crop,
                                                             onSuccess = {
                                                                 bitmap = it.result.image.toImageBitmap()
                                                             },
                                                             modifier =
                                                                 Modifier
-                                                                    .size(280.dp)
-                                                                    .aspectRatio(1f) // CUADRADO PERFECTO
+                                                                    .width(280.dp)
+                                                                    .aspectRatio(if (isSquareThumb) 1f else 16f / 9f) // Ratio dinámico
                                                                     .clip(RoundedCornerShape(8.dp)),
                                                         )
                                                         Column(

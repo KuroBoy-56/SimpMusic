@@ -38,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -88,8 +89,10 @@ import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.LocalForceDarkText
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
@@ -101,15 +104,61 @@ import simpmusic.composeapp.generated.resources.playlist
 import simpmusic.composeapp.generated.resources.podcasts
 import simpmusic.composeapp.generated.resources.radio
 import simpmusic.composeapp.generated.resources.you
+import java.net.URLEncoder
 import kotlin.math.roundToInt
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
 
-/**
- * This is the song item in the playlist or other places.
- *
- * Multi-selection is opt-in per screen: pass [onLongClick] to let a long press start it, then
- * drive [selectionMode] and [isSelected] from the screen's
- * [com.maxrave.simpmusic.ui.component.selection.SongSelectionState].
- */
+// --- LÓGICA DE ITUNES Y CACHÉ GLOBAL ---
+// Mantiene las imágenes en memoria para no saturar la red al hacer scroll
+private val iTunesCache = mutableMapOf<String, String>()
+private val iTunesClient by lazy { HttpClient(CIO) }
+
+fun String.cleanMusicTitle(): String {
+    var clean = this
+    clean = clean.replace(Regex("(?i)\\[.*?\\]|\\(.*?\\)"), "")
+    clean = clean.replace(Regex("(?i)\\s+(ft\\.|feat\\.?|featuring).*"), "")
+    clean = clean.replace(Regex("(?i)\\s*[-–—]\\s*topic\\b"), "")
+    return clean.trim().ifEmpty { this }
+}
+
+@Composable
+fun rememberHighResArtwork(title: String?, artist: String?, fallbackThumbnail: String?): String? {
+    val cacheKey = "${title}-${artist}"
+    var currentUrl by remember(title, artist, fallbackThumbnail) {
+        mutableStateOf(iTunesCache[cacheKey] ?: fallbackThumbnail)
+    }
+
+    LaunchedEffect(title, artist) {
+        if (title.isNullOrBlank() || iTunesCache.containsKey(cacheKey)) return@LaunchedEffect
+
+        withContext(Dispatchers.IO) {
+            try {
+                val cleanTitle = title.cleanMusicTitle()
+                val cleanArtist = artist?.replace(Regex("(?i)-\\s*topic\\b"), "")?.trim() ?: ""
+                val query = URLEncoder.encode("$cleanTitle $cleanArtist".trim(), "UTF-8")
+
+                val response = iTunesClient.get("https://itunes.apple.com/search?term=$query&entity=song&limit=1").bodyAsText()
+
+                val artworks = Regex("\"artworkUrl100\":\"([^\"]+)\"").findAll(response).map { it.groupValues[1] }.toList()
+                if (artworks.isNotEmpty()) {
+                    val highRes = artworks[0].replace("100x100bb", "600x600bb")
+                    iTunesCache[cacheKey] = highRes
+                    currentUrl = highRes
+                } else {
+                    iTunesCache[cacheKey] = fallbackThumbnail ?: ""
+                }
+            } catch(e: Exception) {
+                // Si falla silenciosamente, mantiene la carátula original de YouTube
+            }
+        }
+    }
+    return currentUrl
+}
+// ----------------------------------------
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SongFullWidthItems(
@@ -135,16 +184,35 @@ fun SongFullWidthItems(
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
     val songRepository: SongRepository = koinInject<SongRepository>()
-    val downloadState by songRepository
-        .getSongAsFlow(songEntity?.videoId ?: track?.videoId ?: "")
-        .mapNotNull { it?.downloadState }
-        .collectAsState(initial = DownloadState.STATE_NOT_DOWNLOADED)
+
+    // --- CORRECCIÓN DEL ERROR DE FLOW AQUÍ ---
+    val itemVideoId = track?.videoId ?: songEntity?.videoId ?: ""
+    val downloadStateFlow = remember(itemVideoId) {
+        songRepository.getSongAsFlow(itemVideoId).mapNotNull { it?.downloadState }
+    }
+    val downloadState by downloadStateFlow.collectAsState(initial = DownloadState.STATE_NOT_DOWNLOADED)
+    // ------------------------------------------
+
     val offsetX = remember { Animatable(initialValue = 0f) }
     var heightDp by remember { mutableStateOf(0.dp) }
 
+    // --- CARÁTULAS INTELIGENTES ---
+    val rawTitle = track?.title ?: songEntity?.title ?: ""
+    val rawArtist = track?.artists?.toListName()?.connectArtists() ?: songEntity?.artistName?.connectArtists()
+    val rawThumb = track?.thumbnails?.lastOrNull()?.url ?: songEntity?.thumbnails
+
+    val thumb = rememberHighResArtwork(title = rawTitle, artist = rawArtist, fallbackThumbnail = rawThumb)
+
+    val isSquareThumb = thumb?.let { url ->
+        url.contains("mzstatic", ignoreCase = true) ||
+            url.contains("googleusercontent", ignoreCase = true) ||
+            url.contains("sqp=", ignoreCase = true)
+    } ?: false
+    // ------------------------------
+
     Box(
         modifier =
-        modifier,
+            modifier,
     ) {
         Crossfade(
             offsetX.value >= maxOffset / 2,
@@ -167,7 +235,7 @@ fun SongFullWidthItems(
                 }
             }
         }
-        val itemVideoId = track?.videoId ?: songEntity?.videoId ?: ""
+
         Box(
             modifier =
                 modifier
@@ -189,8 +257,6 @@ fun SongFullWidthItems(
                                 null
                             },
                     ).animateContentSize()
-                    // Keyed on selectionMode so the swipe detector is torn down when selection
-                    // starts — keyed on Unit it would keep running with the stale flag captured.
                     .pointerInput(selectionMode) {
                         if (!isPlaying && onAddToQueue != null && !selectionMode) {
                             detectHorizontalDragGestures(
@@ -207,7 +273,7 @@ fun SongFullWidthItems(
                                 onDragEnd = {
                                     if (offsetX.value == maxOffset) {
                                         onAddToQueue(
-                                            track?.videoId ?: songEntity?.videoId ?: "",
+                                            itemVideoId,
                                         )
                                     }
                                     coroutineScope.launch {
@@ -260,8 +326,11 @@ fun SongFullWidthItems(
                         Spacer(modifier = Modifier.width(12.dp))
                     }
                 }
+
+                // --- CONTENEDOR INTELIGENTE 1:1 o 16:9 ---
+                val thumbWidth = if (isSquareThumb) 48.dp else (48 * 16 / 9).dp
                 Box(
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.height(48.dp).width(thumbWidth),
                     contentAlignment = Alignment.Center,
                 ) {
                     Crossfade(isPlaying) {
@@ -270,7 +339,6 @@ fun SongFullWidthItems(
                                 modifier = Modifier.fillMaxSize(),
                             )
                         } else if (index == null) {
-                            val thumb = track?.thumbnails?.lastOrNull()?.url ?: songEntity?.thumbnails
                             AsyncImage(
                                 model =
                                     ImageRequest
@@ -283,7 +351,7 @@ fun SongFullWidthItems(
                                 placeholder = rememberHolderPainter(),
                                 error = rememberHolderPainter(),
                                 contentDescription = null,
-                                contentScale = ContentScale.FillWidth,
+                                contentScale = ContentScale.Crop, // Modificado a Crop para llenar la caja
                                 modifier =
                                     Modifier
                                         .fillMaxSize()
@@ -356,7 +424,7 @@ fun SongFullWidthItems(
                                 (
                                     track?.artists?.toListName()?.connectArtists()
                                         ?: songEntity?.artistName?.connectArtists()
-                                ) ?: "",
+                                    ) ?: "",
                             style = typo().bodySmall,
                             maxLines = 1,
                             color = subtitleColor,
@@ -374,8 +442,6 @@ fun SongFullWidthItems(
                 if (rightView != null) {
                     rightView()
                 }
-                // Hidden while selecting: the per-item menu moves up to the selection app bar,
-                // so one tap cannot mean both "act on this song" and "pick this song".
                 if (onMoreClickListener != null && !selectionMode) {
                     RippleIconButton(imageVector = SimpIcons.MoreVert, fillMaxSize = false, tint = contentColor) {
                         if (itemVideoId.isNotBlank()) onMoreClickListener.invoke(itemVideoId)
@@ -408,6 +474,21 @@ fun SuggestItems(
 ) {
     val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
+
+    // --- CARÁTULAS INTELIGENTES ---
+    val rawTitle = track.title
+    val rawArtist = track.artists?.toListName()?.connectArtists()
+    val rawThumb = track.thumbnails?.lastOrNull()?.url
+
+    val thumb = rememberHighResArtwork(title = rawTitle, artist = rawArtist, fallbackThumbnail = rawThumb)
+
+    val isSquareThumb = thumb?.let { url ->
+        url.contains("mzstatic", ignoreCase = true) ||
+            url.contains("googleusercontent", ignoreCase = true) ||
+            url.contains("sqp=", ignoreCase = true)
+    } ?: false
+    // ------------------------------
+
     Box(
         modifier =
             Modifier
@@ -423,14 +504,14 @@ fun SuggestItems(
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(modifier = Modifier.size(40.dp)) {
+            val thumbWidth = if (isSquareThumb) 40.dp else (40 * 16 / 9).dp
+            Box(modifier = Modifier.height(40.dp).width(thumbWidth)) {
                 Crossfade(isPlaying) {
                     if (it) {
                         AudioPlayingIndicator(
                             modifier = Modifier.fillMaxSize(),
                         )
                     } else {
-                        val thumb = track.thumbnails?.lastOrNull()?.url
                         AsyncImage(
                             model =
                                 ImageRequest
@@ -443,11 +524,10 @@ fun SuggestItems(
                             placeholder = rememberHolderPainter(),
                             error = rememberHolderPainter(),
                             contentDescription = null,
-                            contentScale = ContentScale.FillWidth,
+                            contentScale = ContentScale.Crop, // Crop para llenar
                             modifier =
                                 Modifier
-                                    .wrapContentHeight()
-                                    .fillMaxWidth()
+                                    .fillMaxSize()
                                     .clip(RoundedCornerShape(4.dp)),
                         )
                     }
@@ -477,7 +557,7 @@ fun SuggestItems(
                     text =
                         (
                             track.artists?.toListName()?.connectArtists()
-                        ) ?: "",
+                            ) ?: "",
                     style = typo().bodySmall,
                     maxLines = 1,
                     color = subtitleColor,

@@ -62,6 +62,7 @@ import simpmusic.composeapp.generated.resources.shuffle_not_available
 import simpmusic.composeapp.generated.resources.synced
 import simpmusic.composeapp.generated.resources.syncing
 import simpmusic.composeapp.generated.resources.view_count
+import java.net.URLEncoder
 
 class PlaylistViewModel(
     private val songRepository: SongRepository,
@@ -187,7 +188,6 @@ class PlaylistViewModel(
     fun getData(id: String) {
         resetData()
         viewModelScope.launch {
-            // Check radio
             if (id.isRadioPlaylistId()) {
                 playlistRepository
                     .getRadio(
@@ -230,7 +230,6 @@ class PlaylistViewModel(
                         }
                     }
             } else {
-                // This is an online playlist
                 playlistRepository
                     .getPlaylistData(id, getString(Res.string.view_count))
                     .collect { res ->
@@ -303,11 +302,14 @@ class PlaylistViewModel(
                                     log("Insert song: $it")
                                 }
                         }
-                        _tracks.update {
-                            val newList = it.toMutableList()
-                            newList.addAll(res.first ?: emptyList())
+                        val newTracks = res.first ?: emptyList()
+                        _tracks.update { current ->
+                            val newList = current.toMutableList()
+                            newList.addAll(newTracks)
                             newList
                         }
+                        enrichTracksWithITunesArtwork(newTracks) // Enriquecemos también la nueva paginación
+
                         if (res.second.isNullOrEmpty()) {
                             _continuation.value = null
                             _tracksListState.value = ListState.PAGINATION_EXHAUST
@@ -420,11 +422,10 @@ class PlaylistViewModel(
 
     private fun cleanArtworkTitle(title: String): String {
         var clean = title
-        clean = clean.replace(
-            Regex("(?i)[\\[\\(]?(official|official video|audio|music video|lyric video|lyric|live|remix|visualizer).*?[\\]\\)]?"),
-            "",
-        )
+        // Limpiamos todo lo que esté entre corchetes o paréntesis y marcadores comunes
+        clean = clean.replace(Regex("(?i)\\[.*?\\]|\\(.*?\\)"), "")
         clean = clean.replace(Regex("(?i)\\s+(ft\\.|feat\\.?|featuring).*"), "")
+        clean = clean.replace(Regex("(?i)\\s*[-–—]\\s*topic\\b"), "")
         return clean.trim().ifEmpty { title }
     }
 
@@ -443,26 +444,27 @@ class PlaylistViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             val client = HttpClient(CIO)
             try {
-                sourceTracks.forEachIndexed { index, track ->
+                sourceTracks.forEach { track ->
                     val artist = track.artists.orEmpty()
                         .joinToString(" ") { it.name }
                         .replace(Regex("(?i)-\\s*topic\\b"), "")
                         .trim()
+
                     val cleanTitle = cleanArtworkTitle(track.title)
-                    val query = "$cleanTitle $artist".trim().replace(Regex("\\s+"), "+")
+
+                    // Codificamos la URL para evitar crasheos de red si hay caracteres extraños
+                    val query = URLEncoder.encode("$cleanTitle $artist".trim(), "UTF-8")
 
                     try {
-                        val body =
-                            client
-                                .get("https://itunes.apple.com/search?term=$query&entity=song&limit=10")
-                                .bodyAsText()
+                        val body = client.get("https://itunes.apple.com/search?term=$query&entity=song&limit=5").bodyAsText()
 
-                        val trackNames = Regex("\\\"trackName\\\":\\\"([^\\\"]*)\\\"").findAll(body).map { it.groupValues[1] }.toList()
-                        val artistNames = Regex("\\\"artistName\\\":\\\"([^\\\"]*)\\\"").findAll(body).map { it.groupValues[1] }.toList()
-                        val artworks = Regex("\\\"artworkUrl100\\\":\\\"([^\\\"]+)\\\"").findAll(body).map { it.groupValues[1] }.toList()
+                        val trackNames = Regex("\"trackName\":\"([^\"]*)\"").findAll(body).map { it.groupValues[1] }.toList()
+                        val artistNames = Regex("\"artistName\":\"([^\"]*)\"").findAll(body).map { it.groupValues[1] }.toList()
+                        val artworks = Regex("\"artworkUrl100\":\"([^\"]+)\"").findAll(body).map { it.groupValues[1] }.toList()
 
                         val normalizedTitle = normalizeArtworkText(cleanTitle)
                         val normalizedArtist = normalizeArtworkText(artist)
+
                         val count = minOf(trackNames.size, artistNames.size, artworks.size)
                         var bestIndex = -1
                         var bestScore = Int.MIN_VALUE
@@ -471,38 +473,43 @@ class PlaylistViewModel(
                             val resultTitle = normalizeArtworkText(trackNames[resultIndex])
                             val resultArtist = normalizeArtworkText(artistNames[resultIndex])
                             var score = 0
+
                             if (resultTitle == normalizedTitle) score += 100
                             else if (resultTitle.contains(normalizedTitle) || normalizedTitle.contains(resultTitle)) score += 45
+
                             if (normalizedArtist.isNotBlank()) {
                                 if (resultArtist == normalizedArtist) score += 120
                                 else if (resultArtist.contains(normalizedArtist) || normalizedArtist.contains(resultArtist)) score += 65
                                 else score -= 35
                             }
+
                             if (score > bestScore) {
                                 bestScore = score
                                 bestIndex = resultIndex
                             }
                         }
 
+                        // Si la coincidencia es sólida, reemplazamos por HD
                         if (bestIndex >= 0 && bestScore >= 80) {
                             val artwork = artworks[bestIndex].replace("100x100bb", "600x600bb")
-                            val current = _tracks.value
-                            if (index < current.size && current[index].videoId == track.videoId) {
-                                _tracks.value = current.toMutableList().apply {
-                                    this[index] = track.copy(
-                                        thumbnails =
-                                            track.thumbnails
-                                                ?.firstOrNull()
-                                                ?.let { thumb ->
-                                                    listOf(thumb.copy(height = 600, url = artwork, width = 600))
-                                                }
-                                                ?: track.thumbnails,
+
+                            // Actualización Thread-Safe que no daña tu lista original
+                            _tracks.update { current ->
+                                val newList = current.toMutableList()
+                                val trackIndex = newList.indexOfFirst { it.videoId == track.videoId }
+                                if (trackIndex != -1) {
+                                    newList[trackIndex] = track.copy(
+                                        thumbnails = track.thumbnails?.firstOrNull()?.let { thumb ->
+                                            listOf(thumb.copy(height = 600, url = artwork, width = 600))
+                                        } ?: track.thumbnails
                                     )
                                 }
+                                newList
                             }
                         }
-                    } catch (_: Exception) {
-                        // Mantiene la miniatura de YouTube para esta canción.
+                    } catch (e: Exception) {
+                        Logger.e("iTunesFetch", "Error al buscar portada para ${track.title}: ${e.message}")
+                        // Si falla, silenciosamente se queda con la original de YouTube
                     }
                 }
             } finally {

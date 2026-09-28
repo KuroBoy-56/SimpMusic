@@ -27,9 +27,7 @@ actual fun getDatabaseBuilder(converters: Converters) : RoomDatabase.Builder<Mus
     return Room
         .databaseBuilder(getKoin().get(), MusicDatabase::class.java, DB_NAME)
         .addTypeConverter(converters)
-        // 🛡️ SEGURO DE VIDA ANTI-CRASHEO DE MIGRACIÓN:
-        // Si la base de datos de un usuario por alguna razón no logra migrar suavemente,
-        // este comando evita que la app muera con un cierre forzoso (crash).
+        // 🛡️ SEGURO DE VIDA: Si todo falla, no crashea la app, la resetea de forma segura.
         .fallbackToDestructiveMigration()
         .addMigrations(
             object : Migration(5, 6) {
@@ -117,6 +115,17 @@ actual fun getDatabaseBuilder(converters: Converters) : RoomDatabase.Builder<Mus
                     connection.execSQL("ALTER TABLE song ADD COLUMN canvasUrl TEXT")
                 }
             },
+            // 🔥 CIRUGÍA MANUAL PARA REPARAR EL ERROR DE MIGRACIÓN:
+            // Creamos la columna faltante que provocaba el crash en los usuarios actuales
+            object : Migration(26, 27) {
+                override fun migrate(connection: SQLiteConnection) {
+                    try {
+                        connection.execSQL("ALTER TABLE `GoogleAccountEntity` ADD COLUMN `authUser` INTEGER NOT NULL DEFAULT 0")
+                    } catch (e: Exception) {
+                        Logger.w("MIGRATION_26_27", "Columna authUser ya existe o hubo un salto: \${e.message}")
+                    }
+                }
+            }
         ).addCallback(
             object : RoomDatabase.Callback() {
                 override fun onOpen(connection: SQLiteConnection) {
