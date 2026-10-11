@@ -705,6 +705,9 @@ internal fun BoxScope.AppleMusicArtworkBackdrop(
     // it keeps the vertical darkening that makes the controls readable at the bottom, while the
     // frosted artwork shows through it.
     Box(modifier = Modifier.fillMaxSize().alpha(BACKDROP_TINT_ALPHA).background(backdropBrush))
+    // A pale cover blurs into a pale page, and every title, artist and lyric here is white: a
+    // fixed dark veil keeps them readable whatever the artwork is.
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)))
 }
 
 @Composable

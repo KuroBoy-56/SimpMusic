@@ -1,5 +1,9 @@
 package com.maxrave.simpmusic.ui.screen.home
 
+import com.maxrave.common.pad2
+import kotlinx.datetime.number
+import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.TimeZone
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -410,9 +414,6 @@ import simpmusic.composeapp.generated.resources.youtube_account
 import simpmusic.composeapp.generated.resources.youtube_subtitle_language
 import simpmusic.composeapp.generated.resources.youtube_subtitle_language_message
 import simpmusic.composeapp.generated.resources.youtube_transcript
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -629,24 +630,28 @@ fun SettingScreen(
                 Spacer(Modifier.height(64.dp))
                 Spacer(Modifier.height(16.dp))
                 // Above every section, and inside item 0 rather than an item of its own, for the
-                // glow reason above.
-                Text(text = stringResource(Res.string.login_sync_section), style = typo().labelMedium, color = MaterialTheme.colorScheme.onBackground)
-                SettingItem(
-                    title =
-                        stringResource(
-                            if (getPlatform() == Platform.Android) Res.string.login_sync_android_title else Res.string.login_sync_desktop_title,
-                        ),
-                    subtitle =
-                        stringResource(
-                            if (getPlatform() == Platform.Android) {
-                                Res.string.login_sync_android_description
-                            } else {
-                                Res.string.login_sync_desktop_description
-                            },
-                        ),
-                    onClick = { showLoginSyncDialog = true },
-                )
-                Spacer(Modifier.height(8.dp))
+                // glow reason above. The Devices section is the phone<->desktop sign-in transport,
+                // which has no iOS side (loadLoginSyncModule binds nothing there), so it is hidden
+                // on iOS rather than offering a dialog that cannot do anything.
+                if (getPlatform() != Platform.iOS) {
+                    Text(text = stringResource(Res.string.login_sync_section), style = typo().labelMedium, color = MaterialTheme.colorScheme.onBackground)
+                    SettingItem(
+                        title =
+                            stringResource(
+                                if (getPlatform() == Platform.Android) Res.string.login_sync_android_title else Res.string.login_sync_desktop_title,
+                            ),
+                        subtitle =
+                            stringResource(
+                                if (getPlatform() == Platform.Android) {
+                                    Res.string.login_sync_android_description
+                                } else {
+                                    Res.string.login_sync_desktop_description
+                                },
+                            ),
+                        onClick = { showLoginSyncDialog = true },
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
                 Text(text = stringResource(Res.string.user_interface), style = typo().labelMedium, color = MaterialTheme.colorScheme.onBackground)
                 val themeModeLabels =
                     listOf(
@@ -2600,10 +2605,13 @@ fun SettingScreen(
                                     if (autoBackupLastTime == 0L) {
                                         stringResource(Res.string.never)
                                     } else {
-                                        DateTimeFormatter
-                                            .ofPattern("yyyy-MM-dd HH:mm:ss")
-                                            .withZone(ZoneId.systemDefault())
-                                            .format(Instant.ofEpochMilli(autoBackupLastTime))
+                                        kotlin.time.Instant
+                                            .fromEpochMilliseconds(autoBackupLastTime)
+                                            .toLocalDateTime(TimeZone.currentSystemDefault())
+                                            .let {
+                                                "${it.year}-${it.month.number.pad2()}-${it.day.pad2()} " +
+                                                    "${it.hour.pad2()}:${it.minute.pad2()}:${it.second.pad2()}"
+                                            }
                                     },
                             )
                         }
