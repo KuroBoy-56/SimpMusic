@@ -401,6 +401,31 @@ class Ytmusic {
         parameter("prettyPrint", false)
     }
 
+    /**
+     * Anonymous player request for a client YouTube serves pre-signed stream URLs to (IOS, ANDROID_VR).
+     * Sent to www.youtube.com with no cookie: these clients reject a web session's cookie.
+     */
+    suspend fun directPlayer(
+        client: YouTubeClient,
+        videoId: String,
+    ) = httpClient.post("https://www.youtube.com/youtubei/v1/player") {
+        contentType(ContentType.Application.Json)
+        header(HttpHeaders.UserAgent, client.userAgent)
+        header("X-YouTube-Client-Name", "${client.xClientName ?: 1}")
+        header("X-YouTube-Client-Version", client.clientVersion)
+        header("Origin", "https://www.youtube.com")
+        visitorData?.let { header("X-Goog-Visitor-Id", it) }
+        setBody(
+            PlayerBody(
+                context = client.toContext(locale, visitorData),
+                videoId = videoId,
+                playlistId = null,
+                cpn = null,
+            ),
+        )
+        parameter("prettyPrint", false)
+    }
+
     suspend fun getSimpMusicChart() =
         httpClient.get("https://chart.simpmusic.org/api/playlists") {
             accept(ContentType.Application.Json)

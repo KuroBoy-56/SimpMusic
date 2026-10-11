@@ -171,7 +171,6 @@ import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.Url
@@ -236,17 +235,14 @@ private val listOfHomeChip =
 @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
 private fun desencriptarUrl(hexString: String): String {
     return try {
-        val decodedBase64 = String(
-            hexString.chunked(2).map { it.toInt(16).toByte() }.toByteArray(),
-            Charsets.UTF_8
-        )
+        val decodedBase64 = hexString.chunked(2).map { it.toInt(16).toByte() }.toByteArray().decodeToString()
         val decodedBytes = kotlin.io.encoding.Base64.decode(decodedBase64.encodeToByteArray())
-        val keyBytes = "KURO".toByteArray(Charsets.UTF_8)
+        val keyBytes = "KURO".encodeToByteArray()
         val result = ByteArray(decodedBytes.size)
         for (i in decodedBytes.indices) {
             result[i] = (decodedBytes[i].toInt() xor keyBytes[i % keyBytes.size].toInt()).toByte()
         }
-        String(result, Charsets.UTF_8)
+        result.decodeToString()
     } catch (e: Exception) {
         ""
     }
@@ -296,7 +292,7 @@ fun HomeScreen(
     var topHeaderColor by remember { mutableStateOf(backgroundColor) }
     val animatedColor by animateColorAsState(topHeaderColor, tween(500))
     val mainHomeThumbnail by viewModel.mainHomeThumbnail.collectAsStateWithLifecycle()
-    val networkLoader = rememberNetworkLoader(HttpClient(CIO))
+    val networkLoader = rememberNetworkLoader(HttpClient())
     val dominantColorState = rememberDominantColorState(
         defaultColor = backgroundColor,
         defaultOnColor = backgroundColor,
@@ -659,7 +655,7 @@ fun HomeTopAppBar(navController: NavController, hasUpdate: Boolean, sharedViewMo
                 val separator = if (apiUrlBase.contains("?")) "&" else "?"
                 val apiUrl = "$apiUrlBase${separator}app=ytmusic"
 
-                val client = HttpClient(CIO)
+                val client = HttpClient()
                 val response = client.get(Url(apiUrl)).bodyAsText()
 
                 val jsonElement = Json { ignoreUnknownKeys = true }.parseToJsonElement(response)

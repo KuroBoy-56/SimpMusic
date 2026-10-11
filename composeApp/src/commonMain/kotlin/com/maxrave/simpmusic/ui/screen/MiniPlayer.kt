@@ -1,5 +1,6 @@
 package com.maxrave.simpmusic.ui.screen
 
+import com.maxrave.simpmusic.isMobilePlatform
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -326,7 +327,7 @@ fun MiniPlayer(
             url.contains("sqp=", ignoreCase = true)
     } ?: false
 
-    if (getPlatform() == Platform.Android) {
+    if (isMobilePlatform()) {
         val miniPlayerShape =
             if (isLiquidGlassEnabled == DataStoreManager.TRUE) CircleShape else RoundedCornerShape(12.dp)
 

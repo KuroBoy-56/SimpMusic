@@ -57,15 +57,17 @@ kotlin {
         }
     }
 
-//    listOf(
-//        iosArm64(),
-//        iosSimulatorArm64()
-//    ).forEach { iosTarget ->
-//        iosTarget.binaries.framework {
-//            baseName = "ComposeApp"
-//            isStatic = true
-//        }
-//    }
+    listOf(
+        iosArm64(),
+        iosSimulatorArm64(),
+    ).forEach { iosTarget ->
+        iosTarget.binaries.framework {
+            baseName = "ComposeApp"
+            isStatic = true
+            // Room (bundled SQLite) needs the system sqlite3 symbols at link time.
+            linkerOpts.add("-lsqlite3")
+        }
+    }
 
     jvm()
 
@@ -75,9 +77,12 @@ kotlin {
             val koinBom = project.dependencies.platform(libs.koin.bom)
             implementation(composeBom)
             implementation(koinBom)
-            implementation(libs.commons.io)
         }
         androidMain.dependencies {
+            implementation(libs.ui.tooling.preview)
+            implementation(libs.commons.io)
+            api(libs.coil.network.okhttp)
+            implementation(libs.ktor.client.cio)
             api(project.dependencies.platform(libs.koin.bom))
             api(libs.koin.android)
             implementation(libs.koin.androidx.compose)
@@ -120,7 +125,6 @@ kotlin {
             implementation(libs.compose.material3.adaptive)
             implementation(libs.compose.material.ripple)
 
-            implementation(libs.ui.tooling.preview)
 
             // Other module
             api(projects.common)
@@ -144,11 +148,10 @@ kotlin {
 
             // Coil
             api(libs.coil.compose)
-            api(libs.coil.network.okhttp)
             api(libs.kmpalette.core)
             api(libs.kmpalette.network)
             implementation(libs.materialkolor)
-            implementation(libs.ktor.client.cio)
+            implementation(libs.ktor.client.core)
 
             // DataStore
             implementation(libs.datastore.preferences)
@@ -185,7 +188,14 @@ kotlin {
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }
+        iosMain.dependencies {
+            implementation(libs.coil.network.ktor3)
+            implementation(libs.ktor.client.darwin)
+        }
         jvmMain.dependencies {
+            implementation(libs.commons.io)
+            api(libs.coil.network.okhttp)
+            implementation(libs.ktor.client.cio)
             // Desktop app entry (main.kt), jpackage/Conveyor
             // packaging, and tray icon live in :desktopApp per the
             // JetBrains 2026 KMP default structure. This module keeps the

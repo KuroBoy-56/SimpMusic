@@ -1,0 +1,73 @@
+# XcodeGen spec for the iOS app. The .xcodeproj is generated from this file
+# (`xcodegen generate` in this folder) rather than committed, so it never drifts.
+name: KuroMusic
+options:
+  bundleIdPrefix: com.kuroboy56
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: "2.5.0"
+    CURRENT_PROJECT_VERSION: "27"
+targets:
+  KuroMusic:
+    type: application
+    platform: iOS
+    sources:
+      - path: iosApp
+        excludes:
+          - Info.plist
+    settings:
+      base:
+        PRODUCT_NAME: KuroMusic
+        PRODUCT_BUNDLE_IDENTIFIER: com.kuroboy56.kuromusic
+        INFOPLIST_FILE: iosApp/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Device only, arm64 only: a sideloaded IPA must not carry simulator or x86 slices,
+        # which is what makes re-signers such as Sideloadly fail with "macho sign/edit failed".
+        ARCHS: arm64
+        ONLY_ACTIVE_ARCH: NO
+        ENABLE_BITCODE: NO
+        # The Kotlin framework is STATIC: it is linked into the app binary and nothing is copied
+        # into Frameworks/, so there is no embedded framework for a re-signer to choke on.
+        FRAMEWORK_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(SRCROOT)/../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
+        OTHER_LDFLAGS:
+          - "$(inherited)"
+          - "-framework"
+          - "ComposeApp"
+          - "-lsqlite3"
+        # The Gradle step below reads and writes outside the sandbox.
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        DEAD_CODE_STRIPPING: YES
+        STRIP_INSTALLED_PRODUCT: YES
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: NO
+        DEVELOPMENT_TEAM: ""
+    preBuildScripts:
+      - name: Compile Kotlin framework
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          if [ "YES" = "$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED" ]; then
+            echo "Skipping Gradle build task invocation due to OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED=YES"
+            exit 0
+          fi
+          cd "$SRCROOT/.."
+          ./gradlew :composeApp:embedAndSignAppleFrameworkForXcode --no-configuration-cache
+schemes:
+  KuroMusic:
+    build:
+      targets:
+        KuroMusic: all
+    run:
+      config: Debug
+    archive:
+      config: Release

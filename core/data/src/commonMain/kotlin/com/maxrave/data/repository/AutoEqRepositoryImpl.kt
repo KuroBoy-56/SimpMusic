@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 import org.simpmusic.autoeq.AutoEq
 import org.simpmusic.autoeq.AutoEqIndexResult
 import kotlin.time.Clock
+import kotlinx.coroutines.IO
 
 private const val TAG = "AutoEqRepositoryImpl"
 
