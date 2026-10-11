@@ -2,6 +2,8 @@
 
 package com.maxrave.simpmusic.ui.screen.player.content
 
+import com.maxrave.simpmusic.isMobilePlatform
+import com.maxrave.common.withThousandsSeparator
 import androidx.compose.animation.Animatable
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -982,7 +984,7 @@ fun NowPlayingContentSpotify(
                                         state = state,
                                         actions = actions,
                                     )
-                                    if (getPlatform() == Platform.Android) {
+                                    if (isMobilePlatform()) {
                                         SpotifyPlaybackControls(
                                             state = state,
                                             actions = actions,
@@ -1472,7 +1474,7 @@ fun NowPlayingContentSpotify(
                                         text =
                                             stringResource(
                                                 Res.string.view_count,
-                                                "%,d".format(state.screenData.songInfoData?.viewCount),
+                                                (state.screenData.songInfoData?.viewCount ?: 0).withThousandsSeparator(),
                                             ),
                                         style = typo().labelMedium,
                                         color = Color.White,
