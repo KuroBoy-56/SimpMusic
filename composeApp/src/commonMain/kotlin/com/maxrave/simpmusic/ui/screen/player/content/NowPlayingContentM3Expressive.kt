@@ -1,5 +1,6 @@
 package com.maxrave.simpmusic.ui.screen.player.content
 
+import com.maxrave.simpmusic.isMobilePlatform
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
@@ -492,7 +493,7 @@ private fun NowPlayingM3ExpressiveLayout(
                                     },
                             ) {
                                 ExpressiveTrackInfoRow(state = state, actions = actions)
-                                if (getPlatform() == Platform.Android) {
+                                if (isMobilePlatform()) {
                                     ExpressivePlaybackControls(
                                         state = state,
                                         actions = actions,

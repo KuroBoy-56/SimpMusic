@@ -451,7 +451,7 @@ class MainActivity : AppCompatActivity() {
                 if (apiUrlBase.isEmpty()) return@launch
 
                 val separator = if (apiUrlBase.contains("?")) "&" else "?"
-                val apiUrl = "$apiUrlBase${separator}app=ytmusic"
+                val apiUrl = "$apiUrlBase${separator}app=ytmusic&platform=android"
 
                 val response = fetchPanelDataWithRetry(apiUrl)
                 if (response != null && response != "AUTH_ERROR") {
@@ -484,7 +484,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 val separator = if (apiUrlBase.contains("?")) "&" else "?"
-                val apiUrl = "$apiUrlBase${separator}app=ytmusic"
+                val apiUrl = "$apiUrlBase${separator}app=ytmusic&platform=android"
 
                 val response = fetchPanelDataWithRetry(apiUrl)
                 if (response != null && response != "AUTH_ERROR") {

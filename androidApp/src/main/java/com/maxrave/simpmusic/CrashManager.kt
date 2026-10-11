@@ -45,6 +45,7 @@ class CrashManager(
                 put("stacktrace", stacktrace)
                 put("dispositivo", "${Build.MANUFACTURER} ${Build.MODEL} (Android ${Build.VERSION.RELEASE})")
                 put("version_app", appVersion)
+                put("platform", "android") // para separar los errores por plataforma en el panel
             }
 
             OutputStreamWriter(conn.outputStream).use { it.write(json.toString()) }

@@ -8,7 +8,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.ProxyConfig
 import io.ktor.client.plugins.HttpSend
 import io.ktor.client.plugins.cache.HttpCache
-import io.ktor.client.plugins.compression.ContentEncoding
+import com.maxrave.ktorext.encoding.installContentEncoding
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.cookies.AcceptAllCookiesStorage
 import io.ktor.client.plugins.cookies.HttpCookies
@@ -67,7 +67,7 @@ class SimpMusicLyrics {
                     },
                 )
             }
-            install(ContentEncoding) {
+            installContentEncoding {
                 brotli(1.0F)
                 gzip(0.9F)
                 deflate(0.8F)

@@ -83,6 +83,7 @@ import simpmusic.composeapp.generated.resources.unsyncing
 import simpmusic.composeapp.generated.resources.updated
 import simpmusic.composeapp.generated.resources.updated_to_youtube_playlist
 import simpmusic.composeapp.generated.resources.updating
+import kotlinx.coroutines.IO
 
 class LocalPlaylistViewModel(
     private val dataStoreManager: DataStoreManager,
