@@ -6,6 +6,10 @@ import com.maxrave.data.di.loader.loadAllModules
 import com.maxrave.simpmusic.di.viewModelModule
 import com.maxrave.simpmusic.ios.panel.KuroCrashReporter
 import com.maxrave.simpmusic.ios.panel.KuroGate
+import com.maxrave.simpmusic.ios.panel.KuroPanel
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
+import platform.Foundation.NSProcessInfo
 import com.maxrave.simpmusic.utils.VersionManager
 import org.koin.core.context.loadKoinModules
 import org.koin.core.context.startKoin
@@ -37,6 +41,9 @@ private fun startOnce() {
     VersionManager.initialize()
     configLastfm(BuildKonfig.lastfmApiKey, BuildKonfig.lastfmSecret)
     KuroCrashReporter.markLaunchStep("ui")
+    if (NSProcessInfo.processInfo.arguments.any { it == "-kuroPanelSelfTest" }) {
+        MainScope().launch { println("KURO_SELFTEST " + KuroPanel.selfTest()) }
+    }
 }
 
 /** Entry point called from Swift (`MainViewControllerKt.MainViewController()`). */

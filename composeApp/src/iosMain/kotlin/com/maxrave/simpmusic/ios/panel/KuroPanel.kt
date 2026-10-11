@@ -6,6 +6,7 @@ import com.maxrave.domain.mediaservice.player.MediaPlayerInterface
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.BuildKonfig
 import io.ktor.client.HttpClient
+import io.ktor.client.engine.darwin.Darwin
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
@@ -114,8 +115,9 @@ object KuroPanel {
 
     private val defaults get() = NSUserDefaults.standardUserDefaults
     private val json = Json { ignoreUnknownKeys = true }
+    // Darwin (NSURLSession) explicitly: it is the only engine with working HTTPS on iOS.
     private val http by lazy {
-        HttpClient {
+        HttpClient(Darwin) {
             expectSuccess = false
             install(HttpTimeout) {
                 connectTimeoutMillis = 8000
@@ -152,7 +154,12 @@ object KuroPanel {
                     parameter("token", securityToken(user, mac))
                 }
             if (response.status.value != 200) return "Error del servidor: ${response.status.value}"
-            val root = json.parseToJsonElement(response.bodyAsText()).jsonObject
+            val body = response.bodyAsText()
+            val root =
+                runCatching { json.parseToJsonElement(body).jsonObject }.getOrElse {
+                    KuroCrashReporter.logSilentError("LOGIN_RESPUESTA", "Respuesta no JSON del panel", body.take(2000))
+                    return "Respuesta de servidor inválida"
+                }
             val userInfo = root["user_info"] as? JsonObject ?: return "Respuesta de servidor inválida"
             if (userInfo.int("auth") == 1) {
                 val status = userInfo.string("status") ?: "Active"
@@ -163,13 +170,26 @@ object KuroPanel {
                 defaults.setDouble(nowMs().toDouble(), KEY_LAST_SYNC)
                 "SUCCESS"
             } else {
-                userInfo.string("status") ?: "Acceso denegado"
+                denyMessage(userInfo)
             }
         } catch (e: Exception) {
             Logger.w(TAG, "Login failed: ${e.message}")
-            "Error de red: revisa tu conexión"
+            KuroCrashReporter.logSilentError("LOGIN_RED", "${e::class.simpleName}: ${e.message}", e.stackTraceToString())
+            "Error de red: revisa tu conexión (${e::class.simpleName ?: "error"})"
         }
     }
+
+    /**
+     * player_api.php puts the reason in `user_info.message` ("Invalid login", "Expired",
+     * "Superó el límite de dispositivos disponibles", a token mismatch…) and always answers
+     * `status: "Disabled"` on a denial, so the message is what the user needs to read.
+     */
+    private fun denyMessage(userInfo: JsonObject): String =
+        when (val message = userInfo.string("message")?.trim().orEmpty()) {
+            "", "Invalid login", "Login failed or Expired" -> "Usuario o contraseña incorrectos"
+            "Expired" -> "Cuenta vencida: contacta a tu proveedor para renovar"
+            else -> message
+        }
 
     /** Flips the gate open once the success animation has played. */
     fun completeLogin() {
@@ -250,11 +270,14 @@ object KuroPanel {
             } as? PanelResponse.Ok ?: return null
         val root = runCatching { json.parseToJsonElement(response.body).jsonObject }.getOrNull() ?: return null
         if (root.string("status") != "success") return null
-        val days = root.int("days_left") ?: -1
-        if (days !in 0..3) return null
+        // check_days.php fills alert_title only for 3, 2, 1 and 0 days left, and for a blocked
+        // account (days_left = -1); the texts are the ones edited in the panel.
+        val days = root.int("days_left") ?: return null
+        val title = root.string("alert_title")?.takeIf { it.isNotBlank() } ?: return null
+        if (days !in -1..3) return null
         return PanelAlert(
-            title = root.string("alert_title") ?: "¡AVISO!",
-            message = root.string("alert_msg") ?: "Tu suscripción está por vencer.",
+            title = title,
+            message = root.string("alert_msg")?.takeIf { it.isNotBlank() } ?: "Tu suscripción está por vencer.",
         )
     }
 
@@ -296,6 +319,27 @@ object KuroPanel {
             mandatory = mandatory,
         )
     }
+
+    /**
+     * Launched with `-kuroPanelSelfTest` (the simulator CI does this): calls every panel endpoint
+     * through the same client and code paths the app uses, with an account that cannot exist,
+     * and prints one line per call. A working connection answers the login with the panel's own
+     * denial rather than a network error.
+     */
+    suspend fun selfTest(): String =
+        buildString {
+            append("login=").append(login("kuro_selftest_no_user", "x"))
+            append(" | days=").append(fetchWithRetry(shiftDecode(DAYS_URL_BYTES)) { listOf("username" to "kuro_selftest_no_user") }.describe())
+            append(" | update=").append(fetchWithRetry(shiftDecode(UPDATE_URL_BYTES)) { listOf("version" to "0", "platform" to "ios") }.describe())
+            append(" | mac=").append(deviceMac)
+        }
+
+    private fun PanelResponse.describe(): String =
+        when (this) {
+            is PanelResponse.Ok -> "200 " + body.replace(Regex("\\s+"), " ").take(120)
+            PanelResponse.AuthError -> "auth-error"
+            PanelResponse.Unreachable -> "UNREACHABLE"
+        }
 
     // ---------------------------------------------------------------------------------------
     // Shared helpers

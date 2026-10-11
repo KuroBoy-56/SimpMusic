@@ -53,7 +53,6 @@ kotlin {
                 implementation(libs.kotlin.stdlib)
                 // Add KMP dependencies here
                 api(libs.ktor.client.core)
-                api(libs.ktor.client.cio)
                 implementation(libs.ktor.client.encoding)
             }
         }
@@ -71,6 +70,10 @@ kotlin {
                 // dependencies declared in commonMain.
                 implementation(libs.ktor.client.okhttp)
                 implementation(libs.brotli.dec)
+                // Not in commonMain: on iOS a bare HttpClient() must resolve to Darwin. With CIO
+                // linked too, Kotlin/Native picked CIO, which has no TLS there, and every https
+                // request (the account panel, images, iTunes) failed as a network error.
+                api(libs.ktor.client.cio)
             }
         }
 
@@ -78,6 +81,10 @@ kotlin {
             dependencies {
                 implementation(libs.ktor.client.okhttp)
                 implementation(libs.brotli.dec)
+                // Not in commonMain: on iOS a bare HttpClient() must resolve to Darwin. With CIO
+                // linked too, Kotlin/Native picked CIO, which has no TLS there, and every https
+                // request (the account panel, images, iTunes) failed as a network error.
+                api(libs.ktor.client.cio)
             }
         }
 

@@ -96,7 +96,7 @@ jobs:
 
           # --console-pty keeps stdout/stderr of the app, which is where Kotlin/Native prints an
           # uncaught exception and its stack trace.
-          (xcrun simctl launch --console-pty --terminate-running-process "$UDID" "$BUNDLE_ID" > smoke/console.log 2>&1 &)
+          (xcrun simctl launch --console-pty --terminate-running-process "$UDID" "$BUNDLE_ID" -kuroPanelSelfTest > smoke/console.log 2>&1 &)
           alive=true
           for t in 10 20 30 40 50 60 70 80 90; do
             sleep 10
@@ -125,6 +125,15 @@ jobs:
             head -c 20000 "$f"
             echo "::endgroup::"
           done
+
+          # The panel self-test must reach the server, not fail as a network error.
+          selftest=$(grep -a "KURO_SELFTEST" smoke/console.log | tail -1)
+          echo "Panel self-test: ${selftest:-<no output>}"
+          case "$selftest" in
+            *"login=Error de red"*|*UNREACHABLE*|"")
+              echo "::error::The app could not reach the account panel"
+              exit 1;;
+          esac
 
           if [ "$alive" != true ]; then
             echo "::error::KuroMusic did not stay alive in the simulator"
