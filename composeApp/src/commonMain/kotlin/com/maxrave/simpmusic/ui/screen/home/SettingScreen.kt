@@ -630,24 +630,28 @@ fun SettingScreen(
                 Spacer(Modifier.height(64.dp))
                 Spacer(Modifier.height(16.dp))
                 // Above every section, and inside item 0 rather than an item of its own, for the
-                // glow reason above.
-                Text(text = stringResource(Res.string.login_sync_section), style = typo().labelMedium, color = MaterialTheme.colorScheme.onBackground)
-                SettingItem(
-                    title =
-                        stringResource(
-                            if (getPlatform() == Platform.Android) Res.string.login_sync_android_title else Res.string.login_sync_desktop_title,
-                        ),
-                    subtitle =
-                        stringResource(
-                            if (getPlatform() == Platform.Android) {
-                                Res.string.login_sync_android_description
-                            } else {
-                                Res.string.login_sync_desktop_description
-                            },
-                        ),
-                    onClick = { showLoginSyncDialog = true },
-                )
-                Spacer(Modifier.height(8.dp))
+                // glow reason above. The Devices section is the phone<->desktop sign-in transport,
+                // which has no iOS side (loadLoginSyncModule binds nothing there), so it is hidden
+                // on iOS rather than offering a dialog that cannot do anything.
+                if (getPlatform() != Platform.iOS) {
+                    Text(text = stringResource(Res.string.login_sync_section), style = typo().labelMedium, color = MaterialTheme.colorScheme.onBackground)
+                    SettingItem(
+                        title =
+                            stringResource(
+                                if (getPlatform() == Platform.Android) Res.string.login_sync_android_title else Res.string.login_sync_desktop_title,
+                            ),
+                        subtitle =
+                            stringResource(
+                                if (getPlatform() == Platform.Android) {
+                                    Res.string.login_sync_android_description
+                                } else {
+                                    Res.string.login_sync_desktop_description
+                                },
+                            ),
+                        onClick = { showLoginSyncDialog = true },
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
                 Text(text = stringResource(Res.string.user_interface), style = typo().labelMedium, color = MaterialTheme.colorScheme.onBackground)
                 val themeModeLabels =
                     listOf(
