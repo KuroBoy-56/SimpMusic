@@ -34,10 +34,14 @@ concurrency:
 jobs:
   build-ipa:
     name: Build KuroMusic.ipa
-    runs-on: macos-15
-    timeout-minutes: 150
+    # Intel image on purpose: the release link of the Kotlin framework (whole-program
+    # optimisation over the entire app) needs ~10 GB of heap. The arm64 macos-15 runner has
+    # 7 GB of RAM and died with "OutOfMemoryError: Java heap space"; this one has 14 GB.
+    # Cross-compiling for iosArm64 from x86_64 is fully supported.
+    runs-on: macos-15-intel
+    timeout-minutes: 180
     env:
-      GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx6g -XX:+UseParallelGC" -Dorg.gradle.daemon=false
+      GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx11g -XX:+UseParallelGC" -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2
     steps:
       - uses: actions/checkout@v6
         with:
