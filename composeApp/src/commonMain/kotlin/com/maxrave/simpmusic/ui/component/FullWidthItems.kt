@@ -1,5 +1,6 @@
 package com.maxrave.simpmusic.ui.component
 
+import io.ktor.http.encodeURLQueryComponent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
@@ -104,17 +105,16 @@ import simpmusic.composeapp.generated.resources.playlist
 import simpmusic.composeapp.generated.resources.podcasts
 import simpmusic.composeapp.generated.resources.radio
 import simpmusic.composeapp.generated.resources.you
-import java.net.URLEncoder
 import kotlin.math.roundToInt
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
+import kotlinx.coroutines.IO
 
 // --- LÓGICA DE ITUNES Y CACHÉ GLOBAL ---
 // Mantiene las imágenes en memoria para no saturar la red al hacer scroll
 private val iTunesCache = mutableMapOf<String, String>()
-private val iTunesClient by lazy { HttpClient(CIO) }
+private val iTunesClient by lazy { HttpClient() }
 
 fun String.cleanMusicTitle(): String {
     var clean = this
@@ -138,7 +138,7 @@ fun rememberHighResArtwork(title: String?, artist: String?, fallbackThumbnail: S
             try {
                 val cleanTitle = title.cleanMusicTitle()
                 val cleanArtist = artist?.replace(Regex("(?i)-\\s*topic\\b"), "")?.trim() ?: ""
-                val query = URLEncoder.encode("$cleanTitle $cleanArtist".trim(), "UTF-8")
+                val query = "$cleanTitle $cleanArtist".trim().encodeURLQueryComponent(encodeFull = true, spaceToPlus = true)
 
                 val response = iTunesClient.get("https://itunes.apple.com/search?term=$query&entity=song&limit=1").bodyAsText()
 

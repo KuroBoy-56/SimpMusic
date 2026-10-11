@@ -1,5 +1,9 @@
 package com.maxrave.simpmusic.ui.screen.home
 
+import com.maxrave.common.pad2
+import kotlinx.datetime.number
+import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.TimeZone
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -410,9 +414,6 @@ import simpmusic.composeapp.generated.resources.youtube_account
 import simpmusic.composeapp.generated.resources.youtube_subtitle_language
 import simpmusic.composeapp.generated.resources.youtube_subtitle_language_message
 import simpmusic.composeapp.generated.resources.youtube_transcript
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -2600,10 +2601,13 @@ fun SettingScreen(
                                     if (autoBackupLastTime == 0L) {
                                         stringResource(Res.string.never)
                                     } else {
-                                        DateTimeFormatter
-                                            .ofPattern("yyyy-MM-dd HH:mm:ss")
-                                            .withZone(ZoneId.systemDefault())
-                                            .format(Instant.ofEpochMilli(autoBackupLastTime))
+                                        kotlin.time.Instant
+                                            .fromEpochMilliseconds(autoBackupLastTime)
+                                            .toLocalDateTime(TimeZone.currentSystemDefault())
+                                            .let {
+                                                "${it.year}-${it.month.number.pad2()}-${it.day.pad2()} " +
+                                                    "${it.hour.pad2()}:${it.minute.pad2()}:${it.second.pad2()}"
+                                            }
                                     },
                             )
                         }
