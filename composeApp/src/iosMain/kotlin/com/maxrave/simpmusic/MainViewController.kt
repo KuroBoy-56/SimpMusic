@@ -7,6 +7,7 @@ import com.maxrave.simpmusic.di.viewModelModule
 import com.maxrave.simpmusic.ios.panel.KuroCrashReporter
 import com.maxrave.simpmusic.ios.panel.KuroGate
 import com.maxrave.simpmusic.ios.panel.KuroPanel
+import com.maxrave.simpmusic.ios.selftest.playbackSelfTest
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 import platform.Foundation.NSProcessInfo
@@ -43,6 +44,9 @@ private fun startOnce() {
     KuroCrashReporter.markLaunchStep("ui")
     if (NSProcessInfo.processInfo.arguments.any { it == "-kuroPanelSelfTest" }) {
         MainScope().launch { println("KURO_SELFTEST " + KuroPanel.selfTest()) }
+    }
+    if (NSProcessInfo.processInfo.arguments.any { it == "-kuroPlaybackSelfTest" }) {
+        MainScope().launch { println("KURO_PLAYTEST " + playbackSelfTest()) }
     }
 }
 

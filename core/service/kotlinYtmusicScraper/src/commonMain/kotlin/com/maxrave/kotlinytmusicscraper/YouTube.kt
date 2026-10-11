@@ -1305,29 +1305,97 @@ class YouTube {
     }
 
     /**
-     * itag → URL pairs from the clients YouTube serves pre-signed URLs to. This is the only stream
-     * source on iOS (NewPipe is JVM-only) and a fallback on the other platforms when NewPipe fails.
+     * The player response of the first client YouTube serves pre-signed URLs to (IOS, then
+     * ANDROID_VR). Those URLs need no cipher and no `n` transform, so this is the only stream
+     * source on iOS (NewPipe is JVM-only) and the fallback elsewhere when NewPipe fails.
      */
-    private suspend fun directClientStreams(videoId: String): List<Pair<Int, String>> {
+    private suspend fun directClientResponse(videoId: String): PlayerResponse? {
         for (client in listOf(YouTubeClient.IOS, YouTubeClient.ANDROID_VR)) {
             val response =
                 runCatching { ytMusic.directPlayer(client, videoId).body<PlayerResponse>() }
                     .onFailure { Logger.w(TAG, "Direct player ${client.clientName} failed: ${it.message}") }
                     .getOrNull() ?: continue
             if (response.playabilityStatus.status != "OK") {
-                Logger.w(TAG, "Direct player ${client.clientName}: ${response.playabilityStatus.status}")
+                Logger.w(TAG, "Direct player ${client.clientName}: ${response.playabilityStatus.status} ${response.playabilityStatus.reason}")
                 continue
             }
-            val streams =
-                (response.streamingData?.formats.orEmpty() + response.streamingData?.adaptiveFormats.orEmpty())
-                    .mapNotNull { format -> format.url?.takeIf { it.isNotEmpty() }?.let { format.itag to it } }
-            if (streams.isNotEmpty()) {
-                Logger.d(TAG, "Direct player ${client.clientName}: ${streams.size} streams")
-                val hls = response.streamingData?.hlsManifestUrl
-                return if (hls != null) streams + (96 to hls) else streams
+            val withUrls = response.streamingData?.adaptiveFormats.orEmpty().count { !it.url.isNullOrEmpty() }
+            if (withUrls > 0) {
+                Logger.d(TAG, "Direct player ${client.clientName}: $withUrls streams")
+                return response
             }
         }
-        return emptyList()
+        return null
+    }
+
+    /**
+     * Builds the answer from [directClientResponse] alone. It must not depend on the WEB_REMIX
+     * response: that one is often not "OK" for an anonymous session (measured: UNPLAYABLE for a
+     * normal song from a clean IP) while the iOS client answers OK for the same video — gating on
+     * it left iOS with no stream at all and the player loading forever. WEB_REMIX still supplies
+     * the details and the watch-time tracking when it did answer.
+     */
+    private suspend fun directClientPlayer(
+        videoId: String,
+        tempRes: PlayerResponse,
+        preferredAudioLanguage: String?,
+    ): PlayerResponse? {
+        val direct = directClientResponse(videoId) ?: return null
+        val streamingData = direct.streamingData ?: return null
+        // A dubbed video lists every audio track under the same itag: keep the preferred (or
+        // original) one per itag, exactly as the NewPipe path does.
+        val preferredUrls =
+            streamingData.adaptiveFormats
+                .mapNotNull { f -> f.url?.takeIf { it.isNotEmpty() }?.let { f.itag to it } }
+                .orderByAudioTrack(preferredAudioLanguage)
+                .distinctBy { it.first }
+                .map { it.second }
+                .toSet()
+        val adaptive =
+            streamingData.adaptiveFormats
+                .filter { it.url in preferredUrls }
+                .map { it.copy(contentLength = it.url?.let(::contentLengthOf) ?: it.contentLength) }
+        // The HLS master (IOS client only) is what AVPlayer plays natively for video; it rides as
+        // a pseudo-format, the same shape the NewPipe path gives manifest URLs.
+        val formats =
+            streamingData.formats.orEmpty() +
+                listOfNotNull(
+                    streamingData.hlsManifestUrl?.let { hls ->
+                        PlayerResponse.StreamingData.Format(
+                            itag = 96,
+                            url = hls,
+                            mimeType = "",
+                            bitrate = 0,
+                            width = 1920,
+                            height = 1080,
+                            contentLength = 0,
+                            quality = "",
+                            fps = 0,
+                            qualityLabel = "",
+                            averageBitrate = 0,
+                            audioQuality = "",
+                            approxDurationMs = "",
+                            audioSampleRate = 0,
+                            audioChannels = 0,
+                            loudnessDb = 0.0,
+                            lastModified = 0,
+                            signatureCipher = "",
+                        )
+                    },
+                )
+        val webOk = tempRes.playabilityStatus.status == "OK"
+        val response =
+            direct.copy(
+                streamingData = streamingData.copy(formats = formats, adaptiveFormats = adaptive),
+                videoDetails = (if (webOk) tempRes.videoDetails else null) ?: direct.videoDetails,
+                playbackTracking = (if (webOk) tempRes.playbackTracking else null) ?: direct.playbackTracking,
+            )
+        val probe = adaptive.firstOrNull { it.isAudio }?.url ?: adaptive.firstOrNull()?.url ?: return null
+        if (is403Url(probe)) {
+            Logger.w(TAG, "Direct client URL rejected for $videoId")
+            return null
+        }
+        return response
     }
 
     suspend fun newPipePlayer(
@@ -1339,17 +1407,16 @@ class YouTube {
         var decodedSigResponse: PlayerResponse?
         var sigResponse: PlayerResponse?
         Logger.d(TAG, "YouTube TempRes ${tempRes.playabilityStatus}")
+        val newPipeStreams = ytMusic.getNewPipePlayer(videoId)
+        // No NewPipe (always on iOS) or nothing from it: the pre-signed clients, which do not need
+        // WEB_REMIX to have answered OK.
+        if (newPipeStreams.isEmpty()) return directClientPlayer(videoId, tempRes, preferredAudioLanguage)
         if (tempRes.playabilityStatus.status != "OK") {
-            return null
+            return directClientPlayer(videoId, tempRes, preferredAudioLanguage)
         } else {
             sigResponse = tempRes
         }
-        val streamsList =
-            ytMusic
-                .getNewPipePlayer(videoId)
-                .ifEmpty { directClientStreams(videoId) }
-                .orderByAudioTrack(preferredAudioLanguage)
-        if (streamsList.isEmpty()) return null
+        val streamsList = newPipeStreams.orderByAudioTrack(preferredAudioLanguage)
 
         decodedSigResponse =
             sigResponse.copy(
