@@ -2636,18 +2636,18 @@ fun SettingScreen(
                         }
                     },
                 )
-                val beforeUrl = stringResource(Res.string.import_data_intro).substringBefore("https://www.simpmusic.org/tools")
-                val afterUrl = stringResource(Res.string.import_data_intro).substringAfter("https://www.simpmusic.org/tools")
+                val beforeUrl = stringResource(Res.string.import_data_intro).substringBefore("https://www.garevynmusic.org/tools")
+                val afterUrl = stringResource(Res.string.import_data_intro).substringAfter("https://www.garevynmusic.org/tools")
                 Text(
                     buildAnnotatedString {
                         append(beforeUrl)
                         withLink(
                             LinkAnnotation.Url(
-                                "https://www.simpmusic.org/tools",
+                                "https://www.garevynmusic.org/tools",
                                 TextLinkStyles(style = SpanStyle(color = MaterialTheme.colorScheme.primary)),
                             ),
                         ) {
-                            append("https://www.simpmusic.org/tools")
+                            append("https://www.garevynmusic.org/tools")
                         }
                         append(afterUrl)
                     },
