@@ -6,6 +6,16 @@ name: Build iOS IPA (KuroMusic)
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/ios.yml'
+      - 'iosApp/**'
+      - 'scripts/ios/**'
+      - 'composeApp/**'
+      - 'core/**'
+      - 'lastfm/**'
+      - 'gradle/**'
+      - '*.gradle.kts'
   push:
     branches:
       - 'ios'
