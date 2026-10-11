@@ -14,6 +14,16 @@ sealed class Platform {
 
 expect fun getPlatform(): Platform
 
+/**
+ * Short tag sent to the account panel so it can store errors per platform and target an
+ * announcement at one OS (e.g. a message only for the iOS app). "android" | "ios" | "desktop".
+ */
+fun platformTag(): String = when (getPlatform()) {
+    Platform.Android -> "android"
+    Platform.iOS -> "ios"
+    Platform.Desktop -> "desktop"
+}
+
 /** Phone/tablet platforms (Android and iOS) share the touch layout: mini player, transport controls, keyboard focus. */
 fun isMobilePlatform(): Boolean = getPlatform().let { it == Platform.Android || it == Platform.iOS }
 

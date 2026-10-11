@@ -119,6 +119,7 @@ import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.isScrollingUp
 import com.maxrave.simpmusic.extension.rgbFactor
 import com.maxrave.simpmusic.getPlatform
+import com.maxrave.simpmusic.platformTag
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.Chip
 import com.maxrave.simpmusic.ui.component.DropdownButton
@@ -653,7 +654,8 @@ fun HomeTopAppBar(navController: NavController, hasUpdate: Boolean, sharedViewMo
             val apiUrlBase = desencriptarUrl(encryptedUrl)
             if (apiUrlBase.isNotEmpty()) {
                 val separator = if (apiUrlBase.contains("?")) "&" else "?"
-                val apiUrl = "$apiUrlBase${separator}app=ytmusic"
+                // platform lets the panel aim an announcement at one OS (ignored if it doesn't use it).
+                val apiUrl = "$apiUrlBase${separator}app=ytmusic&platform=${platformTag()}"
 
                 val client = HttpClient()
                 val response = client.get(Url(apiUrl)).bodyAsText()

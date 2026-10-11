@@ -144,6 +144,9 @@ object KuroCrashReporter {
             put("stacktrace", stacktrace.take(60_000))
             put("dispositivo", deviceDescription())
             put("version_app", "${BuildKonfig.versionName} (iOS)")
+            // So log_error.php can filter iOS reports (and send iOS-only replies).
+            put("platform", "ios")
+            put("mac", runCatching { KuroDeviceId.mac() }.getOrDefault(""))
         }.toString()
 
     private fun deviceDescription(): String {
