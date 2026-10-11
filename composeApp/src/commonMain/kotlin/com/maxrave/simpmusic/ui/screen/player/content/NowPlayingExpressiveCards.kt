@@ -1,5 +1,6 @@
 package com.maxrave.simpmusic.ui.screen.player.content
 
+import com.maxrave.common.withThousandsSeparator
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
@@ -784,7 +785,7 @@ internal fun ExpressiveBelowTheFold(
                         text =
                             stringResource(
                                 Res.string.view_count,
-                                "%,d".format(state.screenData.songInfoData?.viewCount),
+                                (state.screenData.songInfoData?.viewCount ?: 0).withThousandsSeparator(),
                             ),
                         style = typo().labelMedium,
                         color = Color.White,

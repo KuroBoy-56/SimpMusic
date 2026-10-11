@@ -2,8 +2,10 @@ package com.maxrave.data.db
 
 import DatabaseDao
 import androidx.room.AutoMigration
+import androidx.room.ConstructedBy
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import androidx.room.RoomDatabaseConstructor
 import androidx.room.TypeConverters
 import androidx.room.execSQL
 import androidx.room.useWriterConnection
@@ -93,12 +95,20 @@ import com.maxrave.domain.data.entities.analytics.PlaybackEventEntity
     ],
 )
 @TypeConverters(Converters::class)
+@ConstructedBy(MusicDatabaseConstructor::class)
 abstract class MusicDatabase : RoomDatabase() {
     abstract fun getDatabaseDao(): DatabaseDao
 
     suspend fun vacuum() {
         useWriterConnection { it.execSQL("VACUUM") }
     }
+}
+
+// Room has no reflection on Kotlin/Native (iOS), so KSP generates the `actual` of this
+// object for every target and the database is built through it.
+@Suppress("KotlinNoActualForExpect")
+expect object MusicDatabaseConstructor : RoomDatabaseConstructor<MusicDatabase> {
+    override fun initialize(): MusicDatabase
 }
 
 expect fun getDatabaseBuilder(converters: Converters): RoomDatabase.Builder<MusicDatabase>

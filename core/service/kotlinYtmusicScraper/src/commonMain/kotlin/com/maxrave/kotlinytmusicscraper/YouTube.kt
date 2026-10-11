@@ -1304,6 +1304,32 @@ class YouTube {
         }
     }
 
+    /**
+     * itag → URL pairs from the clients YouTube serves pre-signed URLs to. This is the only stream
+     * source on iOS (NewPipe is JVM-only) and a fallback on the other platforms when NewPipe fails.
+     */
+    private suspend fun directClientStreams(videoId: String): List<Pair<Int, String>> {
+        for (client in listOf(YouTubeClient.IOS, YouTubeClient.ANDROID_VR)) {
+            val response =
+                runCatching { ytMusic.directPlayer(client, videoId).body<PlayerResponse>() }
+                    .onFailure { Logger.w(TAG, "Direct player ${client.clientName} failed: ${it.message}") }
+                    .getOrNull() ?: continue
+            if (response.playabilityStatus.status != "OK") {
+                Logger.w(TAG, "Direct player ${client.clientName}: ${response.playabilityStatus.status}")
+                continue
+            }
+            val streams =
+                (response.streamingData?.formats.orEmpty() + response.streamingData?.adaptiveFormats.orEmpty())
+                    .mapNotNull { format -> format.url?.takeIf { it.isNotEmpty() }?.let { format.itag to it } }
+            if (streams.isNotEmpty()) {
+                Logger.d(TAG, "Direct player ${client.clientName}: ${streams.size} streams")
+                val hls = response.streamingData?.hlsManifestUrl
+                return if (hls != null) streams + (96 to hls) else streams
+            }
+        }
+        return emptyList()
+    }
+
     suspend fun newPipePlayer(
         videoId: String,
         tempRes: PlayerResponse,
@@ -1318,7 +1344,11 @@ class YouTube {
         } else {
             sigResponse = tempRes
         }
-        val streamsList = ytMusic.getNewPipePlayer(videoId).orderByAudioTrack(preferredAudioLanguage)
+        val streamsList =
+            ytMusic
+                .getNewPipePlayer(videoId)
+                .ifEmpty { directClientStreams(videoId) }
+                .orderByAudioTrack(preferredAudioLanguage)
         if (streamsList.isEmpty()) return null
 
         decodedSigResponse =

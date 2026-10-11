@@ -26,7 +26,6 @@ import com.maxrave.simpmusic.extension.rgbFactor
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.theme.desktopPanelDark
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
 import io.ktor.http.Url
 
 /**
@@ -106,7 +105,7 @@ fun AmbientThemeGlow(
  */
 @Composable
 fun rememberNowPlayingGlowTint(thumbnailUrl: String?): Color? {
-    val networkLoader = rememberNetworkLoader(HttpClient(CIO))
+    val networkLoader = rememberNetworkLoader(HttpClient())
     val dominantColorState =
         rememberDominantColorState(
             defaultColor = Color.Unspecified,

@@ -1,5 +1,6 @@
 package com.maxrave.simpmusic
 
+import com.maxrave.simpmusic.isMobilePlatform
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
@@ -544,7 +545,7 @@ fun App(
                                 exit = fadeOut(),
                             ) {
                                 MiniPlayer(
-                                    if (getPlatform() == Platform.Android) {
+                                    if (isMobilePlatform()) {
                                         Modifier
                                             .height(if (isLiquidGlassEnabled == TRUE) 56.dp else 60.dp)
                                             .fillMaxWidth(0.8f)
