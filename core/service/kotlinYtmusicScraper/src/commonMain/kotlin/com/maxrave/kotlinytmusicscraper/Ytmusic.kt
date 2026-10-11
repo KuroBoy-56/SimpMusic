@@ -33,7 +33,7 @@ import com.maxrave.logger.Logger
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.ProxyConfig
 import io.ktor.client.plugins.HttpRedirect
-import io.ktor.client.plugins.compression.ContentEncoding
+import com.maxrave.ktorext.encoding.installContentEncoding
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.logging.DEFAULT
@@ -189,7 +189,7 @@ class Ytmusic {
                 )
             }
 
-            install(ContentEncoding) {
+            installContentEncoding {
                 brotli(1.0F)
                 gzip(0.9F)
                 deflate(0.8F)
