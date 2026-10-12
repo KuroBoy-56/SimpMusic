@@ -37,7 +37,10 @@ import platform.AVFAudio.AVAudioSessionInterruptionTypeBegan
 import platform.AVFAudio.AVAudioSessionInterruptionTypeKey
 import platform.AVFAudio.AVAudioSessionModeDefault
 import platform.AVFAudio.setActive
+import kotlin.time.TimeSource
 import platform.AVFoundation.AVPlayer
+import platform.AVFoundation.playImmediatelyAtRate
+import platform.AVFoundation.setAutomaticallyWaitsToMinimizeStalling
 import platform.AVFoundation.AVPlayerItem
 import platform.AVFoundation.AVPlayerItemDidPlayToEndTimeNotification
 import platform.AVFoundation.AVPlayerItemFailedToPlayToEndTimeNotification
@@ -72,6 +75,7 @@ import kotlin.concurrent.Volatile
 import kotlin.math.max
 
 private const val TAG = "AvPlayerAdapter"
+private const val PREPARE_TIMEOUT_NANOS = 25_000_000_000L // 25 s
 
 /** User agent the direct-client stream URLs were issued to; googlevideo checks it against the URL. */
 private const val STREAM_USER_AGENT =
@@ -151,12 +155,24 @@ class AvPlayerAdapter(
     private var retryCount = 0
     private val maxRetryCount = 2
 
+    // When the current item entered PREPARING, to give up if it never becomes ready (see polling).
+    private val monotonic = TimeSource.Monotonic.markNow()
+
+    private fun elapsedNanos(): Long = monotonic.elapsedNow().inWholeNanoseconds
+
+    @Volatile private var preparingSinceNanos = 0L
+
     override var crossfadeSuppressed: Boolean = false
     override var albumTrackIds: Set<String> = emptySet()
     override var skipSilenceEnabled: Boolean = false
 
     init {
         activateAudioSession()
+        // Default is true: AVPlayer then decides on its own when the buffer is "enough" and can sit
+        // in WaitingToPlayAtSpecifiedRate forever without ever starting — the "loads forever, no
+        // audio" seen on real devices (the simulator almost always starts, which is why it hid
+        // here). false makes it start as soon as it has any data, like Android/ExoPlayer does.
+        avPlayer.setAutomaticallyWaitsToMinimizeStalling(false)
         coroutineScope.launch {
             dataStoreManager.watchVideoInsteadOfPlayingAudio.collect {
                 watchVideoEnabled = it == DataStoreManager.TRUE
@@ -589,8 +605,9 @@ class AvPlayerAdapter(
 
     private fun startAvPlayback() {
         applyVolume()
-        avPlayer.play()
-        if (internalSpeed != 1f) avPlayer.rate = internalSpeed
+        // playImmediatelyAtRate starts without waiting for a "full enough" buffer, paired with
+        // automaticallyWaitsToMinimizeStalling = false above.
+        avPlayer.playImmediatelyAtRate(if (internalSpeed > 0f) internalSpeed else 1f)
     }
 
     private fun loadAndPlayTrackInternal(
@@ -610,6 +627,7 @@ class AvPlayerAdapter(
                     avPlayer.pause()
                     cachedPosition = startPositionMs
                     cachedDuration = 0L
+                    preparingSinceNanos = elapsedNanos()
                     transitionToState(InternalState.PREPARING)
                     notifyListeners {
                         onMediaItemTransition(mediaItem, PlayerConstants.MEDIA_ITEM_TRANSITION_REASON_AUTO)
@@ -807,6 +825,19 @@ class AvPlayerAdapter(
                     }
                     if (status == AVPlayerTimeControlStatusPlaying && internalState == InternalState.READY) {
                         transitionToState(InternalState.PLAYING)
+                    }
+                    // Never spin forever: if the item has not become ready in time (it can sit in
+                    // AVPlayerItemStatusUnknown without ever flipping to .failed on a real device),
+                    // treat it as a failure so it retries and then surfaces an error instead of an
+                    // endless loading spinner with no audio.
+                    if (internalState == InternalState.PREPARING &&
+                        preparingSinceNanos > 0L &&
+                        elapsedNanos() - preparingSinceNanos > PREPARE_TIMEOUT_NANOS
+                    ) {
+                        Logger.e(TAG, "Item never became ready in time, treating as failure")
+                        preparingSinceNanos = 0L
+                        onPlaybackFailed()
+                        break
                     }
                     delay(100)
                 }
