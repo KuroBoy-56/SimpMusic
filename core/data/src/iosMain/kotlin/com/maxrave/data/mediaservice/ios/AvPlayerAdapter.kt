@@ -162,6 +162,9 @@ class AvPlayerAdapter(
 
     @Volatile private var preparingSinceNanos = 0L
 
+    // Once the progressive URL has failed on the device, resolveSource switches this video to HLS.
+    @Volatile private var forceHlsVideoId: String? = null
+
     override var crossfadeSuppressed: Boolean = false
     override var albumTrackIds: Set<String> = emptySet()
     override var skipSilenceEnabled: Boolean = false
@@ -689,6 +692,25 @@ class AvPlayerAdapter(
         val videoId = mediaItem.mediaId
         val wantVideo = mediaItem.isVideo() && watchVideoEnabled
         localFileFor(videoId)?.let { return Source(it, isVideo = false) }
+        // After the clean progressive URL has failed to play on the device, fall back to YouTube's
+        // HLS stream (muxed = true returns hlsManifestUrl). HLS is Apple's native format and the
+        // one YouTube serves for iOS, so it plays on AVPlayer where a raw googlevideo URL may not.
+        if (forceHlsVideoId == videoId && !wantVideo) {
+            val hls =
+                streamRepository
+                    .getStream(
+                        dataStoreManager = dataStoreManager,
+                        videoId = videoId,
+                        isDownloading = false,
+                        isVideo = false,
+                        muxed = true,
+                    ).lastOrNull()
+            if (hls != null && hls.isNotEmpty()) {
+                Logger.w(TAG, "Using HLS fallback for $videoId")
+                // isVideo stays false: a song's HLS is mostly audio and we render no video here.
+                return Source(hls, isVideo = false)
+            }
+        }
         if (!wantVideo) {
             streamRepository.getNewFormat(videoId).firstOrNull()?.audioUrl?.let { url ->
                 if (url.isNotEmpty() && isAacUrl(url) && streamRepository.is403Url(url).firstOrNull() == false) {
@@ -775,6 +797,19 @@ class AvPlayerAdapter(
                 coroutineScope.launch {
                     streamRepository.invalidateFormat(videoId)
                     streamRepository.invalidateFormat("${MERGING_DATA_TYPE.VIDEO}$videoId")
+                    loadAndPlayTrackInternal(localCurrentMediaItemIndex, cachedPosition, true)
+                }
+                return
+            }
+            // Progressive playback has failed every retry. Before giving up, switch this video to
+            // YouTube's HLS stream (resolveSource reads forceHlsVideoId) — Apple's native format,
+            // which plays on AVPlayer where a raw googlevideo URL may stall on a real device.
+            if (forceHlsVideoId != videoId) {
+                forceHlsVideoId = videoId
+                retryCount = 0
+                Logger.w(TAG, "Progressive failed, switching $videoId to HLS")
+                coroutineScope.launch {
+                    streamRepository.invalidateFormat(videoId)
                     loadAndPlayTrackInternal(localCurrentMediaItemIndex, cachedPosition, true)
                 }
                 return

@@ -268,16 +268,20 @@ internal class StreamRepositoryImpl(
                             keyScale = tidalKeyScale,
                         ),
                     )
+                    // AVPlayer (iOS) does its own HTTP Range requests, so the googlevideo URL must
+                    // stay clean: the "&range=0-N" query that ExoPlayer/NewPipe rely on makes the CDN
+                    // answer oddly for AVPlayer and the item never becomes ready (plays in the Mac
+                    // simulator, stalls on a real device). onlyAacAudioPlayable is true only on iOS.
                     if (data.first != null) {
                         emit(
                             if (muxed) {
                                 response.streamingData?.hlsManifestUrl
                             } else {
                                 format?.url?.let { url ->
-                                    if (youTube.isManifestUrl(url)) {
-                                        url.plus("&cpn=${data.first}")
-                                    } else {
-                                        url.plus("&cpn=${data.first}&range=0-${format.contentLength ?: 10000000}")
+                                    when {
+                                        youTube.isManifestUrl(url) -> url.plus("&cpn=${data.first}")
+                                        onlyAacAudioPlayable -> url.plus("&cpn=${data.first}")
+                                        else -> url.plus("&cpn=${data.first}&range=0-${format.contentLength ?: 10000000}")
                                     }
                                 }
                             },
@@ -288,10 +292,10 @@ internal class StreamRepositoryImpl(
                                 response.streamingData?.hlsManifestUrl
                             } else {
                                 format?.url?.let { url ->
-                                    if (youTube.isManifestUrl(url)) {
-                                        url
-                                    } else {
-                                        url.plus("&range=0-${format.contentLength ?: 10000000}")
+                                    when {
+                                        youTube.isManifestUrl(url) -> url
+                                        onlyAacAudioPlayable -> url
+                                        else -> url.plus("&range=0-${format.contentLength ?: 10000000}")
                                     }
                                 }
                             },
