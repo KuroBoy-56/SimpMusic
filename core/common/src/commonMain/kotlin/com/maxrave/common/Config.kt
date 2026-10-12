@@ -267,6 +267,12 @@ object ITAG {
      */
     const val AUDIO_AAC_HIGH: Int = 141
 
+    /**
+     * AAC 128 kbps, adaptive audio. Served to every account, which makes it the floor on iOS:
+     * AVPlayer cannot play WebM/Opus at all, so the Opus itags above are unusable there.
+     */
+    const val AUDIO_AAC_MEDIUM: Int = 140
+
     /** H.264 360p, adaptive video — what the "360p" video-quality setting selects. */
     const val VIDEO_360P: Int = 134
 
