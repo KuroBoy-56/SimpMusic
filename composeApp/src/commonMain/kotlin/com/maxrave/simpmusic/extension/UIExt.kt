@@ -43,6 +43,8 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.CompositingStrategy
@@ -503,7 +505,23 @@ fun Palette?.getColorFromPalette(): Color {
             }
         }
     }
-    return Color(startColor)
+    // Only light swatches were left on a pale artwork, and the player draws white titles, artists
+    // and lyrics on this colour — darken it until white text reads on it.
+    return Color(startColor).darkenedForWhiteText()
+}
+
+/**
+ * Pulls a colour toward black until its luminance is at most [maxLuminance], keeping its hue,
+ * so white or light-grey text drawn on it stays readable whatever the artwork looks like.
+ */
+fun Color.darkenedForWhiteText(maxLuminance: Float = 0.22f): Color {
+    var c = this
+    var steps = 0
+    while (c.luminance() > maxLuminance && steps < 12) {
+        c = lerp(c, Color.Black, 0.2f)
+        steps++
+    }
+    return c
 }
 
 /**

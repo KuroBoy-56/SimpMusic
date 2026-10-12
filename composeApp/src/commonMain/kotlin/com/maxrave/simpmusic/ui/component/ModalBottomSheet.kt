@@ -1,5 +1,6 @@
 package com.maxrave.simpmusic.ui.component
 
+import com.maxrave.common.toFixed
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutLinearInEasing
@@ -2150,7 +2151,7 @@ fun PlaybackSpeedPitchBottomSheet(
                         )
                     }
                     Text(
-                        text = "x${String.format("%.1f", playbackSpeed)}",
+                        text = "x${playbackSpeed.toFixed(1)}",
                         style = typo().titleMedium,
                         color = rememberSurfaceDarkColors().subtitle,
                         modifier = Modifier.widthIn(min = 60.dp),
