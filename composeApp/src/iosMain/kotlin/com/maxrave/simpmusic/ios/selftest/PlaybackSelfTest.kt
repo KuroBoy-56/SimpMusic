@@ -28,6 +28,15 @@ suspend fun playbackSelfTest(videoId: String = "dQw4w9WgXcQ"): String {
         }.getOrElse { "ERROR ${it::class.simpleName}: ${it.message}" }
     val itag = url?.let { Regex("[?&]itag=(\\d+)").find(it)?.groupValues?.get(1) }
 
+    // iOS now plays HLS first (resolveSource); report whether the manifest resolves.
+    val hls =
+        runCatching {
+            koin.get<StreamRepository>()
+                .getStream(koin.get<DataStoreManager>(), videoId, isDownloading = false, isVideo = false, muxed = true)
+                .lastOrNull()
+        }.getOrElse { "ERROR ${it::class.simpleName}: ${it.message}" }
+    val hlsDesc = if (hls == null) "null" else if (hls.startsWith("ERROR")) hls else if (hls.contains(".m3u8")) "ok m3u8" else "ok"
+
     // 2) The UI path: handler.clearMediaItems() + handler.addMediaItem(item, playWhenReady = true).
     val handler = koin.get<MediaPlayerHandler>()
     val item = GenericMediaItem(mediaId = videoId, uri = videoId, metadata = GenericMediaMetadata(title = "self-test"))
@@ -65,5 +74,5 @@ suspend fun playbackSelfTest(videoId: String = "dQw4w9WgXcQ"): String {
         }.getOrElse { "ADAPTER_ERROR ${it::class.simpleName}: ${it.message}" }
 
     val urlDesc = if (url == null) "null" else if (url.startsWith("ERROR")) url else "ok itag=$itag"
-    return "url=$urlDesc | $handlerResult | $adapterResult"
+    return "url=$urlDesc | hls=$hlsDesc | $handlerResult | $adapterResult"
 }

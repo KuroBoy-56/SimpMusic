@@ -162,8 +162,9 @@ class AvPlayerAdapter(
 
     @Volatile private var preparingSinceNanos = 0L
 
-    // Once the progressive URL has failed on the device, resolveSource switches this video to HLS.
-    @Volatile private var forceHlsVideoId: String? = null
+    // iOS plays the HLS manifest first (see resolveSource). If HLS fails, resolveSource switches
+    // this video to the progressive AAC URL instead.
+    @Volatile private var forceProgressiveVideoId: String? = null
 
     override var crossfadeSuppressed: Boolean = false
     override var albumTrackIds: Set<String> = emptySet()
@@ -691,43 +692,48 @@ class AvPlayerAdapter(
     private suspend fun resolveSource(mediaItem: GenericMediaItem): Source? {
         val videoId = mediaItem.mediaId
         val wantVideo = mediaItem.isVideo() && watchVideoEnabled
+        // A downloaded file always wins, and is a plain progressive .m4a.
         localFileFor(videoId)?.let { return Source(it, isVideo = false) }
-        // After the clean progressive URL has failed to play on the device, fall back to YouTube's
-        // HLS stream (muxed = true returns hlsManifestUrl). HLS is Apple's native format and the
-        // one YouTube serves for iOS, so it plays on AVPlayer where a raw googlevideo URL may not.
-        if (forceHlsVideoId == videoId && !wantVideo) {
+
+        // Video: the muxed HLS manifest carries its own audio (AVPlayer cannot splice two separate
+        // DASH streams the way mpv's edl:// does), so video has always gone through HLS.
+        if (wantVideo) {
+            val url =
+                streamRepository
+                    .getStream(dataStoreManager, videoId, isDownloading = false, isVideo = true, muxed = true)
+                    .lastOrNull()
+            return url?.takeIf { it.isNotEmpty() }?.let { Source(it, isVideo = true) }
+        }
+
+        // Audio. HLS FIRST — this is the format the official YouTube iOS app plays and the one
+        // AVPlayer is built for: adaptive, segmented, and immune to the Range/throttling quirks of a
+        // raw progressive googlevideo URL that leave AVPlayer "loading forever" on a real device
+        // (those URLs still played in the Mac simulator, which is what masked this). The progressive
+        // AAC URL stays as the fallback, and is also what onPlaybackFailed forces if HLS ever fails.
+        if (forceProgressiveVideoId != videoId) {
             val hls =
                 streamRepository
-                    .getStream(
-                        dataStoreManager = dataStoreManager,
-                        videoId = videoId,
-                        isDownloading = false,
-                        isVideo = false,
-                        muxed = true,
-                    ).lastOrNull()
-            if (hls != null && hls.isNotEmpty()) {
-                Logger.w(TAG, "Using HLS fallback for $videoId")
-                // isVideo stays false: a song's HLS is mostly audio and we render no video here.
+                    .getStream(dataStoreManager, videoId, isDownloading = false, isVideo = false, muxed = true)
+                    .lastOrNull()
+            if (!hls.isNullOrEmpty()) {
+                Logger.d(TAG, "Playing $videoId via HLS")
+                // isVideo = false: we render no video for a song; AVPlayer still plays the audio.
                 return Source(hls, isVideo = false)
             }
+            Logger.w(TAG, "No HLS manifest for $videoId — using progressive AAC")
         }
-        if (!wantVideo) {
-            streamRepository.getNewFormat(videoId).firstOrNull()?.audioUrl?.let { url ->
-                if (url.isNotEmpty() && isAacUrl(url) && streamRepository.is403Url(url).firstOrNull() == false) {
-                    return Source(url, isVideo = false)
-                }
+
+        // Progressive AAC fallback: a cached format row, then a fresh extraction.
+        streamRepository.getNewFormat(videoId).firstOrNull()?.audioUrl?.let { url ->
+            if (url.isNotEmpty() && isAacUrl(url) && streamRepository.is403Url(url).firstOrNull() == false) {
+                return Source(url, isVideo = false)
             }
         }
         val url =
             streamRepository
-                .getStream(
-                    dataStoreManager = dataStoreManager,
-                    videoId = videoId,
-                    isDownloading = false,
-                    isVideo = wantVideo,
-                    muxed = wantVideo,
-                ).lastOrNull()
-        return url?.takeIf { it.isNotEmpty() }?.let { Source(it, isVideo = wantVideo) }
+                .getStream(dataStoreManager, videoId, isDownloading = false, isVideo = false, muxed = false)
+                .lastOrNull()
+        return url?.takeIf { it.isNotEmpty() }?.let { Source(it, isVideo = false) }
     }
 
     /** WebM/Opus URLs (cached by an older format row) cannot be decoded by AVPlayer. */
@@ -801,13 +807,13 @@ class AvPlayerAdapter(
                 }
                 return
             }
-            // Progressive playback has failed every retry. Before giving up, switch this video to
-            // YouTube's HLS stream (resolveSource reads forceHlsVideoId) — Apple's native format,
-            // which plays on AVPlayer where a raw googlevideo URL may stall on a real device.
-            if (forceHlsVideoId != videoId) {
-                forceHlsVideoId = videoId
+            // HLS has failed every retry. Before giving up, switch this video to the progressive
+            // AAC URL (resolveSource reads forceProgressiveVideoId) — the other stream YouTube's
+            // iOS client serves, in case HLS is unavailable or rejected for this video.
+            if (forceProgressiveVideoId != videoId) {
+                forceProgressiveVideoId = videoId
                 retryCount = 0
-                Logger.w(TAG, "Progressive failed, switching $videoId to HLS")
+                Logger.w(TAG, "HLS failed, switching $videoId to progressive AAC")
                 coroutineScope.launch {
                     streamRepository.invalidateFormat(videoId)
                     loadAndPlayTrackInternal(localCurrentMediaItemIndex, cachedPosition, true)
