@@ -33,7 +33,7 @@ import com.maxrave.logger.Logger
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.ProxyConfig
 import io.ktor.client.plugins.HttpRedirect
-import io.ktor.client.plugins.compression.ContentEncoding
+import com.maxrave.ktorext.encoding.installContentEncoding
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.logging.DEFAULT
@@ -189,7 +189,7 @@ class Ytmusic {
                 )
             }
 
-            install(ContentEncoding) {
+            installContentEncoding {
                 brotli(1.0F)
                 gzip(0.9F)
                 deflate(0.8F)
@@ -396,6 +396,31 @@ class Ytmusic {
                     PlayerBody.ServiceIntegrityDimensions(
                         poToken = poToken,
                     ),
+            ),
+        )
+        parameter("prettyPrint", false)
+    }
+
+    /**
+     * Anonymous player request for a client YouTube serves pre-signed stream URLs to (IOS, ANDROID_VR).
+     * Sent to www.youtube.com with no cookie: these clients reject a web session's cookie.
+     */
+    suspend fun directPlayer(
+        client: YouTubeClient,
+        videoId: String,
+    ) = httpClient.post("https://www.youtube.com/youtubei/v1/player") {
+        contentType(ContentType.Application.Json)
+        header(HttpHeaders.UserAgent, client.userAgent)
+        header("X-YouTube-Client-Name", "${client.xClientName ?: 1}")
+        header("X-YouTube-Client-Version", client.clientVersion)
+        header("Origin", "https://www.youtube.com")
+        visitorData?.let { header("X-Goog-Visitor-Id", it) }
+        setBody(
+            PlayerBody(
+                context = client.toContext(locale, visitorData),
+                videoId = videoId,
+                playlistId = null,
+                cpn = null,
             ),
         )
         parameter("prettyPrint", false)

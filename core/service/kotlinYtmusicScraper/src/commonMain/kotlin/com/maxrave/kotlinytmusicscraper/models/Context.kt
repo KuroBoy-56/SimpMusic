@@ -21,6 +21,7 @@ data class Context(
         val osVersion: String?,
         val timeZone: String? = null,
         val utcOffsetMinutes: Int? = null,
+        val androidSdkVersion: Int? = null,
     )
 
     @Serializable
