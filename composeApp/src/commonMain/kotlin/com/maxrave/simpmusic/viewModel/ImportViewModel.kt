@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.import_invalid_file
+import kotlinx.coroutines.IO
 
 /**
  * Drives an import of a file produced by the SimpMusic web converter.

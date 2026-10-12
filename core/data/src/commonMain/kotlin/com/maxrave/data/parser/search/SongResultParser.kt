@@ -1,5 +1,6 @@
 package com.maxrave.data.parser.search
 
+import com.maxrave.common.formatMinutesSeconds
 import com.maxrave.domain.data.model.searchResult.songs.Album
 import com.maxrave.domain.data.model.searchResult.songs.SongsResult
 import com.maxrave.domain.data.model.searchResult.songs.Thumbnail
@@ -29,7 +30,7 @@ internal fun parseSearchSong(result: SearchResult): ArrayList<SongsResult> {
                         )
                     },
                 category = "Song",
-                duration = if (song.duration != null) "%02d:%02d".format(song.duration!! / 60, song.duration!! % 60) else "",
+                duration = if (song.duration != null) formatMinutesSeconds(song.duration!!) else "",
                 durationSeconds = song.duration ?: 0,
                 feedbackTokens = null,
                 isExplicit = song.explicit,

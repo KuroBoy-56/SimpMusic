@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.IO
 
 internal class UpdateRepositoryImpl(
     private val youTube: YouTube,
@@ -27,7 +28,7 @@ internal class UpdateRepositoryImpl(
                         ),
                     )
                 }.onFailure {
-                    emit(Resource.Error<UpdateData>(it.localizedMessage ?: "Unknown error"))
+                    emit(Resource.Error<UpdateData>(it.message ?: "Unknown error"))
                 }
         }.flowOn(Dispatchers.IO)
 
@@ -51,7 +52,7 @@ internal class UpdateRepositoryImpl(
                         ),
                     )
                 }.onFailure {
-                    emit(Resource.Error<UpdateData>(it.localizedMessage ?: "Unknown error"))
+                    emit(Resource.Error<UpdateData>(it.message ?: "Unknown error"))
                 }
         }.flowOn(Dispatchers.IO)
 
@@ -60,6 +61,6 @@ internal class UpdateRepositoryImpl(
             youTube
                 .getFdroidSigningKeys()
                 .onSuccess { emit(Resource.Success(it)) }
-                .onFailure { emit(Resource.Error<List<String>>(it.localizedMessage ?: "Unknown error")) }
+                .onFailure { emit(Resource.Error<List<String>>(it.message ?: "Unknown error")) }
         }.flowOn(Dispatchers.IO)
 }
