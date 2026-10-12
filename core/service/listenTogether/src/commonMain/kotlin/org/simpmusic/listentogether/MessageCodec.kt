@@ -10,6 +10,7 @@ import okio.Buffer
 import okio.GzipSink
 import okio.GzipSource
 import okio.buffer
+import okio.use
 
 /**
  * Turns a payload into the bytes that go on the socket, and back.
