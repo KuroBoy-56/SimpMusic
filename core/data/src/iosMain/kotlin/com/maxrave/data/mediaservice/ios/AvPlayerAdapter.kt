@@ -918,6 +918,10 @@ class AvPlayerAdapter(
                 emit(PlayerConstants.STATE_READY)
                 listeners.forEach { it.onIsLoadingChanged(false) }
                 if (internalPlayWhenReady) {
+                    // Re-assert the audio session: an interruption (call, Siri) between load and
+                    // ready can deactivate it, and without this the track would resume silently in
+                    // the background. Activating is idempotent when the session is already active.
+                    activateAudioSession()
                     startAvPlayback()
                     internalState = InternalState.PLAYING
                     listeners.forEach { it.onIsPlayingChanged(true) }

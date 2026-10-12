@@ -2,7 +2,7 @@ package com.maxrave.data.di.loader
 
 import com.maxrave.common.Config.SERVICE_SCOPE
 import com.maxrave.data.mediaservice.ios.AvPlayerAdapter
-import com.maxrave.domain.mediaservice.handler.DownloadHandler.Download
+import com.maxrave.data.mediaservice.ios.IosDownloadHandler
 import com.maxrave.domain.mediaservice.handler.DownloadHandler
 import com.maxrave.domain.mediaservice.player.MediaPlayerInterface
 import com.maxrave.domain.repository.CacheRepository
@@ -10,8 +10,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.newSingleThreadContext
 import org.koin.core.context.loadKoinModules
 import org.koin.core.qualifier.named
@@ -42,22 +40,14 @@ private val iosPlayerModule =
                 override suspend fun getAllCacheKeys(cacheName: String): List<String> = emptyList()
             }
         }
-        // Offline downloads need a muxing step (NewPipe + FFmpeg) that has no iOS build.
+        // Downloads the same progressive AAC stream iOS plays (no FFmpeg/NewPipe muxing, which has
+        // no iOS build) into <fileDir>/download, where the player's localFileFor() picks it up.
         single<DownloadHandler> {
-            object : DownloadHandler {
-                override suspend fun downloadTrack(
-                    videoId: String,
-                    title: String,
-                    thumbnail: String,
-                ) {}
-
-                override fun removeDownload(videoId: String) {}
-
-                override fun removeAllDownloads() {}
-
-                override val downloads: StateFlow<Map<String, Pair<Download?, Download?>>> = MutableStateFlow(emptyMap())
-                override val downloadTask: StateFlow<Map<String, Int>> = MutableStateFlow(emptyMap())
-            }
+            IosDownloadHandler(
+                streamRepository = get(),
+                songRepository = get(),
+                dataStoreManager = get(),
+            )
         }
     }
 
