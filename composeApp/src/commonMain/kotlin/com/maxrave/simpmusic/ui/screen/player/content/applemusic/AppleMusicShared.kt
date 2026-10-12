@@ -1,5 +1,6 @@
 package com.maxrave.simpmusic.ui.screen.player.content.applemusic
 
+import com.maxrave.simpmusic.isMobilePlatform
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -836,7 +837,7 @@ internal fun AppleMusicBottomCluster(
 ) {
     val localDensity = LocalDensity.current
     Column(modifier = modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 8.dp)) {
-        if (getPlatform() == Platform.Android) {
+        if (isMobilePlatform()) {
             AppleMusicPlaybackControls(state = state, actions = actions, typography = typography)
             Spacer(modifier = Modifier.height(14.dp))
             deviceVolumeController?.let { controller ->

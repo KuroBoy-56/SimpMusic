@@ -2,6 +2,7 @@
 
 package com.maxrave.simpmusic.viewModel
 
+import io.ktor.http.encodeURLQueryComponent
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewModelScope
 import com.maxrave.common.Config
@@ -45,7 +46,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import org.koin.core.component.inject
@@ -62,7 +62,7 @@ import simpmusic.composeapp.generated.resources.shuffle_not_available
 import simpmusic.composeapp.generated.resources.synced
 import simpmusic.composeapp.generated.resources.syncing
 import simpmusic.composeapp.generated.resources.view_count
-import java.net.URLEncoder
+import kotlinx.coroutines.IO
 
 class PlaylistViewModel(
     private val songRepository: SongRepository,
@@ -442,7 +442,7 @@ class PlaylistViewModel(
         if (sourceTracks.isEmpty()) return
 
         viewModelScope.launch(Dispatchers.IO) {
-            val client = HttpClient(CIO)
+            val client = HttpClient()
             try {
                 sourceTracks.forEach { track ->
                     val artist = track.artists.orEmpty()
@@ -453,7 +453,7 @@ class PlaylistViewModel(
                     val cleanTitle = cleanArtworkTitle(track.title)
 
                     // Codificamos la URL para evitar crasheos de red si hay caracteres extraños
-                    val query = URLEncoder.encode("$cleanTitle $artist".trim(), "UTF-8")
+                    val query = "$cleanTitle $artist".trim().encodeURLQueryComponent(encodeFull = true, spaceToPlus = true)
 
                     try {
                         val body = client.get("https://itunes.apple.com/search?term=$query&entity=song&limit=5").bodyAsText()

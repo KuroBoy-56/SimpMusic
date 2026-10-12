@@ -3,7 +3,7 @@ package org.simpmusic.autoeq
 import com.maxrave.ktorext.getEngine
 import com.maxrave.logger.Logger
 import io.ktor.client.HttpClient
-import io.ktor.client.plugins.compression.ContentEncoding
+import com.maxrave.ktorext.encoding.installContentEncoding
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
@@ -26,7 +26,7 @@ class AutoEq {
             expectSuccess = false
             followRedirects = true
             // The index is 851 kB of Markdown that gzips to about 110 kB.
-            install(ContentEncoding) {
+            installContentEncoding {
                 gzip(0.9F)
             }
         }

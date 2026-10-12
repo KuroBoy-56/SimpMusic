@@ -1,13 +1,9 @@
 package com.maxrave.kotlinytmusicscraper.extension
 
-import java.security.MessageDigest
+import okio.ByteString.Companion.encodeUtf8
 import kotlin.random.Random
 
-fun String.sha256(): String {
-    val digest = MessageDigest.getInstance("SHA-256")
-    val hash = digest.digest(toByteArray())
-    return hash.fold("", { str, it -> str + "%02x".format(it) })
-}
+fun String.sha256(): String = encodeUtf8().sha256().hex()
 
 fun randomString(length: Int): String {
     val chars = "0123456789abcdef"
