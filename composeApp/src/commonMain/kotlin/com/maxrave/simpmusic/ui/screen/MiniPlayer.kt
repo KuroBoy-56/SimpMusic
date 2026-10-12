@@ -1,5 +1,6 @@
 package com.maxrave.simpmusic.ui.screen
 
+import com.maxrave.simpmusic.isMobilePlatform
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -203,15 +204,11 @@ fun MiniPlayer(
         label = "MiniPlayerBackgroundColor"
     )
 
-    // 2. Contraste inteligente: Si el fondo es muy claro, usar texto oscuro. Si no, blanco.
-    val isLightBackground = backgroundColor.luminance() > 0.5f
-    val adaptiveTextColor = if (isLightBackground) Color(0xFF222222) else Color.White
-
-    val textColor by animateColorAsState(
-        targetValue = if (useGlassSurface) adaptiveTextColor else MaterialTheme.colorScheme.onSurface,
-        label = "MiniPlayerTextColor",
-        animationSpec = tween(500),
-    )
+    // 2. Texto siempre blanco / gris claro: el color de la carátula ya llega oscurecido
+    // (getColorFromPalette → darkenedForWhiteText), así que el texto se lee sobre cualquier portada
+    // y no cambia de color con cada canción.
+    val textColor = Color.White
+    val secondaryTextColor = Color(0xFFD0D0D0)
 
     LaunchedEffect(layer, useGlassSurface) {
         val buffer = IntArray(25)
@@ -326,15 +323,16 @@ fun MiniPlayer(
             url.contains("sqp=", ignoreCase = true)
     } ?: false
 
-    if (getPlatform() == Platform.Android) {
+    if (isMobilePlatform()) {
         val miniPlayerShape =
             if (isLiquidGlassEnabled == DataStoreManager.TRUE) CircleShape else RoundedCornerShape(12.dp)
 
         val cardColor =
+            // Opaque enough that the white text never sits on a light page behind the glass.
             if (isLiquidGlassEnabled == DataStoreManager.TRUE) {
-                backgroundColor.copy(alpha = 0.4f)
+                backgroundColor.copy(alpha = 0.7f)
             } else {
-                backgroundColor.copy(alpha = 0.85f)
+                backgroundColor.copy(alpha = 0.92f)
             }
 
         val isFlat = isLiquidGlassEnabled != DataStoreManager.TRUE
@@ -544,7 +542,7 @@ fun MiniPlayer(
                                                 text = (songEntity?.artistName?.connectArtists() ?: ""),
                                                 style = if (isFlat) typo().bodySmall.copy(fontSize = 10.sp) else typo().bodySmall,
                                                 maxLines = 1,
-                                                color = if (isFlat) MaterialTheme.colorScheme.onSurfaceVariant else textColor.copy(alpha = 0.8f),
+                                                color = secondaryTextColor,
                                                 modifier =
                                                     Modifier
                                                         .weight(1f)

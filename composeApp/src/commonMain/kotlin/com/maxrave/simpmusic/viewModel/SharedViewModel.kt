@@ -1,5 +1,7 @@
 package com.maxrave.simpmusic.viewModel
 
+import okio.Path.Companion.toPath
+import com.maxrave.data.io.fileSystem
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.viewModelScope
 import com.maxrave.common.Config
@@ -108,15 +110,14 @@ import simpmusic.composeapp.generated.resources.removed_from_youtube_liked
 import simpmusic.composeapp.generated.resources.shared
 import simpmusic.composeapp.generated.resources.updated
 import simpmusic.composeapp.generated.resources.vote_submitted
-import java.io.FileOutputStream
 import kotlin.math.abs
 import kotlin.reflect.KClass
 
 // --- IMPORTACIONES PARA CARÁTULA EN ALTA RESOLUCIÓN ---
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
+import kotlinx.coroutines.IO
 
 const val FOOTGUNS_STAR_KEY = "footguns_starred"
 
@@ -560,7 +561,7 @@ class SharedViewModel(
 
                 val cleanArtist = artist?.replace(Regex("(?i)- topic"), "")?.trim() ?: ""
 
-                val client = HttpClient(CIO)
+                val client = HttpClient()
                 val query = "$cleanTitle $cleanArtist".replace(" ", "+")
                 val response = client.get("https://itunes.apple.com/search?term=$query&entity=song&limit=1")
                 val body = response.bodyAsText()
@@ -1911,9 +1912,9 @@ class SharedViewModel(
             nowPlayingState.value?.track?.let { track ->
                 val bytesArray = bitmap.toByteArray()
                 try {
-                    val fileOutputStream = FileOutputStream("$path.jpg")
-                    fileOutputStream.write(bytesArray)
-                    fileOutputStream.close()
+                    if (bytesArray != null) {
+                        fileSystem().write("$path.jpg".toPath()) { write(bytesArray) }
+                    }
                     Logger.d(tag, "Thumbnail saved to $path.jpg")
                 } catch (e: Exception) {
                     throw RuntimeException(e)

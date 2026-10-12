@@ -154,10 +154,18 @@ internal class StreamRepositoryImpl(
                             ?: formatList.find { !it.isAudio && it.url.isNullOrEmpty().not() }
                     val audioTwinItag = ITAG.highQualityTwinOf(itag)
                     val audioFormat =
-                        formatList.find { it.itag == itag } ?: if (audioTwinItag != null) {
-                            formatList.find { it.itag == audioTwinItag }
+                        if (onlyAacAudioPlayable) {
+                            // AVPlayer has no WebM/Opus decoder: stay inside the AAC family, best first.
+                            val wantsHigh = itag == ITAG.AUDIO_OPUS_HIGH || itag == ITAG.AUDIO_AAC_HIGH
+                            (if (wantsHigh) formatList.find { it.itag == ITAG.AUDIO_AAC_HIGH } else null)
+                                ?: formatList.find { it.itag == ITAG.AUDIO_AAC_MEDIUM }
+                                ?: formatList.find { it.isAudio && it.mimeType.contains("mp4") && it.url.isNullOrEmpty().not() }
                         } else {
-                            formatList.find { it.isAudio && it.url.isNullOrEmpty().not() }
+                            formatList.find { it.itag == itag } ?: if (audioTwinItag != null) {
+                                formatList.find { it.itag == audioTwinItag }
+                            } else {
+                                formatList.find { it.isAudio && it.url.isNullOrEmpty().not() }
+                            }
                         }
                     var format =
                         if (isVideo) {
@@ -260,16 +268,20 @@ internal class StreamRepositoryImpl(
                             keyScale = tidalKeyScale,
                         ),
                     )
+                    // AVPlayer (iOS) does its own HTTP Range requests, so the googlevideo URL must
+                    // stay clean: the "&range=0-N" query that ExoPlayer/NewPipe rely on makes the CDN
+                    // answer oddly for AVPlayer and the item never becomes ready (plays in the Mac
+                    // simulator, stalls on a real device). onlyAacAudioPlayable is true only on iOS.
                     if (data.first != null) {
                         emit(
                             if (muxed) {
                                 response.streamingData?.hlsManifestUrl
                             } else {
                                 format?.url?.let { url ->
-                                    if (youTube.isManifestUrl(url)) {
-                                        url.plus("&cpn=${data.first}")
-                                    } else {
-                                        url.plus("&cpn=${data.first}&range=0-${format.contentLength ?: 10000000}")
+                                    when {
+                                        youTube.isManifestUrl(url) -> url.plus("&cpn=${data.first}")
+                                        onlyAacAudioPlayable -> url.plus("&cpn=${data.first}")
+                                        else -> url.plus("&cpn=${data.first}&range=0-${format.contentLength ?: 10000000}")
                                     }
                                 }
                             },
@@ -280,10 +292,10 @@ internal class StreamRepositoryImpl(
                                 response.streamingData?.hlsManifestUrl
                             } else {
                                 format?.url?.let { url ->
-                                    if (youTube.isManifestUrl(url)) {
-                                        url
-                                    } else {
-                                        url.plus("&range=0-${format.contentLength ?: 10000000}")
+                                    when {
+                                        youTube.isManifestUrl(url) -> url
+                                        onlyAacAudioPlayable -> url
+                                        else -> url.plus("&range=0-${format.contentLength ?: 10000000}")
                                     }
                                 }
                             },
