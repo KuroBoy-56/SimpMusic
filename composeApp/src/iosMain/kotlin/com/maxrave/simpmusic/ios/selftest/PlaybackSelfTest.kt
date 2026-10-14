@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 package com.maxrave.simpmusic.ios.selftest
 
 import com.maxrave.data.io.fileDir
