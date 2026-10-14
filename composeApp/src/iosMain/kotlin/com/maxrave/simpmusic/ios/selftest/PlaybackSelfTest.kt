@@ -1,14 +1,20 @@
 package com.maxrave.simpmusic.ios.selftest
 
+import com.maxrave.data.io.fileDir
+import com.maxrave.data.mediaservice.ios.AvPlayerAdapter
 import com.maxrave.domain.data.player.GenericMediaItem
 import com.maxrave.domain.data.player.GenericMediaMetadata
 import com.maxrave.domain.manager.DataStoreManager
+import com.maxrave.domain.mediaservice.handler.DownloadHandler
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
 import com.maxrave.domain.mediaservice.player.MediaPlayerInterface
 import com.maxrave.domain.repository.StreamRepository
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.lastOrNull
 import org.koin.mp.KoinPlatform
+import platform.Foundation.NSFileManager
+import platform.Foundation.NSFileSize
+import platform.Foundation.NSNumber
 
 /**
  * Launched with `-kuroPlaybackSelfTest` (the simulator CI does this). It exercises the REAL path
@@ -51,7 +57,8 @@ suspend fun playbackSelfTest(videoId: String = "dQw4w9WgXcQ"): String {
                 waited++
                 pos = handler.getProgress()
             }
-            "handlerPos=${pos}ms handlerPlaying=${handler.controlState.value.isPlaying} dur=${handler.getPlayerDuration()}ms"
+            val source = (koin.get<MediaPlayerInterface>() as? AvPlayerAdapter)?.currentSourceName
+            "handlerPos=${pos}ms handlerPlaying=${handler.controlState.value.isPlaying} dur=${handler.getPlayerDuration()}ms source=$source"
         }.getOrElse { "HANDLER_ERROR ${it::class.simpleName}: ${it.message}" }
 
     // 3) The adapter directly, for comparison — isolates handler vs adapter.
@@ -73,6 +80,19 @@ suspend fun playbackSelfTest(videoId: String = "dQw4w9WgXcQ"): String {
             "adapterPos=${pos}ms adapterPlaying=${player.isPlaying}"
         }.getOrElse { "ADAPTER_ERROR ${it::class.simpleName}: ${it.message}" }
 
+    // 4) A real download through the iOS download handler, then the size of the file it wrote.
+    val downloadResult =
+        runCatching {
+            val downloadId = "jNQXAC9IVRw"
+            koin.get<DownloadHandler>().downloadTrack(downloadId, "self-test", "")
+            val path = fileDir() + "/download/$downloadId.m4a"
+            val size =
+                (NSFileManager.defaultManager.attributesOfItemAtPath(path, null)?.get(NSFileSize) as? NSNumber)
+                    ?.longLongValue ?: -1L
+            NSFileManager.defaultManager.removeItemAtPath(path, null)
+            "download=${if (size > 0) "ok ${size}B" else "FAILED"}"
+        }.getOrElse { "DOWNLOAD_ERROR ${it::class.simpleName}: ${it.message}" }
+
     val urlDesc = if (url == null) "null" else if (url.startsWith("ERROR")) url else "ok itag=$itag"
-    return "url=$urlDesc | hls=$hlsDesc | $handlerResult | $adapterResult"
+    return "url=$urlDesc | hls=$hlsDesc | $handlerResult | $adapterResult | $downloadResult"
 }
