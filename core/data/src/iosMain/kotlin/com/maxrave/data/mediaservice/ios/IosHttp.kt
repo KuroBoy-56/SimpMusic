@@ -23,7 +23,6 @@ import platform.Foundation.dataTaskWithRequest
 import platform.Foundation.fileHandleForWritingAtPath
 import platform.Foundation.seekToEndOfFile
 import platform.Foundation.setHTTPMethod
-import platform.Foundation.setTimeoutInterval
 import platform.Foundation.setValue
 import platform.Foundation.writeData
 import kotlin.coroutines.resume

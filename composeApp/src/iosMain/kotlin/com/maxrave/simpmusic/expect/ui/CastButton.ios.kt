@@ -105,14 +105,13 @@ private object IosRoutePicker {
                 userInteractionEnabled = false
             }.also { picker = it }
         if (view.superview != window) window.addSubview(view)
-        view.setFrame(
+        view.frame =
             CGRectMake(
                 x.toDouble(),
                 y.toDouble(),
                 width.toDouble().coerceAtLeast(1.0),
                 height.toDouble().coerceAtLeast(1.0),
-            ),
-        )
+            )
         window.bringSubviewToFront(view)
         view.layoutIfNeeded()
         val control = findControl(view)
