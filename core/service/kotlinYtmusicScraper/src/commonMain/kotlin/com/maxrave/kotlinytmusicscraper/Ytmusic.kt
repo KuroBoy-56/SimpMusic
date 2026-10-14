@@ -36,6 +36,7 @@ import io.ktor.client.plugins.HttpRedirect
 import com.maxrave.ktorext.encoding.installContentEncoding
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
+import io.ktor.client.plugins.expectSuccess
 import io.ktor.client.plugins.logging.DEFAULT
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logging
@@ -47,6 +48,7 @@ import io.ktor.client.request.header
 import io.ktor.client.request.headers
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
+import io.ktor.client.request.prepareGet
 import io.ktor.client.request.prepareRequest
 import io.ktor.client.request.forms.submitForm
 import io.ktor.client.request.setBody
@@ -1280,6 +1282,26 @@ class Ytmusic {
             true
         }
     }
+
+    /**
+     * Whether googlevideo serves bytes [start]..[end] of [url] (a 2xx answer to a Range request).
+     * Used instead of a HEAD where it matters that the stream really plays past its first bytes.
+     */
+    suspend fun probeStreamRange(
+        url: String,
+        start: Long,
+        end: Long,
+    ): Boolean =
+        try {
+            httpClient
+                .prepareGet(url) {
+                    header(HttpHeaders.Range, "bytes=$start-$end")
+                    expectSuccess = false
+                }.execute { it.status.value in 200..299 }
+        } catch (e: Exception) {
+            Logger.w(TAG, "Stream probe failed: ${e.message}")
+            false
+        }
 
     suspend fun getTidalOAuthToken() =
         httpClient.submitForm(

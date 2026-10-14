@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import platform.Foundation.NSHTTPURLResponse
 import platform.Foundation.NSMutableURLRequest
 import platform.Foundation.NSURL
@@ -35,9 +36,6 @@ import platform.Foundation.setValue
 import kotlin.coroutines.resume
 
 private const val TAG = "IosDownloadHandler"
-
-private const val STREAM_USER_AGENT =
-    "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)"
 
 /**
  * iOS offline downloads.
@@ -102,25 +100,52 @@ internal class IosDownloadHandler(
                     ).lastOrNull()
             }.getOrNull()
 
-        if (url.isNullOrEmpty()) {
+        if (url.isNullOrEmpty() || url.contains(".m3u8") || url.contains("/manifest/")) {
             Logger.e(TAG, "No AAC stream resolved for $videoId — cannot download")
+            IosPlaybackDiagnostics.report(
+                tipo = "ERROR_DESCARGA",
+                mensaje = "No downloadable AAC stream (videoId=$videoId)",
+                detalle = "resolved=${url?.take(160) ?: "null"}",
+            )
             fail(videoId)
             return
         }
 
         createDownloadDir()
         val dest = downloadDir() + "/$videoId.m4a"
-        val ok =
-            runCatching { fetchToFile(url, dest) }
-                .onFailure { Logger.e(TAG, "Download of $videoId failed: ${it.message}") }
-                .getOrDefault(false)
+        // Written under a temporary name and renamed at the end, so the player's localFileFor()
+        // never picks up a half-written file.
+        val partial = downloadDir() + "/$videoId.part"
+        val length = Regex("[?&]clen=(\\d+)").find(url)?.groupValues?.get(1)?.toLongOrNull()
+        val error =
+            runCatching {
+                if (length != null && length > 0) {
+                    withContext(Dispatchers.IO) { IosHttp.downloadInChunks(url, length, partial) }
+                } else if (fetchToFile(url, partial)) {
+                    null
+                } else {
+                    "single download failed"
+                }
+            }.getOrElse { it.message ?: it::class.simpleName ?: "exception" }
 
+        val fm = NSFileManager.defaultManager
+        if (error == null) fm.removeItemAtPath(dest, null)
+        val ok = error == null && fm.moveItemAtPath(partial, dest, null)
         if (ok) {
             Logger.d(TAG, "Downloaded $videoId to $dest")
             songRepository.updateDownloadState(videoId, DownloadState.STATE_DOWNLOADED)
             publish(videoId, DownloadState.STATE_DOWNLOADED)
         } else {
-            NSFileManager.defaultManager.removeItemAtPath(dest, null)
+            Logger.e(TAG, "Download of $videoId failed: $error")
+            IosPlaybackDiagnostics.report(
+                tipo = "ERROR_DESCARGA",
+                mensaje = "Download failed (videoId=$videoId)",
+                detalle = "${error ?: "move failed"} | clen=$length | url=${url.take(160)}",
+            )
+            fm.removeItemAtPath(partial, null)
+            // A failed URL is most likely an expired or refused one: drop it so the next attempt
+            // resolves a fresh stream.
+            streamRepository.invalidateFormat(videoId)
             fail(videoId)
         }
     }
@@ -156,7 +181,7 @@ internal class IosDownloadHandler(
                 return@suspendCancellableCoroutine
             }
             val request = NSMutableURLRequest.requestWithURL(nsUrl)
-            request.setValue(STREAM_USER_AGENT, forHTTPHeaderField = "User-Agent")
+            request.setValue(streamUserAgentFor(url), forHTTPHeaderField = "User-Agent")
 
             val task: NSURLSessionDownloadTask =
                 NSURLSession.sharedSession.downloadTaskWithRequest(request) { location: NSURL?, response: NSURLResponse?, error: NSError? ->
