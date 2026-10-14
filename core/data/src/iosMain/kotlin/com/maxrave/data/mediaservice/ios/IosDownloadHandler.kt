@@ -15,6 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -80,11 +81,15 @@ internal class IosDownloadHandler(
         }
     }
 
+    // Runs in the handler's own scope: the callers are view-model scopes, and closing the screen
+    // used to cancel a download half way (reported as a failure).
     override suspend fun downloadTrack(
         videoId: String,
         title: String,
         thumbnail: String,
-    ) {
+    ) = scope.async { runDownload(videoId) }.await()
+
+    private suspend fun runDownload(videoId: String) {
         songRepository.updateDownloadState(videoId, DownloadState.STATE_DOWNLOADING)
         publish(videoId, DownloadState.STATE_DOWNLOADING)
 

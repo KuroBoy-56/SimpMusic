@@ -30,17 +30,19 @@ import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import platform.AVFAudio.AVAudioSession
 import platform.AVFAudio.AVAudioSessionCategoryPlayback
 import platform.AVFAudio.AVAudioSessionInterruptionNotification
 import platform.AVFAudio.AVAudioSessionInterruptionTypeBegan
 import platform.AVFAudio.AVAudioSessionInterruptionTypeKey
 import platform.AVFAudio.AVAudioSessionModeDefault
+import platform.AVFAudio.AVAudioSessionRouteChangeNotification
+import platform.AVFAudio.AVAudioSessionRouteChangeReasonKey
+import platform.AVFAudio.AVAudioSessionRouteChangeReasonOldDeviceUnavailable
 import platform.AVFAudio.setActive
 import kotlin.time.TimeSource
 import platform.AVFoundation.AVPlayer
-import platform.AVFoundation.playImmediatelyAtRate
-import platform.AVFoundation.setAutomaticallyWaitsToMinimizeStalling
 import platform.AVFoundation.AVPlayerItem
 import platform.AVFoundation.AVPlayerItemErrorLogEvent
 import platform.AVFoundation.errorLog
@@ -48,7 +50,10 @@ import platform.AVFoundation.AVPlayerItemDidPlayToEndTimeNotification
 import platform.AVFoundation.AVPlayerItemFailedToPlayToEndTimeNotification
 import platform.AVFoundation.AVPlayerItemStatusFailed
 import platform.AVFoundation.AVPlayerItemStatusReadyToPlay
+import platform.AVFoundation.AVPlayerTimeControlStatus
+import platform.AVFoundation.AVPlayerTimeControlStatusPaused
 import platform.AVFoundation.AVPlayerTimeControlStatusPlaying
+import platform.AVFoundation.reasonForWaitingToPlay
 import platform.AVFoundation.AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate
 import platform.AVFoundation.AVURLAsset
 import platform.AVFoundation.currentItem
@@ -65,7 +70,12 @@ import platform.AVFoundation.volume
 import platform.CoreMedia.CMTimeGetSeconds
 import platform.CoreMedia.CMTimeMakeWithSeconds
 import platform.AVFoundation.CMTimeRangeValue
+import platform.Foundation.NSData
 import platform.Foundation.NSFileManager
+import platform.Foundation.dataWithContentsOfFile
+import kotlinx.cinterop.ByteVar
+import kotlinx.cinterop.get
+import kotlinx.cinterop.reinterpret
 import platform.Foundation.NSNotification
 import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSNumber
@@ -78,9 +88,18 @@ import kotlin.math.max
 
 private const val TAG = "AvPlayerAdapter"
 
-private const val STAGE_HLS_AUDIO = 0
-private const val STAGE_PROGRESSIVE = 1
+// Source order for a song. Progressive first, because that is what Android and Desktop play: the
+// same pre-signed googlevideo file (itag 140 here, AVPlayer has no Opus), fetched with Range requests.
+private const val STAGE_PROGRESSIVE = 0
+private const val STAGE_HLS_AUDIO = 1
 private const val STAGE_HLS_MASTER = 2
+private const val FIRST_STAGE = STAGE_PROGRESSIVE
+
+/** How long a stream may take to resolve (all network round trips) before the attempt is dropped. */
+private const val RESOLVE_TIMEOUT_MS = 45_000L
+
+/** A playing item that sits waiting for data this long, with its buffer not growing, has stalled. */
+private const val STALL_TIMEOUT_NANOS = 25_000_000_000L
 private const val PREPARE_TIMEOUT_NANOS = 15_000_000_000L // 15 s per attempt
 
 /**
@@ -153,6 +172,12 @@ class AvPlayerAdapter(
     private var endObserver: NSObjectProtocol? = null
     private var failObserver: NSObjectProtocol? = null
     private var interruptionObserver: NSObjectProtocol? = null
+    private var routeChangeObserver: NSObjectProtocol? = null
+
+    // Resume watchdog state (see startPolling).
+    private var lastResumeNanos = 0L
+    private var waitingSinceNanos = 0L
+    private var bufferedAtWaitStart = 0L
     private var retryVideoId: String? = null
     private var retryCount = 0
     private val maxRetryCount = 1
@@ -183,16 +208,29 @@ class AvPlayerAdapter(
 
     init {
         activateAudioSession()
-        // Default is true: AVPlayer then decides on its own when the buffer is "enough" and can sit
-        // in WaitingToPlayAtSpecifiedRate forever without ever starting — the "loads forever, no
-        // audio" seen on real devices (the simulator almost always starts, which is why it hid
-        // here). false makes it start as soon as it has any data, like Android/ExoPlayer does.
-        avPlayer.setAutomaticallyWaitsToMinimizeStalling(false)
+        // automaticallyWaitsToMinimizeStalling stays at its default (true), which is what ExoPlayer
+        // does on Android: buffer, play, and on an underrun wait and resume by itself. With it off,
+        // AVPlayer drops to PAUSED (rate 0) the first time its buffer runs dry and never resumes —
+        // on a phone that is the very first moment, since the media fetch starts cold.
         coroutineScope.launch {
             dataStoreManager.watchVideoInsteadOfPlayingAudio.collect {
                 watchVideoEnabled = it == DataStoreManager.TRUE
             }
         }
+        // Headphones unplugged / Bluetooth gone: AVPlayer pauses itself; follow it, so the resume
+        // watchdog in the poll loop does not restart playback on the phone's speaker.
+        routeChangeObserver =
+            NSNotificationCenter.defaultCenter.addObserverForName(
+                name = AVAudioSessionRouteChangeNotification,
+                `object` = null,
+                queue = NSOperationQueue.mainQueue,
+            ) { notification: NSNotification? ->
+                val reason = (notification?.userInfo?.get(AVAudioSessionRouteChangeReasonKey) as? NSNumber)?.unsignedLongValue
+                if (reason == AVAudioSessionRouteChangeReasonOldDeviceUnavailable) {
+                    Logger.d(TAG, "Audio route lost — pausing")
+                    pause()
+                }
+            }
         interruptionObserver =
             NSNotificationCenter.defaultCenter.addObserverForName(
                 name = AVAudioSessionInterruptionNotification,
@@ -611,6 +649,7 @@ class AvPlayerAdapter(
         avPlayer.pause()
         clearItemObservers()
         interruptionObserver?.let { NSNotificationCenter.defaultCenter.removeObserver(it) }
+        routeChangeObserver?.let { NSNotificationCenter.defaultCenter.removeObserver(it) }
         avPlayer.replaceCurrentItemWithPlayerItem(null)
         IosPlayerVideoOutput.playerFlow.value = null
         listeners.clear()
@@ -620,9 +659,9 @@ class AvPlayerAdapter(
 
     private fun startAvPlayback() {
         applyVolume()
-        // playImmediatelyAtRate starts without waiting for a "full enough" buffer, paired with
-        // automaticallyWaitsToMinimizeStalling = false above.
-        avPlayer.playImmediatelyAtRate(if (internalSpeed > 0f) internalSpeed else 1f)
+        // Setting the rate asks AVPlayer to play as soon as it is likely to keep up, and to wait and
+        // resume on its own after an underrun (automaticallyWaitsToMinimizeStalling = true).
+        avPlayer.rate = if (internalSpeed > 0f) internalSpeed else 1f
     }
 
     private fun loadAndPlayTrackInternal(
@@ -648,14 +687,14 @@ class AvPlayerAdapter(
                         onMediaItemTransition(mediaItem, PlayerConstants.MEDIA_ITEM_TRANSITION_REASON_AUTO)
                     }
 
-                    var source = withContext(Dispatchers.IO) { resolveSource(mediaItem) }
+                    var source = resolveSourceBounded(mediaItem)
                     if (source == null) {
                         Logger.w(TAG, "First extract failed for $videoId, invalidating and retrying")
                         withContext(Dispatchers.IO) {
                             streamRepository.invalidateFormat(videoId)
                             streamRepository.invalidateFormat("${MERGING_DATA_TYPE.VIDEO}$videoId")
                         }
-                        source = withContext(Dispatchers.IO) { resolveSource(mediaItem) }
+                        source = resolveSourceBounded(mediaItem)
                     }
                     if (source == null) {
                         Logger.e(TAG, "No playable URL for $videoId")
@@ -670,6 +709,10 @@ class AvPlayerAdapter(
                         return@launch
                     }
                     clearItemObservers()
+                    // The prepare timeout covers AVPlayer loading the item, not the extraction above
+                    // (which has its own bound): counting both starved slow networks.
+                    preparingSinceNanos = elapsedNanos()
+                    waitingSinceNanos = 0L
                     avPlayer.replaceCurrentItemWithPlayerItem(item)
                     observeItem(item)
                     IosPlayerVideoOutput.isVideoFlow.value = source.isVideo
@@ -698,6 +741,15 @@ class AvPlayerAdapter(
         val stage: Int = STAGE_HLS_MASTER,
     )
 
+    /** [resolveSource] on the IO dispatcher, given up after [RESOLVE_TIMEOUT_MS]. */
+    private suspend fun resolveSourceBounded(mediaItem: GenericMediaItem): Source? =
+        withTimeoutOrNull(RESOLVE_TIMEOUT_MS) {
+            withContext(Dispatchers.IO) { resolveSource(mediaItem) }
+        } ?: run {
+            noteFailure(mediaItem.mediaId, "resolve gave nothing within ${RESOLVE_TIMEOUT_MS}ms")
+            null
+        }
+
     /**
      * Same order as the desktop adapter: a cached format first, then a fresh extraction. Video is
      * played from the HLS manifest (`muxed`), which carries its own audio — AVPlayer cannot mux two
@@ -713,15 +765,19 @@ class AvPlayerAdapter(
         // DASH streams the way mpv's edl:// does), so video has always gone through HLS.
         if (wantVideo) {
             val url =
-                streamRepository
-                    .getStream(dataStoreManager, videoId, isDownloading = false, isVideo = true, muxed = true)
-                    .lastOrNull()
-            return url?.takeIf { it.isNotEmpty() }?.let { Source(it, isVideo = true) }
+                runCatching {
+                    streamRepository
+                        .getStream(dataStoreManager, videoId, isDownloading = false, isVideo = true, muxed = true)
+                        .lastOrNull()
+                }.getOrNull()
+            if (!url.isNullOrEmpty()) return Source(url, isVideo = true)
+            // No video stream: play the song's audio rather than nothing at all.
+            noteFailure(videoId, "video: no url, falling back to audio")
         }
 
         // Audio: walk the sources from the stage this video is at; a stage that yields nothing
         // (no manifest, no served URL) moves straight on to the next.
-        var stage = sourceStageByVideo[videoId] ?: STAGE_HLS_AUDIO
+        var stage = sourceStageByVideo[videoId] ?: FIRST_STAGE
         while (stage <= STAGE_HLS_MASTER) {
             val url =
                 runCatching { sourceFor(videoId, stage) }
@@ -844,13 +900,33 @@ class AvPlayerAdapter(
 
     private fun localFileFor(videoId: String): String? {
         val dir = com.maxrave.data.io.fileDir() + "/download"
-        val files = NSFileManager.defaultManager.contentsOfDirectoryAtPath(dir, null) ?: return null
+        val fm = NSFileManager.defaultManager
+        val files = fm.contentsOfDirectoryAtPath(dir, null) ?: return null
         val name =
             files.filterIsInstance<String>().firstOrNull {
                 it.contains(videoId) && !it.contains(MERGING_DATA_TYPE.VIDEO) && !it.endsWith(".part")
             }
                 ?: return null
-        return "file://$dir/$name"
+        val path = "$dir/$name"
+        // An earlier build could save something that is not audio (an HLS playlist, an error page)
+        // under this name, and a local file always wins — so that song could never play again.
+        if (!isPlayableAudioFile(path)) {
+            Logger.w(TAG, "Discarding unplayable download $name")
+            fm.removeItemAtPath(path, null)
+            return null
+        }
+        return "file://$path"
+    }
+
+    /** An MP4/M4A (`ftyp` box at offset 4) or an ADTS AAC stream (0xFFF sync word), over 64 KB. */
+    private fun isPlayableAudioFile(path: String): Boolean {
+        val data = NSData.dataWithContentsOfFile(path) ?: return false
+        if (data.length < 64_000uL) return false
+        val bytes = data.bytes?.reinterpret<ByteVar>() ?: return false
+        val head = ByteArray(8) { bytes[it] }
+        val isMp4 = head[4] == 'f'.code.toByte() && head[5] == 't'.code.toByte() && head[6] == 'y'.code.toByte() && head[7] == 'p'.code.toByte()
+        val isAdts = (head[0].toInt() and 0xFF) == 0xFF && (head[1].toInt() and 0xF0) == 0xF0
+        return isMp4 || isAdts
     }
 
     private fun createPlayerItem(url: String): AVPlayerItem? {
@@ -988,6 +1064,7 @@ class AvPlayerAdapter(
                     if (status == AVPlayerTimeControlStatusPlaying && internalState == InternalState.READY) {
                         transitionToState(InternalState.PLAYING)
                     }
+                    if (watchPlayback(item, status)) break
                     // Never spin forever: if the item has not become ready in time (it can sit in
                     // AVPlayerItemStatusUnknown without ever flipping to .failed on a real device),
                     // treat it as a failure so it retries and then surfaces an error instead of an
@@ -1004,6 +1081,51 @@ class AvPlayerAdapter(
                     delay(100)
                 }
             }
+    }
+
+    /**
+     * Keeps a track that should be playing actually playing, the way ExoPlayer does on Android:
+     * - AVPlayer paused by itself (an interrupted fetch, an old route) while we still want playback
+     *   → ask it to play again, at most once a second;
+     * - waiting for data for [STALL_TIMEOUT_NANOS] with the buffer not growing → treat the source
+     *   as failed, so the next source is tried instead of a silent spinner forever.
+     * Returns true when the poll loop must stop.
+     */
+    private fun watchPlayback(
+        item: AVPlayerItem,
+        status: AVPlayerTimeControlStatus,
+    ): Boolean {
+        if (!internalPlayWhenReady || item.status != AVPlayerItemStatusReadyToPlay) {
+            waitingSinceNanos = 0L
+            return false
+        }
+        if (internalState != InternalState.PLAYING && internalState != InternalState.READY) return false
+        val now = elapsedNanos()
+        val nearEnd = cachedDuration > 0 && cachedPosition >= cachedDuration - 500
+        if (status == AVPlayerTimeControlStatusPaused && !nearEnd && now - lastResumeNanos > 1_000_000_000L) {
+            lastResumeNanos = now
+            Logger.w(TAG, "AVPlayer paused on its own while playback is wanted — resuming")
+            activateAudioSession()
+            startAvPlayback()
+        }
+        if (status == AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate) {
+            if (waitingSinceNanos == 0L) {
+                waitingSinceNanos = now
+                bufferedAtWaitStart = cachedBufferedPosition
+            } else if (cachedBufferedPosition > bufferedAtWaitStart) {
+                // Data is arriving: restart the clock.
+                waitingSinceNanos = now
+                bufferedAtWaitStart = cachedBufferedPosition
+            } else if (now - waitingSinceNanos > STALL_TIMEOUT_NANOS) {
+                Logger.e(TAG, "Stalled: waiting for data with no buffer growth")
+                waitingSinceNanos = 0L
+                onPlaybackFailed("stalled (${avPlayer.reasonForWaitingToPlay ?: "unknown"})")
+                return true
+            }
+        } else {
+            waitingSinceNanos = 0L
+        }
+        return false
     }
 
     private fun stopPolling() {

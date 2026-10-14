@@ -151,7 +151,7 @@ jobs:
           playtest=$(grep -a "KURO_PLAYTEST" smoke/console.log | tail -1)
           echo "Playback self-test: ${playtest:-<no output>}"
           case "$playtest" in
-            *"url=ok"*) case "$playtest" in *"pos=0ms"*) echo "::error::A song resolved but did not play"; exit 1;; esac ;;
+            *"url=ok"*) case "$playtest" in *"Pos=0ms"*) echo "::error::A song resolved but did not play"; exit 1;; esac ;;
             *) echo "::error::No playable stream could be resolved"; exit 1;;
           esac
           case "$playtest" in

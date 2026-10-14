@@ -100,6 +100,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -1308,33 +1309,57 @@ class YouTube {
     }
 
     /**
-     * The player responses of the clients YouTube serves pre-signed URLs to (ANDROID_VR and IOS).
-     * Those URLs need no cipher and no `n` transform, so they are the only stream source on iOS
-     * (NewPipe is JVM-only) and the fallback elsewhere when NewPipe fails. Both clients are asked
-     * at once: IOS is the only one with an HLS manifest, ANDROID_VR is the one whose progressive
-     * URLs need no PO token, and which of the two a given network accepts varies.
+     * The player responses of the clients YouTube serves pre-signed URLs to, in order of preference:
+     * - VISIONOS — what Android and Desktop actually stream from: PipePipe's default client, sent
+     *   exactly as PipePipe sends it (a freshly minted visitorData, then the player request). Its
+     *   formats are pre-signed and it always carries an HLS master;
+     * - ANDROID_VR and IOS — kept as fallbacks, now with that same minted visitorData when the
+     *   session has none (an empty one gets "Sign in to confirm you're not a bot").
+     * They are the only stream source on iOS (NewPipe is JVM-only) and the fallback elsewhere when
+     * NewPipe fails. All are asked at once.
      */
-    private suspend fun directClientResponses(videoId: String): List<Pair<YouTubeClient, PlayerResponse>> =
+    private suspend fun directClientResponses(videoId: String): List<Pair<String, PlayerResponse>> =
         coroutineScope {
-            listOf(YouTubeClient.ANDROID_VR, YouTubeClient.IOS)
-                .map { client ->
-                    async {
-                        val response =
-                            runCatching { ytMusic.directPlayer(client, videoId).body<PlayerResponse>() }
-                                .onFailure { Logger.w(TAG, "Direct player ${client.clientName} failed: ${it.message}") }
-                                .getOrNull() ?: return@async null
-                        if (response.playabilityStatus.status != "OK") {
-                            Logger.w(TAG, "Direct player ${client.clientName}: ${response.playabilityStatus.status} ${response.playabilityStatus.reason}")
-                            return@async null
-                        }
-                        val withUrls = response.streamingData?.adaptiveFormats.orEmpty().count { !it.url.isNullOrEmpty() }
-                        val hasHls = !response.streamingData?.hlsManifestUrl.isNullOrEmpty()
-                        Logger.d(TAG, "Direct player ${client.clientName}: $withUrls streams, hls=$hasHls")
-                        if (withUrls > 0 || hasHls) client to response else null
+            val visitor =
+                runCatching { withTimeoutOrNull(DIRECT_CLIENT_TIMEOUT_MS) { ytMusic.visionOsVisitorData() } }
+                    .onFailure { Logger.w(TAG, "VISIONOS visitor_id failed: ${it.message}") }
+                    .getOrNull()
+            val visionOs =
+                async {
+                    if (visitor == null) return@async null
+                    directClientOrNull("VISIONOS") {
+                        ytMusic.visionOsPlayer(videoId, visitor, randomInnertubeString(16)).body<PlayerResponse>()
                     }
-                }.awaitAll()
-                .filterNotNull()
+                }
+            val others =
+                listOf(YouTubeClient.ANDROID_VR, YouTubeClient.IOS).map { client ->
+                    async {
+                        directClientOrNull(client.clientName) {
+                            ytMusic.directPlayer(client, videoId, visitorDataOverride = visitor).body<PlayerResponse>()
+                        }
+                    }
+                }
+            (listOf(visionOs) + others).awaitAll().filterNotNull()
         }
+
+    /** One direct client: its response when it is OK and carries streams, else null (logged). */
+    private suspend fun directClientOrNull(
+        name: String,
+        request: suspend () -> PlayerResponse,
+    ): Pair<String, PlayerResponse>? {
+        val response =
+            runCatching { withTimeoutOrNull(DIRECT_CLIENT_TIMEOUT_MS) { request() } }
+                .onFailure { Logger.w(TAG, "Direct player $name failed: ${it.message}") }
+                .getOrNull() ?: return null
+        if (response.playabilityStatus.status != "OK") {
+            Logger.w(TAG, "Direct player $name: ${response.playabilityStatus.status} ${response.playabilityStatus.reason}")
+            return null
+        }
+        val withUrls = response.streamingData?.adaptiveFormats.orEmpty().count { !it.url.isNullOrEmpty() }
+        val hasHls = !response.streamingData?.hlsManifestUrl.isNullOrEmpty()
+        Logger.d(TAG, "Direct player $name: $withUrls streams, hls=$hasHls")
+        return if (withUrls > 0 || hasHls) name to response else null
+    }
 
     /**
      * Whether googlevideo actually serves [format]'s bytes. A HEAD (what [is403Url] does) is not
@@ -1346,7 +1371,7 @@ class YouTube {
         val url = format.url ?: return false
         val length = format.contentLength ?: url.let(::contentLengthOf) ?: 0L
         val start = if (length > 1_000_000L) length / 2 else 0L
-        return ytMusic.probeStreamRange(url, start, start + 4095)
+        return withTimeoutOrNull(PROBE_TIMEOUT_MS) { ytMusic.probeStreamRange(url, start, start + 4095) } ?: false
     }
 
     /** AAC first (all iOS can decode), then whatever audio stream there is. */
@@ -1397,11 +1422,11 @@ class YouTube {
             val adaptive = adaptiveOf(response)
             val probe = adaptive.filter { it.isAudio }.probeAudio() ?: adaptive.probeAudio() ?: continue
             if (isStreamServed(probe)) {
-                Logger.d(TAG, "Direct client ${client.clientName} serves $videoId (itag ${probe.itag})")
+                Logger.d(TAG, "Direct client $client serves $videoId (itag ${probe.itag})")
                 chosen = response to adaptive
                 break
             }
-            Logger.w(TAG, "Direct client ${client.clientName} URL rejected for $videoId")
+            Logger.w(TAG, "Direct client $client URL rejected for $videoId")
         }
         // No progressive URL is served, but the HLS manifest may still be: hand that over alone.
         if (chosen == null && hlsManifest == null) return null
@@ -2410,6 +2435,11 @@ class YouTube {
 
     companion object {
         const val MAX_GET_QUEUE_SIZE = 1000
+
+        // Bounds for the direct-client path, so one stalled connection cannot hold playback up
+        // for NSURLSession's default 60 s.
+        private const val DIRECT_CLIENT_TIMEOUT_MS = 15_000L
+        private const val PROBE_TIMEOUT_MS = 8_000L
 
         // Visitor data is a base64 protobuf: bytes 0x0a 0x0b (field 1, length 11) then an 11-char
         // id. "Cg" is fixed; the third char encodes the top 2 bits of the id's first byte, so it is

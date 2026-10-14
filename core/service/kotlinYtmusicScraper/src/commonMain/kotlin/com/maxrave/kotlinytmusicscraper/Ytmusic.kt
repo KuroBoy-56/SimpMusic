@@ -53,12 +53,14 @@ import io.ktor.client.request.prepareRequest
 import io.ktor.client.request.forms.submitForm
 import io.ktor.client.request.setBody
 import io.ktor.client.request.url
+import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.Parameters
 import io.ktor.http.contentType
+import io.ktor.http.content.TextContent
 import io.ktor.http.userAgent
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.serialization.kotlinx.protobuf.protobuf
@@ -75,6 +77,14 @@ import kotlinx.datetime.toInstant
 import kotlinx.io.readByteArray
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import nl.adaptivity.xmlutil.XmlDeclMode
 import nl.adaptivity.xmlutil.serialization.XML
 import okio.FileSystem
@@ -91,6 +101,16 @@ private const val DOWNLOAD_USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 private const val DEFAULT_PARALLEL_DOWNLOADS = 4
+
+// PipePipe's visionOS user agent (`YoutubeParsingHelper.getVisionOsUserAgent` with an empty
+// country): no space before "(" and no gzip suffix, exactly as the extractor sends it.
+private const val VISIONOS_USER_AGENT =
+    "com.google.visionos.youtube/1.02(RealityDevice14,1; U; CPU visionOS 25_6_0 like Mac OS X; )"
+private const val INNERTUBE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
+/** A random string from YouTube's base64url alphabet, as used for `cpn` and the `t` parameter. */
+internal fun randomInnertubeString(length: Int): String =
+    (1..length).map { INNERTUBE_CHARS[kotlin.random.Random.nextInt(INNERTUBE_CHARS.length)] }.joinToString("")
 private const val CHUNK_SIZE = 1024L * 1024L // 1MB per chunk
 
 class Ytmusic {
@@ -410,23 +430,107 @@ class Ytmusic {
     suspend fun directPlayer(
         client: YouTubeClient,
         videoId: String,
-    ) = httpClient.post("https://www.youtube.com/youtubei/v1/player") {
-        contentType(ContentType.Application.Json)
-        header(HttpHeaders.UserAgent, client.userAgent)
-        header("X-YouTube-Client-Name", "${client.xClientName ?: 1}")
-        header("X-YouTube-Client-Version", client.clientVersion)
-        header("Origin", "https://www.youtube.com")
-        visitorData?.let { header("X-Goog-Visitor-Id", it) }
-        setBody(
-            PlayerBody(
-                context = client.toContext(locale, visitorData),
-                videoId = videoId,
-                playlistId = null,
-                cpn = null,
-            ),
-        )
-        parameter("prettyPrint", false)
+        visitorDataOverride: String? = null,
+    ): HttpResponse {
+        // An empty visitorData is what an anonymous session holds, and YouTube answers these
+        // clients with "Sign in to confirm you're not a bot" for it. A minted one fixes that.
+        val visitor = visitorData?.takeIf { it.isNotBlank() } ?: visitorDataOverride
+        return httpClient.post("https://www.youtube.com/youtubei/v1/player") {
+            contentType(ContentType.Application.Json)
+            header(HttpHeaders.UserAgent, client.userAgent)
+            header("X-YouTube-Client-Name", "${client.xClientName ?: 1}")
+            header("X-YouTube-Client-Version", client.clientVersion)
+            header("Origin", "https://www.youtube.com")
+            visitor?.let { header("X-Goog-Visitor-Id", it) }
+            setBody(
+                PlayerBody(
+                    context = client.toContext(locale, visitor),
+                    videoId = videoId,
+                    playlistId = null,
+                    cpn = null,
+                ),
+            )
+            parameter("prettyPrint", false)
+        }
     }
+
+    /**
+     * The visitorData PipePipe mints before every "visionos" player request — the request Android
+     * and Desktop stream from. Without it that client gets the same bot check as the others.
+     * Wire format copied from the pinned PipePipe jar (`YoutubeParsingHelper.getVisitorDataFromInnertube`).
+     */
+    suspend fun visionOsVisitorData(): String? {
+        val body = buildJsonObject { put("context", visionOsContext(visitorData = null)) }
+        val response =
+            httpClient.post("https://youtubei.googleapis.com/youtubei/v1/visitor_id") {
+                parameter("prettyPrint", false)
+                header(HttpHeaders.UserAgent, VISIONOS_USER_AGENT)
+                header("X-Goog-Api-Format-Version", "2")
+                header(HttpHeaders.AcceptLanguage, "en-GB, en;q=0.9")
+                setBody(TextContent(body.toString(), ContentType.Application.Json))
+            }
+        val json = normalJson.parseToJsonElement(response.bodyAsText()).jsonObject
+        return json["responseContext"]
+            ?.jsonObject
+            ?.get("visitorData")
+            ?.jsonPrimitive
+            ?.contentOrNull
+            ?.takeIf { it.isNotBlank() }
+    }
+
+    /**
+     * PipePipe's "visionos" player request (`YoutubeStreamExtractor.fetchVisionOsJsonPlayer`),
+     * byte for byte: the source Android and Desktop actually play. Its formats carry plain,
+     * pre-signed URLs (no signatureCipher, no `n`), so nothing has to be deciphered.
+     */
+    suspend fun visionOsPlayer(
+        videoId: String,
+        visitorData: String,
+        cpn: String,
+    ): HttpResponse {
+        val body =
+            buildJsonObject {
+                put("context", visionOsContext(visitorData))
+                put("videoId", videoId)
+                put("cpn", cpn)
+                put("contentCheckOk", true)
+                put("racyCheckOk", true)
+            }
+        return httpClient.post("https://youtubei.googleapis.com/youtubei/v1/player") {
+            parameter("prettyPrint", false)
+            parameter("t", randomInnertubeString(12))
+            parameter("id", videoId)
+            header(HttpHeaders.UserAgent, VISIONOS_USER_AGENT)
+            header("X-Goog-Api-Format-Version", "2")
+            header(HttpHeaders.AcceptLanguage, "en")
+            setBody(TextContent(body.toString(), ContentType.Application.Json))
+        }
+    }
+
+    private fun visionOsContext(visitorData: String?): JsonObject =
+        buildJsonObject {
+            putJsonObject("client") {
+                put("clientName", "VISIONOS")
+                put("clientVersion", "1.02")
+                put("clientScreen", "WATCH")
+                put("platform", "MOBILE")
+                visitorData?.let { put("visitorData", it) }
+                put("deviceMake", "Apple")
+                put("deviceModel", "RealityDevice14,1")
+                put("osName", "visionOS")
+                put("osVersion", "25.6.0.23O471")
+                put("hl", "en")
+                put("gl", "GB")
+                put("utcOffsetMinutes", 0)
+            }
+            putJsonObject("request") {
+                putJsonArray("internalExperimentFlags") {}
+                put("useSsl", true)
+            }
+            putJsonObject("user") {
+                put("lockedSafetyMode", false)
+            }
+        }
 
     suspend fun getSimpMusicChart() =
         httpClient.get("https://chart.simpmusic.org/api/playlists") {
