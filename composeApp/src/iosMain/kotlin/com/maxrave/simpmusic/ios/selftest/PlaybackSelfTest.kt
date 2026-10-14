@@ -85,7 +85,7 @@ suspend fun playbackSelfTest(videoId: String = "dQw4w9WgXcQ"): String {
     // 4) A real download through the iOS download handler, then the size of the file it wrote.
     val downloadResult =
         runCatching {
-            val downloadId = "jNQXAC9IVRw"
+            val downloadId = videoId
             koin.get<DownloadHandler>().downloadTrack(downloadId, "self-test", "")
             val path = fileDir() + "/download/$downloadId.m4a"
             val size =
