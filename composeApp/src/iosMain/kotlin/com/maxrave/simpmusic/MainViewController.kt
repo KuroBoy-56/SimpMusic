@@ -3,6 +3,7 @@ package com.maxrave.simpmusic
 import androidx.compose.ui.window.ComposeUIViewController
 import com.maxrave.common.AppIdentity
 import com.maxrave.data.di.loader.loadAllModules
+import com.maxrave.data.mediaservice.ios.IosPlaybackDiagnostics
 import com.maxrave.simpmusic.di.viewModelModule
 import com.maxrave.simpmusic.ios.panel.KuroCrashReporter
 import com.maxrave.simpmusic.ios.panel.KuroGate
@@ -27,6 +28,8 @@ private fun startOnce() {
     started = true
     // First, so a failure anywhere below still reaches the panel.
     KuroCrashReporter.install()
+    // Playback/download failures on a device reach the panel with the stage and HTTP status.
+    IosPlaybackDiagnostics.reporter = { tipo, mensaje, detalle -> KuroCrashReporter.logSilentError(tipo, mensaje, detalle) }
     KuroCrashReporter.markLaunchStep("koin")
     startKoin {
         loadAllModules(

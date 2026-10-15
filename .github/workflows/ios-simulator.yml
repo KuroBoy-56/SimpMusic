@@ -108,7 +108,7 @@ jobs:
           echo "App process started: $started"
           alive=$started
           if [ "$started" = true ]; then
-            for t in 10 20 30 40 50 60 70 80 90; do
+            for t in 10 20 30 40 50 60 70 80 90 100 110 120 130 140 150; do
               sleep 10
               if ! xcrun simctl spawn "$UDID" launchctl list | grep -q "$BUNDLE_ID"; then
                 alive=false
@@ -151,8 +151,12 @@ jobs:
           playtest=$(grep -a "KURO_PLAYTEST" smoke/console.log | tail -1)
           echo "Playback self-test: ${playtest:-<no output>}"
           case "$playtest" in
-            *"url=ok"*) case "$playtest" in *"pos=0ms"*) echo "::error::A song resolved but did not play"; exit 1;; esac ;;
+            *"url=ok"*) case "$playtest" in *"Pos=0ms"*) echo "::error::A song resolved but did not play"; exit 1;; esac ;;
             *) echo "::error::No playable stream could be resolved"; exit 1;;
+          esac
+          case "$playtest" in
+            *"download=ok"*) ;;
+            *) echo "::error::The download self-test did not write a file"; exit 1;;
           esac
 
           if [ "$alive" != true ]; then
