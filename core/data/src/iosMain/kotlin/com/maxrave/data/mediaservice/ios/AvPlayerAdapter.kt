@@ -84,6 +84,7 @@ import platform.Foundation.NSURL
 import platform.Foundation.NSValue
 import platform.darwin.NSObjectProtocol
 import kotlin.concurrent.Volatile
+import kotlin.math.abs
 import kotlin.math.max
 
 private const val TAG = "AvPlayerAdapter"
@@ -94,6 +95,7 @@ private const val STAGE_PROGRESSIVE = 0
 private const val STAGE_HLS_AUDIO = 1
 private const val STAGE_HLS_MASTER = 2
 private const val FIRST_STAGE = STAGE_PROGRESSIVE
+private const val DURATION_TOLERANCE_MS = 2_000L
 
 /** How long a stream may take to resolve (all network round trips) before the attempt is dropped. */
 private const val RESOLVE_TIMEOUT_MS = 45_000L
@@ -160,6 +162,11 @@ class AvPlayerAdapter(
     @Volatile private var cachedPosition = 0L
 
     @Volatile private var cachedDuration = 0L
+
+    // YouTube's own length of the current track. AVPlayer has to estimate the length of the
+    // fragmented .m4a googlevideo serves and can be minutes off (an 8-minute bar on a 3-minute
+    // song, then silence with the clock still running); ExoPlayer and mpv read it correctly.
+    @Volatile private var expectedDurationMs = 0L
 
     @Volatile private var cachedBufferedPosition = 0L
 
@@ -681,6 +688,7 @@ class AvPlayerAdapter(
                     avPlayer.pause()
                     cachedPosition = startPositionMs
                     cachedDuration = 0L
+                    expectedDurationMs = 0L
                     preparingSinceNanos = elapsedNanos()
                     transitionToState(InternalState.PREPARING)
                     notifyListeners {
@@ -703,6 +711,10 @@ class AvPlayerAdapter(
                         return@launch
                     }
                     currentSourceStage = source.stage
+                    expectedDurationMs =
+                        withContext(Dispatchers.IO) {
+                            runCatching { streamRepository.getNewFormat(videoId).firstOrNull()?.lengthSeconds }.getOrNull()
+                        }?.takeIf { it > 0 }?.let { it * 1000L } ?: 0L
 
                     val item = createPlayerItem(source.url) ?: run {
                         transitionToState(InternalState.ERROR)
@@ -1055,6 +1067,18 @@ class AvPlayerAdapter(
                         else -> Unit
                     }
                     readTimes(item)
+                    // Past YouTube's length with AVPlayer still running on its wrong estimate: the
+                    // audio is over, so end the track as AVPlayerItemDidPlayToEndTime would have.
+                    if (internalState == InternalState.PLAYING &&
+                        expectedDurationMs > 0 &&
+                        cachedPosition >= expectedDurationMs + DURATION_TOLERANCE_MS
+                    ) {
+                        Logger.w(TAG, "Position ${cachedPosition}ms past the track's ${expectedDurationMs}ms, ending it")
+                        avPlayer.pause()
+                        transitionToState(InternalState.ENDED)
+                        handleTrackEnd()
+                        break
+                    }
                     val status = avPlayer.timeControlStatus
                     val loading = status == AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate
                     if (loading != cachedIsLoading && internalState != InternalState.PREPARING) {
@@ -1137,7 +1161,12 @@ class AvPlayerAdapter(
         val position = CMTimeGetSeconds(avPlayer.currentTime())
         if (!position.isNaN() && position >= 0) cachedPosition = (position * 1000).toLong()
         val dur = CMTimeGetSeconds(item.duration)
-        if (!dur.isNaN() && !dur.isInfinite() && dur > 0) cachedDuration = (dur * 1000).toLong()
+        val avDuration = if (!dur.isNaN() && !dur.isInfinite() && dur > 0) (dur * 1000).toLong() else 0L
+        val expected = expectedDurationMs
+        // AVPlayer's own value when it agrees with YouTube's (it is exact to the millisecond),
+        // YouTube's whole seconds when AVPlayer is off or does not know yet.
+        val best = if (expected > 0 && (avDuration <= 0 || abs(avDuration - expected) > DURATION_TOLERANCE_MS)) expected else avDuration
+        if (best > 0) cachedDuration = best
         val range = item.loadedTimeRanges.firstOrNull() as? NSValue
         if (range != null) {
             range.CMTimeRangeValue.useContents {

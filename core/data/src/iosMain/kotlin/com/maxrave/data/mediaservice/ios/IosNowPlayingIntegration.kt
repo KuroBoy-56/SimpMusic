@@ -30,6 +30,9 @@ import platform.MediaPlayer.MPRemoteCommandHandlerStatusSuccess
 import platform.UIKit.UIImage
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 private const val TAG = "IosNowPlaying"
 
@@ -74,6 +77,8 @@ class IosNowPlayingIntegration private constructor() {
     private var listener: IosRemoteCommandListener? = null
     private var info: MutableMap<Any?, Any?> = mutableMapOf()
     private var initialized = false
+    private val clock = TimeSource.Monotonic.markNow()
+    private var lastElapsedPublish = Duration.ZERO
 
     fun initialize(): Boolean {
         if (initialized) return true
@@ -157,11 +162,22 @@ class IosNowPlayingIntegration private constructor() {
         }
     }
 
+    /**
+     * Called on every progress tick. The track's info is first published before the player knows
+     * the duration, so the duration is filled in here the moment it is known — without it the lock
+     * screen shows no progress bar and no times. The elapsed time is re-published once a second;
+     * the system advances it in between from the playback rate.
+     */
     fun updateElapsedTime(
         elapsedSeconds: Double,
-        rate: Double,
+        durationSeconds: Double,
     ) {
         if (info.isEmpty()) return
+        val durationChanged = durationSeconds > 0 && info[MPMediaItemPropertyPlaybackDuration] != durationSeconds
+        if (durationChanged) info[MPMediaItemPropertyPlaybackDuration] = durationSeconds
+        val now = clock.elapsedNow()
+        if (!durationChanged && now - lastElapsedPublish < 1.seconds) return
+        lastElapsedPublish = now
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsedSeconds
         publish()
     }
