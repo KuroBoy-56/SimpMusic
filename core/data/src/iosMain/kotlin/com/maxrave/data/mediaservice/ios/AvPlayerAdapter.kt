@@ -680,15 +680,20 @@ class AvPlayerAdapter(
         val mediaItem = playlist[index]
         val videoId = mediaItem.mediaId
         currentLoadJob?.cancel()
+        // Reset before launching, not inside the job: picking a song runs clear → set → prepare →
+        // play back to back, and play() (still IDLE, the job not started yet) reloads from
+        // cachedPosition — the previous song's position, so the new song started at e.g. 1:30.
+        // Polling stops first so a last tick on the old item cannot write its position back.
+        stopPolling()
+        cachedPosition = startPositionMs
+        cachedDuration = 0L
+        expectedDurationMs = 0L
         currentLoadJob =
             coroutineScope.launch {
                 try {
                     internalPlayWhenReady = shouldPlay
                     stopPolling()
                     avPlayer.pause()
-                    cachedPosition = startPositionMs
-                    cachedDuration = 0L
-                    expectedDurationMs = 0L
                     preparingSinceNanos = elapsedNanos()
                     transitionToState(InternalState.PREPARING)
                     notifyListeners {
