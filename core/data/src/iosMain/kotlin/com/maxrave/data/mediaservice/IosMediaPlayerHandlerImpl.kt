@@ -3195,7 +3195,7 @@ class IosMediaPlayerHandlerImpl(
      * Update iOS Now Playing elapsed time (called periodically)
      */
     private fun updateIosElapsedTime() {
-        iosNowPlaying?.updateElapsedTime(player.currentPosition / 1000.0, 1.0)
+        iosNowPlaying?.updateElapsedTime(player.currentPosition / 1000.0, getPlayerDuration() / 1000.0)
     }
 
     /**

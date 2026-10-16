@@ -192,7 +192,9 @@ internal class StreamRepositoryImpl(
                     var tidalBpm: Int? = null
                     var tidalMusicKey: String? = null
                     var tidalKeyScale: String? = null
-                    if (!isVideo && durationSecond != null && data.third == MediaType.Song) {
+                    // AutoMix metadata only feeds crossfade/DJ mode, which iOS does not have; there the
+                    // lookup would only delay the stream (it runs before anything is emitted).
+                    if (!onlyAacAudioPlayable && !isVideo && durationSecond != null && data.third == MediaType.Song) {
                         val title = response.videoDetails?.title ?: ""
                         val author = response.videoDetails?.author ?: ""
                         val q =
